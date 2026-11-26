@@ -252,6 +252,47 @@
   background:var(--surface-sunken);overflow:auto;
 }
 .markdown-body pre code{padding:0;background:none;font-size:13px;line-height:1.7;}
+/* 代码块：左上语言标签 + 右上复制/全屏。按钮在滚动容器外，pre 横向滚动时不会被带走 */
+.code-block{position:relative;margin:14px 0;}
+.code-block>pre{margin:0;}
+.code-block[data-lang]>pre{padding-top:30px;}
+.code-lang{
+  position:absolute;top:7px;left:11px;z-index:1;pointer-events:none;
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;
+  line-height:1;color:var(--text-3);letter-spacing:.02em;
+}
+.code-tools{
+  position:absolute;top:6px;right:6px;z-index:1;display:flex;align-items:center;gap:4px;
+  opacity:0;transition:opacity var(--dur-fast) var(--ease-out);
+}
+.code-block:hover .code-tools,.code-tools:focus-within{opacity:1;}
+.code-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:4px;height:22px;padding:0 7px;
+  border:1px solid var(--border);border-radius:var(--r-xs);
+  background:var(--surface);color:var(--text-3);font-family:inherit;font-size:11px;line-height:1;
+  cursor:pointer;
+  transition:color var(--dur-fast) var(--ease-out),background var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out);
+}
+.code-btn:hover{color:var(--text);background:var(--surface-hover);}
+.code-btn.is-copied{color:var(--success-fg);border-color:var(--success-border);background:var(--success-soft);}
+.code-btn svg{width:12px;height:12px;}
+.code-expand{padding:0;width:22px;}
+@media (hover:none){.code-tools{opacity:.75;}}
+/* 代码全屏查看：整屏遮罩 + 可滚动 pre */
+.code-modal{position:fixed;inset:0;z-index:220;display:grid;place-items:center;padding:24px;background:rgba(15,23,42,.45);}
+.code-modal-panel{
+  display:flex;flex-direction:column;width:min(1100px,96vw);max-height:88vh;overflow:hidden;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xl);
+}
+.code-modal-head{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--border);}
+.code-modal-lang{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;color:var(--text-3);}
+.code-modal-pre{
+  margin:0;padding:16px;overflow:auto;
+  background:var(--surface-sunken);
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:13px;line-height:1.7;color:var(--text);
+}
+.markdown-body .table-wrap{overflow-x:auto;margin:14px 0;-webkit-overflow-scrolling:touch;}
+.markdown-body .table-wrap>table{margin:0;width:auto;min-width:100%;}
 .markdown-body table{border-collapse:collapse;width:auto;max-width:100%;margin:14px 0;font-size:14px;}
 .markdown-body th,.markdown-body td{border:1px solid var(--border);padding:var(--space-2) 10px;vertical-align:middle;}
 .markdown-body th{background:var(--surface-sunken);font-weight:650;text-align:left;}
@@ -672,6 +713,21 @@
 .rrd-acts{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap;}
 .rrd-meta{margin-top:6px;font-size:12px;color:var(--text-3);}
 .rrd-body{font-size:14px;line-height:1.85;min-height:200px;}
+/* 阅读页：正文 + 右侧大纲（大纲沿用编辑页那套 .reqdoc-toc，只是外层改为网格） */
+.rrd-docwrap{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:22px;align-items:start;}
+#reqDocReader.no-toc .rrd-toc{display:none;}
+#reqDocReader.no-toc .rrd-docwrap{grid-template-columns:minmax(0,1fr);}
+.rrd-toc{top:12px;max-height:calc(100vh - 160px);}
+/* 窄屏 / 评论栏张开时让正文优先，大纲收起；点顶部「大纲」仍可强制显示 */
+@media (max-width:1180px){
+  .rrd-toc{display:none !important;}
+  #reqDocReader [data-rrd-toc]{display:none;}
+  #reqDocReader .rrd-docwrap{grid-template-columns:minmax(0,1fr);}
+}
+@media (max-width:1440px){
+  #reqDocReader.with-comments .rrd-toc{display:none;}
+  #reqDocReader.with-comments .rrd-docwrap{grid-template-columns:minmax(0,1fr);}
+}
 /* 正文缩放：阅读与编辑共用 --doc-zoom，只缩正文不缩工具栏。
    宽度取 min(100%, 100%/缩放)：放大时反向补偿填满栏宽，
    缩小时保持栏宽（否则 125% 的布局盒会撑出横向滚动）。 */
@@ -1102,3 +1158,69 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
   #dlgReqDocHistory .rh-foot-hint{display:none;}
   #dlgReqDocHistory .rh-dfold .range{display:none;}
 }
+
+/* ---------------- 阅读页增强：大纲筛选/层级、标题锚点、更多菜单、翻页、进度 ---------------- */
+/* 大纲：头部与筛选常驻，只让列表区滚动（编辑页大纲仍是整块滚动） */
+.rrd-toc{display:flex;flex-direction:column;overflow:hidden;}
+.rrd-toc .reqdoc-toc-head{flex:none;}
+.rrd-toc .reqdoc-toc-body{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;}
+.rt-depth{
+  flex:none;height:20px;padding:0 6px;border:1px solid var(--border);border-radius:var(--r-micro);
+  background:var(--surface);color:var(--text-3);font:inherit;font-size:11px;line-height:1;cursor:pointer;
+}
+.rt-depth:hover{color:var(--text-2);border-color:var(--border-strong);}
+.rt-depth.on{background:var(--primary-soft);border-color:transparent;color:var(--primary-fg);}
+.rt-filter{flex:none;padding:0 8px 8px;}
+.rt-filter input{
+  width:100%;height:26px;padding:0 8px;border:1px solid var(--border);border-radius:var(--r-xs);
+  background:var(--surface);color:var(--text);font:inherit;font-size:12px;
+}
+.rt-filter input:focus{outline:none;border-color:var(--border-strong);}
+
+/* 标题锚点：悬停标题左侧浮出复制按钮 */
+.rrd-body h1,.rrd-body h2,.rrd-body h3,.rrd-body h4,.rrd-body h5,.rrd-body h6{position:relative;}
+.rrd-anchor{
+  position:absolute;left:-22px;top:.16em;display:grid;place-items:center;width:18px;height:18px;padding:0;
+  border:none;border-radius:var(--r-micro);background:none;color:var(--text-3);opacity:0;cursor:pointer;
+  transition:opacity var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out),background var(--dur-fast) var(--ease-out);
+}
+.rrd-body h1:hover>.rrd-anchor,.rrd-body h2:hover>.rrd-anchor,.rrd-body h3:hover>.rrd-anchor,
+.rrd-body h4:hover>.rrd-anchor,.rrd-body h5:hover>.rrd-anchor,.rrd-body h6:hover>.rrd-anchor,
+.rrd-anchor:focus-visible{opacity:1;}
+.rrd-anchor:hover{color:var(--primary-fg);background:var(--primary-soft);}
+.rrd-anchor.is-copied{opacity:1;color:var(--success-fg);}
+@media (hover:none){.rrd-anchor{display:none;}}
+/* 深链定位到的标题闪一下 */
+.rrd-body .rrd-flash{animation:rrd-flash-hl 1.6s var(--ease-out);border-radius:var(--r-xs);}
+@keyframes rrd-flash-hl{0%,45%{background:var(--primary-soft);}100%{background:transparent;}}
+@media (prefers-reduced-motion: reduce){.rrd-body .rrd-flash{animation:none;background:var(--primary-soft);}}
+
+/* 工具栏「更多」菜单 */
+.rrd-more{position:relative;display:inline-flex;}
+.rrd-more-menu{top:calc(100% + 4px);right:0;left:auto;min-width:160px;}
+
+/* 文末上一篇 / 下一篇 */
+.rrd-pager{display:flex;gap:var(--space-3);margin-top:26px;padding-top:16px;border-top:1px solid var(--border);}
+.rrd-pager[hidden]{display:none;}
+.rrd-pager-item{
+  flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;padding:9px 12px;
+  border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);text-align:left;cursor:pointer;
+}
+.rrd-pager-item.next{align-items:flex-end;text-align:right;}
+.rrd-pager-item:hover{border-color:var(--border-strong);background:var(--surface-hover);}
+.pp-dir{font-size:11px;color:var(--text-3);}
+.pp-name{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600;color:var(--text);}
+
+/* 回到顶部 + 右侧阅读进度（避开右下角 AI 入口） */
+.rrd-top{
+  position:fixed;right:24px;bottom:calc(88px + var(--app-foot-h));z-index:99;
+  display:grid;place-items:center;width:36px;height:36px;padding:0;
+  border:1px solid var(--border);border-radius:50%;background:var(--surface);color:var(--text-2);
+  box-shadow:var(--shadow-md);cursor:pointer;
+}
+.rrd-top:hover{color:var(--text);background:var(--surface-hover);}
+.rrd-top[hidden]{display:none;}
+.rrd-progress{position:fixed;top:0;right:0;bottom:var(--app-foot-h);width:3px;z-index:98;pointer-events:none;}
+.rrd-progress[hidden]{display:none;}
+.rrd-progress i{display:block;width:100%;height:100%;background:var(--primary);opacity:.55;transform:scaleY(0);transform-origin:top;}
+@media (max-width:900px){.rrd-top,.rrd-progress{display:none;}}

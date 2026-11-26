@@ -519,7 +519,22 @@ function enterRequirementsView(){
   loadReqDocs(true).then(function(){ renderReqDocMode(); });
   /* 新标签页深链只消费一次：之后在同页里切来切去不再把正文强行推出来 */
   var deepDoc = reqDocDeepLinkDone ? "" : docDeepLinkId();
-  if(deepDoc){ reqDocDeepLinkDone = true; openReqDocEditor(deepDoc); }
+  if(deepDoc){
+    reqDocDeepLinkDone = true;
+    if(rrdHashParam("view") === "read"){
+      var h = parseInt(rrdHashParam("h"), 10);
+      rrdPendingHead = h >= 0 ? h : -1;
+      rrdSkipRestore = false;
+      /* 阅读分栏依赖文档列表判存：等列表到位再开，否则 renderReqDocSplit 会把刚选中的文档当已删除 */
+      loadReqDocs().then(function(){
+        if(activeView !== "requirements") return;
+        setReqDocMode("read");
+        loadReqDocSplitDoc(deepDoc);
+      });
+    }else{
+      openReqDocEditor(deepDoc);
+    }
+  }
 }
 function showReqDocList(){
   /* 同视图内再点「文档」也要先处理未保存正文，不能直接清空编辑态 */
@@ -1194,7 +1209,7 @@ function renderReqDocMode(){
   syncReqDocFilterUI();
   syncReqDocScopeUI();
   syncReqDocLoadError();
-  if(reqDocMode !== "read") disposeReqSheetReader();
+  if(reqDocMode !== "read"){ disposeReqSheetReader(); closeRrdCodeModal(); }
   if(reqDocMode === "kanban") renderReqDocKanban();
   else if(reqDocMode === "read") renderReqDocSplit();
   else if(reqDocMode === "feed") renderReqDocFeed();
@@ -1616,8 +1631,8 @@ function renderReqDocSplit(){
   var box = $("reqDocSplitTree");
   if(!box) return;
   applyDocWideState();
-  /* 选中的文档已被删除：回到占位提示 */
-  if(splitDocId && !reqDocById(splitDocId)){
+  /* 选中的文档已被删除：回到占位提示（列表还没取回时不能判存，先保持加载态） */
+  if(splitDocId && reqDocsLoaded && !reqDocById(splitDocId)){
     splitDocId = null;
     disposeReqSheetReader();
     if($("reqDocReader")) $("reqDocReader").innerHTML = '<div class="rrd-empty"><div class="rrd-empty-title"><span class="desk-only">从左侧选择文档阅读</span><span class="mob-inline">从上方目录选择文档</span></div>'
@@ -1661,6 +1676,9 @@ function renderReqDocSplit(){
   }).join("");
 }
 function loadReqDocSplitDoc(id){
+  /* 切到另一篇前，先把当前这篇的阅读位置记下来 */
+  if(splitDocId != null && splitDocId !== id) saveRrdPosNow();
+  rrdEntryScroll = true;
   splitDocId = id;
   renderReqDocSplit();
   var box = $("reqDocReader");
@@ -1711,6 +1729,8 @@ function reqDocReaderFill(body, cleanHtml){
   var h1 = tpl.content.querySelector("h1");
   if(h1){
     var h2 = document.createElement("h2");
+    /* 只为避免同屏两个一级标题而降级；大纲仍按原来的 H1 层级缩进 */
+    h2.setAttribute("data-rrd-hlevel", "1");
     h2.innerHTML = h1.innerHTML;
     h1.replaceWith(h2);
   }
@@ -1726,9 +1746,536 @@ function reqDocReaderFill(body, cleanHtml){
   body.textContent = "";
   body.appendChild(tpl.content);
 }
+/* 代码块右上角复制 / 全屏：包一层相对定位容器，按钮不随 pre 横向滚动跑掉 */
+function decorateCodeBlocks(root){
+  if(!root) return;
+  var pres = root.querySelectorAll("pre");
+  for(var i = 0; i < pres.length; i++){
+    var pre = pres[i];
+    if(pre.parentElement && (pre.parentElement.classList.contains("code-block") || pre.parentElement.classList.contains("code-modal"))) continue;
+    var wrap = document.createElement("div");
+    wrap.className = "code-block";
+    pre.parentNode.insertBefore(wrap, pre);
+    wrap.appendChild(pre);
+    /* marked 会给围栏代码加 class="language-xxx"，有就显示语言标签 */
+    var code = pre.querySelector("code");
+    var lm = code && String(code.className || "").match(/language-([A-Za-z0-9_+#.-]+)/);
+    var lang = lm ? lm[1].toLowerCase() : "";
+    if(lang){
+      wrap.setAttribute("data-lang", lang);
+      var tag = document.createElement("span");
+      tag.className = "code-lang";
+      tag.textContent = lang;
+      wrap.appendChild(tag);
+    }
+    var tools = document.createElement("div");
+    tools.className = "code-tools";
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "code-btn code-copy";
+    btn.setAttribute("data-code-copy", "1");
+    btn.setAttribute("aria-label", "复制代码");
+    btn.innerHTML = icon("copy", 12) + '<span>复制</span>';
+    tools.appendChild(btn);
+    var exp = document.createElement("button");
+    exp.type = "button";
+    exp.className = "code-btn code-expand";
+    exp.setAttribute("data-code-expand", "1");
+    exp.setAttribute("aria-label", "全屏查看代码");
+    exp.setAttribute("data-tip", "全屏查看");
+    exp.innerHTML = icon("expand", 12);
+    tools.appendChild(exp);
+    wrap.appendChild(tools);
+  }
+}
+/* 宽表格：外面套一层横向滚动容器；列宽不再被压缩到挤字（min-width:min-content 见 CSS） */
+function decorateTables(root){
+  if(!root) return;
+  var tables = root.querySelectorAll("table");
+  for(var i = 0; i < tables.length; i++){
+    var t = tables[i];
+    if(t.parentElement && t.parentElement.classList.contains("table-wrap")) continue;
+    var wrap = document.createElement("div");
+    wrap.className = "table-wrap";
+    t.parentNode.insertBefore(wrap, t);
+    wrap.appendChild(t);
+  }
+}
+function codeBlockText(pre){
+  if(!pre) return "";
+  var clone = pre.cloneNode(true);
+  var stray = clone.querySelector(".code-copy");
+  if(stray) stray.remove();
+  return clone.textContent || "";
+}
+
+/* ---------- 阅读：右侧大纲（复用编辑页样式，状态与编辑页分开） ---------- */
+var rrdTocItems = [];
+var rrdTocCollapsed = {};
+var rrdTocActive = null;
+var rrdTocRaf = 0;
+var rrdTocQuery = "";
+var rrdTocDepthOnly = rrdTocDepthPref();
+var rrdPendingHead = -1;      // 深链 ?h=N：打开后滚到第 N 个标题
+var rrdEntryScroll = false;   // 由 loadReqDocSplitDoc 触发的重绘才做“进入定位”
+var rrdSkipRestore = false;   // 上一篇/下一篇：从正文顶部开始，不恢复旧位置
+var rrdPosTimer = null;
+var rrdCodeEscHandler = null;
+
+function rrdTocVisiblePref(){
+  try{ return localStorage.getItem("ds.reqTocRead") !== "0"; }catch(e){ return true; }
+}
+function rrdTocDepthPref(){
+  try{ return localStorage.getItem("ds.reqTocDepth") === "1"; }catch(e){ return false; }
+}
+function syncRrdTocToggle(rd){
+  if(!rd) return;
+  var b = rd.querySelector("[data-rrd-toc]");
+  if(!b) return;
+  var on = !rd.classList.contains("no-toc");
+  var tip = on ? "隐藏大纲" : "显示大纲";
+  b.setAttribute("aria-pressed", on ? "true" : "false");
+  b.setAttribute("data-tip", tip);
+  b.setAttribute("aria-label", tip);
+}
+function setRrdTocVisible(on){
+  var rd = $("reqDocReader");
+  if(!rd) return;
+  rd.classList.toggle("no-toc", !on);
+  try{ localStorage.setItem("ds.reqTocRead", on ? "1" : "0"); }catch(e){ /* 隐私模式忽略 */ }
+  syncRrdTocToggle(rd);
+  if(on) scheduleRrdTocActive();
+}
+function setRrdTocDepthOnly(on){
+  rrdTocDepthOnly = !!on;
+  try{ localStorage.setItem("ds.reqTocDepth", on ? "1" : "0"); }catch(e){ /* 隐私模式忽略 */ }
+  var b = $("rrdTocDepth");
+  if(b){
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+    b.classList.toggle("on", !!on);
+  }
+  renderRrdToc();
+  refreshRrdTocActive();
+}
+function collectRrdToc(){
+  rrdTocItems = [];
+  var root = $("reqDocReaderBody");
+  if(!root) return;
+  var hs = root.querySelectorAll("h1,h2,h3,h4,h5,h6");
+  var items = [];
+  for(var i = 0; i < hs.length; i++){
+    var el = hs[i];
+    var text = (el.textContent || "").replace(/\s+/g, " ").trim();
+    if(!text) continue;
+    var anchor = "r" + items.length;
+    var level = parseInt(el.getAttribute("data-rrd-hlevel") || el.tagName.charAt(1), 10) || 1;
+    el.setAttribute("data-rtoc", anchor);
+    /* 标题左侧浮出「复制本节链接」，深链参数 h 就是这里的序号 */
+    var linkBtn = document.createElement("button");
+    linkBtn.type = "button";
+    linkBtn.className = "rrd-anchor";
+    linkBtn.setAttribute("data-rrd-anchor", String(items.length));
+    linkBtn.setAttribute("title", "复制本节链接");
+    linkBtn.setAttribute("aria-label", "复制本节链接");
+    linkBtn.innerHTML = icon("link", 12);
+    el.insertBefore(linkBtn, el.firstChild);
+    items.push({ anchor: anchor, level: level, text: text, depth: 0, parent: null, hasChild: false });
+  }
+  /* 与编辑页同一口径：按标题级别栈算缩进，H1 后直接跟 H3 不多缩两层 */
+  var stack = [];
+  items.forEach(function(t){
+    while(stack.length && stack[stack.length - 1].level >= t.level) stack.pop();
+    t.depth = Math.min(stack.length, 3);
+    t.parent = stack.length ? stack[stack.length - 1].anchor : null;
+    stack.push(t);
+  });
+  var byAnchor = {};
+  items.forEach(function(t){ byAnchor[t.anchor] = t; });
+  items.forEach(function(t){
+    if(t.parent && byAnchor[t.parent]) byAnchor[t.parent].hasChild = true;
+  });
+  rrdTocItems = items;
+}
+function renderRrdToc(){
+  var body = $("rrdTocBody");
+  if(!body) return;
+  if(!rrdTocItems.length){
+    body.innerHTML = '<div class="rt-empty">正文里用标题样式写几段（一级/二级标题），这里会自动生成大纲。</div>';
+    return;
+  }
+  var q = rrdTocQuery;
+  var pool = rrdTocDepthOnly
+    ? rrdTocItems.filter(function(t){ return t.level <= 2; })
+    : rrdTocItems.slice();
+  if(!pool.length){
+    body.innerHTML = '<div class="rt-empty">这篇没有一、二级标题；关掉顶部「一二级」可看全部层级。</div>';
+    return;
+  }
+  var hidden = {};
+  if(q){
+    /* 筛选：命中项连同它的上级一起留下，忽略折叠状态 */
+    var idx = {};
+    pool.forEach(function(t){ idx[t.anchor] = t; });
+    var keep = {};
+    var ql = q.toLowerCase();
+    pool.forEach(function(t){
+      if(t.text.toLowerCase().indexOf(ql) < 0) return;
+      keep[t.anchor] = true;
+      var p = t.parent;
+      while(p && idx[p]){ keep[p] = true; p = idx[p].parent; }
+    });
+    pool = pool.filter(function(t){ return keep[t.anchor]; });
+    if(!pool.length){
+      body.innerHTML = '<div class="rt-empty">没有匹配「' + esc(q) + '」的标题。</div>';
+      return;
+    }
+  }else if(!rrdTocDepthOnly){
+    rrdTocItems.forEach(function(t){
+      if(t.parent && (rrdTocCollapsed[t.parent] || hidden[t.parent])) hidden[t.anchor] = true;
+    });
+  }
+  var flat = !!q || rrdTocDepthOnly;
+  var html = "";
+  pool.forEach(function(t){
+    if(hidden[t.anchor]) return;
+    var lv = Math.min(t.depth + 1, 4);
+    var caret = (!flat && t.hasChild)
+      ? '<span class="rt-caret' + (rrdTocCollapsed[t.anchor] ? " collapsed" : "") + '" data-rtoc-fold="' + t.anchor + '">' + icon("down", 11) + '</span>'
+      : '<span class="rt-caret"></span>';
+    html += '<button class="rt-item rt-lv' + lv + (t.anchor === rrdTocActive ? " active" : "") + '"' +
+      ' type="button" data-rtoc-go="' + t.anchor + '" title="' + esc(t.text) + '">' +
+      caret + '<span class="rt-text">' + esc(t.text) + '</span></button>';
+  });
+  body.innerHTML = html;
+}
+function rebuildRrdToc(){
+  collectRrdToc();
+  renderRrdToc();
+  refreshRrdTocActive();
+}
+function rrdScrollRoot(){
+  var el = $("reqDocReader");
+  while(el && el !== document.body && el !== document.documentElement){
+    var cs = window.getComputedStyle(el);
+    if(/(auto|scroll)/.test(cs.overflowY)) return el;
+    el = el.parentElement;
+  }
+  return null;
+}
+function markRrdTocActive(anchor){
+  if(!anchor || anchor === rrdTocActive) return;
+  rrdTocActive = anchor;
+  var body = $("rrdTocBody");
+  if(!body) return;
+  var prev = body.querySelector(".rt-item.active");
+  if(prev) prev.classList.remove("active");
+  var next = body.querySelector('[data-rtoc-go="' + anchor + '"]');
+  if(!next) return;
+  next.classList.add("active");
+  /* 当前项滚出大纲可视区时，在大纲内部跟随，不带动整页滚动 */
+  var br = body.getBoundingClientRect(), nr = next.getBoundingClientRect();
+  if(nr.top < br.top || nr.bottom > br.bottom){
+    body.scrollTop += nr.top - br.top - 8;
+  }
+}
+function scrollToRrdToc(anchor){
+  var root = $("reqDocReaderBody");
+  if(!root) return;
+  var el = root.querySelector('[data-rtoc="' + anchor + '"]');
+  if(!el) return;
+  var sc = rrdScrollRoot();
+  if(sc){
+    var top = sc.scrollTop + el.getBoundingClientRect().top - sc.getBoundingClientRect().top - 20;
+    if(top < 0) top = 0;
+    try{ sc.scrollTo({ top: top, behavior: "smooth" }); }
+    catch(e){ sc.scrollTop = top; }
+  }else{
+    var top2 = el.getBoundingClientRect().top + (window.pageYOffset || 0) - 76;
+    if(top2 < 0) top2 = 0;
+    try{ window.scrollTo({ top: top2, behavior: "smooth" }); }
+    catch(e){ window.scrollTo(0, top2); }
+  }
+  markRrdTocActive(anchor);
+}
+/* ---------- 阅读位置记忆：按文档记「标题 + 偏移」，换缩放也能落回原处 ---------- */
+function rrdPosMap(){
+  try{
+    var o = JSON.parse(localStorage.getItem("hg.docPos") || "{}");
+    return o && typeof o === "object" ? o : {};
+  }catch(e){ return {}; }
+}
+function saveRrdPosNow(){
+  if(!splitDocId) return;
+  var rd = $("reqDocReader"), sc = rrdScrollRoot();
+  if(!rd || !sc || !rd.offsetParent) return;
+  var map = rrdPosMap();
+  var top = Math.round(sc.scrollTop);
+  if(top < 80){
+    delete map[splitDocId];
+  }else{
+    var anchor = rrdTocActive || "";
+    var el = anchor ? document.querySelector('#reqDocReaderBody [data-rtoc="' + anchor + '"]') : null;
+    map[splitDocId] = {
+      a: anchor,
+      /* 标题顶边相对滚动容器顶边的距离：恢复时按同样关系摆放 */
+      d: el ? Math.round(el.getBoundingClientRect().top - sc.getBoundingClientRect().top) : 0,
+      t: top,
+      ts: Date.now()
+    };
+  }
+  var keys = Object.keys(map);
+  if(keys.length > 80){
+    keys.sort(function(a, b){ return (map[a].ts || 0) - (map[b].ts || 0); });
+    keys.slice(0, keys.length - 80).forEach(function(k){ delete map[k]; });
+  }
+  try{ localStorage.setItem("hg.docPos", JSON.stringify(map)); }catch(e){ /* 存储不可用 */ }
+}
+function scheduleRrdPosSave(){
+  if(rrdPosTimer) clearTimeout(rrdPosTimer);
+  rrdPosTimer = setTimeout(function(){ rrdPosTimer = null; saveRrdPosNow(); }, 600);
+}
+function restoreRrdPos(id){
+  if(!id) return false;
+  var rec = rrdPosMap()[id];
+  if(!rec || !rec.ts || Date.now() - rec.ts > 30 * 86400000) return false;
+  var sc = rrdScrollRoot(), body = $("reqDocReaderBody");
+  if(!sc || !body) return false;
+  var el = rec.a ? body.querySelector('[data-rtoc="' + rec.a + '"]') : null;
+  var top = el
+    ? sc.scrollTop + el.getBoundingClientRect().top - sc.getBoundingClientRect().top - (rec.d || 0)
+    : rec.t;
+  if(!(top > 40)) return false;
+  sc.scrollTop = top;
+  refreshRrdTocActive();
+  return true;
+}
+function scrollRrdToBodyTop(){
+  var sc = rrdScrollRoot(), rd = $("reqDocReader");
+  if(!sc || !rd) return;
+  var top = sc.scrollTop + rd.getBoundingClientRect().top - sc.getBoundingClientRect().top - 8;
+  sc.scrollTop = Math.max(0, top);
+}
+function flashRrdHeading(anchor){
+  var body = $("reqDocReaderBody");
+  if(!body) return;
+  var el = body.querySelector('[data-rtoc="' + anchor + '"]');
+  if(!el) return;
+  el.classList.add("rrd-flash");
+  setTimeout(function(){ el.classList.remove("rrd-flash"); }, 1700);
+}
+/* 打开文档后的落点：深链标题 > 翻页置顶 > 上次阅读位置 > 正文顶部 */
+function applyRrdEntryScroll(id){
+  if(!rrdEntryScroll) return;
+  rrdEntryScroll = false;
+  var head = rrdPendingHead;
+  rrdPendingHead = -1;
+  if(head >= 0 && rrdTocItems[head]){
+    scrollToRrdToc(rrdTocItems[head].anchor);
+    flashRrdHeading(rrdTocItems[head].anchor);
+    updateRrdScrollUI();
+    return;
+  }
+  if(rrdSkipRestore){
+    rrdSkipRestore = false;
+    scrollRrdToBodyTop();
+  }else if(!restoreRrdPos(id)){
+    scrollRrdToBodyTop();
+  }
+  updateRrdScrollUI();
+}
+/* ---------- 回到顶部 + 右侧阅读进度 ---------- */
+function updateRrdScrollUI(){
+  var rd = $("reqDocReader");
+  var topBtn = $("rrdTop"), prog = $("rrdProgress"), fill = $("rrdProgressFill");
+  var sc = rrdScrollRoot();
+  if(!rd || !sc || !rd.offsetParent){
+    if(topBtn) topBtn.hidden = true;
+    if(prog) prog.hidden = true;
+    return;
+  }
+  var max = sc.scrollHeight - sc.clientHeight;
+  var y = max > 0 ? Math.max(0, Math.min(1, sc.scrollTop / max)) : 0;
+  if(fill) fill.style.transform = "scaleY(" + y.toFixed(4) + ")";
+  if(prog) prog.hidden = max < 240;
+  if(topBtn) topBtn.hidden = sc.scrollTop < 320;
+}
+function scrollRrdTop(){
+  var sc = rrdScrollRoot();
+  if(!sc) return;
+  try{ sc.scrollTo({ top: 0, behavior: "smooth" }); }
+  catch(e){ sc.scrollTop = 0; }
+}
+/* ---------- 阅读页动作：复制正文 / 复制链接 / 打印 / 代码全屏 / 上一篇下一篇 ---------- */
+function rrdHashParam(name){
+  var h = String(window.location.hash || "");
+  var q = h.indexOf("?");
+  if(q < 0) return "";
+  var parts = h.substring(q + 1).split("&");
+  for(var i = 0; i < parts.length; i++){
+    var kv = parts[i].split("=");
+    if(decodeURIComponent(kv[0]) === name) return decodeURIComponent(kv[1] || "");
+  }
+  return "";
+}
+/* 深链约定：#/requirements?doc=<id>&view=read[&h=标题序号]，h 是阅读大纲里的序号 */
+function rrdDocLinkUrl(id, headIndex){
+  var base = window.location.origin + window.location.pathname;
+  if(location.protocol === "file:") base = String(window.location.href).split("#")[0];
+  return base + "#/requirements?doc=" + encodeURIComponent(id) + "&view=read"
+    + (headIndex >= 0 ? "&h=" + headIndex : "");
+}
+function rrdPlainText(){
+  if(rrdDocDetail && rrdDocDetail.format === "sheet" && reqSheetReaderView){
+    try{ return sheetSnapshotText(reqSheetReaderView.getSnapshot()); }catch(e){ return ""; }
+  }
+  var body = $("reqDocReaderBody");
+  if(!body) return "";
+  /* 按钮文案（复制 / 语言标签）不属于正文；克隆到屏外取 innerText，保留换行与列表结构 */
+  var clone = body.cloneNode(true);
+  clone.querySelectorAll(".code-tools,.code-lang,.rrd-anchor").forEach(function(n){ n.remove(); });
+  var host = document.createElement("div");
+  host.style.cssText = "position:fixed;left:-9999px;top:0;width:760px;";
+  host.appendChild(clone);
+  document.body.appendChild(host);
+  var text = clone.innerText || clone.textContent || "";
+  host.remove();
+  return text;
+}
+function copyRrdBody(){
+  var text = String(rrdPlainText()).replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  if(!text){ toast("正文是空的，没有可复制的内容", "warn"); return; }
+  UI.copyText(text, "已复制正文（" + text.length + " 字）");
+}
+function copyRrdLink(){
+  if(!splitDocId) return;
+  UI.copyText(rrdDocLinkUrl(splitDocId, -1), "已复制文档链接");
+}
+function printRrdDoc(){
+  var body = $("reqDocReaderBody");
+  if(!body || !(body.textContent || "").trim()){ toast("正文为空，没有可打印的内容", "warn"); return; }
+  var clone = body.cloneNode(true);
+  clone.querySelectorAll(".code-tools,.code-btn,.code-lang,.rrd-anchor").forEach(function(n){ n.remove(); });
+  var title = (rrdDocDetail && rrdDocDetail.title) || "文档";
+  var win = window.open("", "_blank");
+  if(!win){ toast("浏览器阻止了弹出窗口，请允许后重试", "warn"); return; }
+  win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + esc(title) + '</title>'
+    + '<style>body{font-family:system-ui,-apple-system,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.7;font-size:14px;color:#222;}'
+    + 'h1{font-size:22px;border-bottom:1px solid #ddd;padding-bottom:8px;}img{max-width:100%;}'
+    + 'table{border-collapse:collapse;width:100%;}td,th{border:1px solid #ccc;padding:6px 8px;}'
+    + '.table-wrap{overflow:visible;}'
+    + 'pre{background:#f6f7f9;padding:10px;border-radius:6px;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;}'
+    + '@media print{body{margin:0;max-width:none;}}</style></head><body>'
+    + '<h1>' + esc(title) + '</h1>' + clone.innerHTML + '</body></html>');
+  win.document.close();
+  setTimeout(function(){ win.print(); }, 300);
+}
+function closeRrdCodeModal(){
+  var m = document.getElementById("rrdCodeModal");
+  if(m) m.remove();
+  if(rrdCodeEscHandler){
+    document.removeEventListener("keydown", rrdCodeEscHandler, true);
+    rrdCodeEscHandler = null;
+  }
+}
+function openCodeFullscreen(block){
+  var pre = block ? block.querySelector("pre") : null;
+  if(!pre) return;
+  closeRrdCodeModal();
+  var lang = block.getAttribute("data-lang") || "";
+  var modal = document.createElement("div");
+  modal.className = "code-modal";
+  modal.id = "rrdCodeModal";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("aria-label", "代码全屏查看");
+  modal.innerHTML = '<div class="code-modal-panel">' +
+      '<div class="code-modal-head">' +
+        '<span class="code-modal-lang">' + esc(lang) + '</span>' +
+        '<button class="code-btn" type="button" data-code-copy="1" aria-label="复制代码">' + icon("copy", 12) + '<span>复制</span></button>' +
+        '<button class="code-btn" type="button" data-code-close="1" aria-label="关闭全屏">' + icon("close", 12) + '</button>' +
+      '</div>' +
+      '<pre class="code-modal-pre"></pre>' +
+    '</div>';
+  modal.querySelector(".code-modal-pre").textContent = codeBlockText(pre);
+  modal.addEventListener("click", function(e){
+    if(e.target === modal || e.target.closest("[data-code-close]")) closeRrdCodeModal();
+  });
+  document.body.appendChild(modal);
+  rrdCodeEscHandler = function(e){
+    if(e.key === "Escape"){
+      e.stopPropagation();
+      closeRrdCodeModal();
+    }
+  };
+  document.addEventListener("keydown", rrdCodeEscHandler, true);
+}
+function closeRrdMore(){
+  var menu = $("rrdMoreMenu");
+  if(menu) menu.hidden = true;
+  var btn = document.querySelector("#reqDocReader [data-rrd-more]");
+  if(btn) btn.setAttribute("aria-expanded", "false");
+}
+/* 左侧文档树的先序顺序 = 阅读时的上一篇/下一篇顺序 */
+function rrdDocOrder(){
+  var out = [];
+  function walk(nodes){
+    (nodes || []).forEach(function(n){
+      if(n.kind === "doc"){ out.push(n.doc); walk(n.children); }
+      else walk(n.children);
+    });
+  }
+  reqDocGroupsCache.forEach(function(g){ walk(g.nodes); });
+  return out;
+}
+function renderRrdPager(docId){
+  var box = $("rrdPager");
+  if(!box) return;
+  var order = rrdDocOrder();
+  var i = -1;
+  for(var k = 0; k < order.length; k++) if(order[k].id === docId){ i = k; break; }
+  var prev = i > 0 ? order[i - 1] : null;
+  var next = i >= 0 && i < order.length - 1 ? order[i + 1] : null;
+  if(!prev && !next){ box.hidden = true; box.innerHTML = ""; return; }
+  function item(d, dir){
+    if(!d) return "";
+    return '<button class="rrd-pager-item ' + dir + '" type="button" data-rrd-open="' + esc(d.id) + '">' +
+      '<span class="pp-dir">' + (dir === "prev" ? "上一篇" : "下一篇") + '</span>' +
+      '<span class="pp-name">' + esc(d.title) + '</span></button>';
+  }
+  box.innerHTML = item(prev, "prev") + item(next, "next");
+  box.hidden = false;
+}
+function refreshRrdTocActive(){
+  if(!rrdTocItems.length || splitDocId == null) return;
+  var rd = $("reqDocReader");
+  if(!rd || !rd.offsetParent) return;
+  var root = $("reqDocReaderBody");
+  if(!root) return;
+  var line = 128;
+  var cur = rrdTocItems[0].anchor;
+  for(var i = 0; i < rrdTocItems.length; i++){
+    var el = root.querySelector('[data-rtoc="' + rrdTocItems[i].anchor + '"]');
+    if(!el) continue;
+    if(el.getBoundingClientRect().top <= line) cur = rrdTocItems[i].anchor;
+    else break;
+  }
+  markRrdTocActive(cur);
+}
+function scheduleRrdTocActive(){
+  if(rrdTocRaf) return;
+  rrdTocRaf = requestAnimationFrame(function(){
+    rrdTocRaf = 0;
+    refreshRrdTocActive();
+    updateRrdScrollUI();
+    scheduleRrdPosSave();
+  });
+}
 function renderReqDocReader(doc){
   var box = $("reqDocReader");
   if(!box) return;
+  closeRrdCodeModal();
+  closeRrdMore();
+  rrdTocQuery = "";
   disposeReqSheetReader();
   rrdDocDetail = doc;
   var pubBadge = doc.publishedAt == null
@@ -1748,11 +2295,17 @@ function renderReqDocReader(doc){
   rrdActiveTab = "comments";
   rrdCanComment = canWrite;
   rrdFlashCommentId = null;
+  rrdTocItems = [];
+  rrdTocCollapsed = {};
+  rrdTocActive = null;
   setRrdQuote(null);
   hideRrdSelBubble();
   hideRrdCellBubble();
   var rrdActTip = doc.format === "sheet" ? "选中单元格可批注" : "选中正文可划线";
   box.classList.remove("with-comments");
+  /* 表格没有标题层级，不挂大纲；正文类文档按本机偏好显示/隐藏 */
+  var tocOn = doc.format !== "sheet" && rrdTocVisiblePref();
+  box.classList.toggle("no-toc", !tocOn);
   box.innerHTML =
     '<div class="rrd-main">' +
     '<div class="rrd-head">' +
@@ -1762,6 +2315,8 @@ function renderReqDocReader(doc){
         '<span class="rrd-acts">' +
           docZoomControlHTML() +
           '<span class="vdiv" aria-hidden="true"></span>' +
+          (doc.format === "sheet" ? '' :
+            '<button class="btn sm ghost ibtn" type="button" data-rrd-toc aria-pressed="' + (tocOn ? "true" : "false") + '" data-tip="' + (tocOn ? "隐藏大纲" : "显示大纲") + '" aria-label="' + (tocOn ? "隐藏大纲" : "显示大纲") + '">' + icon("listUl", 15) + '</button>') +
           '<button class="btn sm ghost ibtn" type="button" data-rrd-wide aria-pressed="false" data-tip="宽屏阅读（收起左侧文档树）" aria-label="宽屏阅读">' + icon("expand", 15) + '</button>' +
           '<span class="vdiv" aria-hidden="true"></span>' +
           (canMut ? '<button class="btn sm ghost ibtn" type="button" data-rrd-rename="' + esc(doc.id) + '" data-tip="重命名文档" aria-label="重命名文档">' + icon("edit", 15) + '</button>' : '') +
@@ -1771,13 +2326,38 @@ function renderReqDocReader(doc){
           '<span class="vdiv" aria-hidden="true"></span>' +
           '<button class="btn sm ghost ibtn" type="button" data-rrd-export="' + esc(doc.id) + '" data-tip="导出 Markdown / HTML" aria-label="导出 Markdown / HTML">' + icon("download", 15) + '</button>' +
           '<button class="btn sm ghost ibtn" type="button" data-rrd-export-word="' + esc(doc.id) + '" data-tip="导出 Word（.docx）" aria-label="导出 Word">' + icon("docW", 15) + '</button>' +
+          '<span class="rrd-more">' +
+            '<button class="btn sm ghost ibtn" type="button" data-rrd-more aria-haspopup="true" aria-expanded="false" data-tip="更多" aria-label="更多操作">' + icon("more", 15) + '</button>' +
+            '<div class="menu rrd-more-menu" id="rrdMoreMenu" hidden>' +
+              '<button class="menu-item" type="button" data-rrd-act="copy-body">' + icon("copy", 14) + '复制正文</button>' +
+              '<button class="menu-item" type="button" data-rrd-act="copy-link">' + icon("link", 14) + '复制链接</button>' +
+              '<button class="menu-item" type="button" data-rrd-act="print">' + icon("print", 14) + '打印 / 导出 PDF</button>' +
+            '</div>' +
+          '</span>' +
           '<span class="vdiv" aria-hidden="true"></span>' +
           '<button class="btn sm soft" type="button" data-rrd-edit="' + esc(doc.id) + '"' + (canMut ? ' data-tip="编辑这篇文档" aria-label="编辑文档"' : ' disabled title="仅文档负责人或空间管理员可编辑"') + '>' + icon("edit", 13) + ' 编辑文档</button>' +
         '</span>' +
       '</div>' +
       '<div class="rrd-meta">' + meta.join(" · ") + '</div>' +
     '</div>' +
-    '<div class="rrd-body markdown-body" id="reqDocReaderBody"></div>' +
+    '<div class="rrd-docwrap">' +
+      '<div class="rrd-body markdown-body" id="reqDocReaderBody"></div>' +
+      (doc.format === "sheet" ? '' :
+        '<aside class="reqdoc-toc rrd-toc" id="rrdToc" aria-label="文档大纲">' +
+          '<div class="reqdoc-toc-head">' +
+            '<span class="rt-title">大纲</span>' +
+            '<button class="rt-depth" type="button" id="rrdTocDepth" aria-pressed="' + (rrdTocDepthOnly ? "true" : "false") + '" title="只看一、二级标题">一二级</button>' +
+            '<button class="rt-fold" type="button" id="rrdTocFold" title="收起大纲" aria-label="收起大纲">' + icon("rail", 14) + '</button>' +
+          '</div>' +
+          '<div class="rt-filter">' +
+            '<input type="search" id="rrdTocSearch" placeholder="筛选标题…" aria-label="筛选大纲标题" autocomplete="off" />' +
+          '</div>' +
+          '<nav class="reqdoc-toc-body" id="rrdTocBody"></nav>' +
+        '</aside>') +
+    '</div>' +
+    '<nav class="rrd-pager" id="rrdPager" aria-label="上一篇 / 下一篇" hidden></nav>' +
+    '<button class="rrd-top" id="rrdTop" type="button" title="回到顶部" aria-label="回到顶部" hidden>' + icon("up", 16) + '</button>' +
+    '<div class="rrd-progress" id="rrdProgress" hidden aria-hidden="true"><i id="rrdProgressFill"></i></div>' +
     '</div>' +
     '<aside class="rrd-comments" id="rrdComments" hidden aria-label="文档侧栏">' +
       '<div class="rrdc-head rrdc-tabhead">' +
@@ -1804,7 +2384,9 @@ function renderReqDocReader(doc){
       '<div class="rrdc-pane rrdc-perm" id="rrdPanePerm" hidden></div>' +
     '</aside>';
   syncDocZoomUI();
+  syncRrdTocToggle(box);
   UI.wireTooltips(box);
+  renderRrdPager(doc.id);
   loadRrdCommentCount(doc.id);
   if(!canWrite){ var cf = $("rrdCommentForm"); if(cf) cf.style.display = "none"; }
   bindRrdMention();
@@ -1847,7 +2429,13 @@ function renderReqDocReader(doc){
     }
     reqDocReaderFill(body, window.DOMPurify.sanitize(html));
     reqDocReaderOpenLinks(body);
+    decorateCodeBlocks(body);
+    decorateTables(body);
+    UI.wireTooltips(body);
+    rebuildRrdToc();
     rrdApplyHighlights();
+    applyRrdEntryScroll(id);
+    updateRrdScrollUI();
   }).catch(function(ex){
     if(splitDocId === id) body.innerHTML = UI.errorState(ex.message || "正文渲染失败");
   });
@@ -4859,6 +5447,7 @@ function renderMarkdownPreview(){
       links[i].setAttribute("target", "_blank");
       links[i].setAttribute("rel", "noopener noreferrer");
     }
+    decorateCodeBlocks(box);
     rebuildToc();
   }).catch(function(ex){
     box.innerHTML = '<div class="rt-empty">' + esc(ex.message || "Markdown 预览加载失败") + '</div>';
@@ -5291,6 +5880,7 @@ function printReqDoc(){
   win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + esc(title) + '</title>'
     + '<style>body{font-family:system-ui,-apple-system,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.7;font-size:14px;color:#222;}'
     + 'h1{font-size:22px;border-bottom:1px solid #ddd;padding-bottom:8px;}img{max-width:100%;}table{border-collapse:collapse;width:100%;}td,th{border:1px solid #ccc;padding:6px 8px;}'
+    + '.code-copy{display:none;}'
     + '@media print{body{margin:0;max-width:none;}}</style></head><body>'
     + '<h1>' + esc(title) + '</h1>' + bodyHtml + '</body></html>');
   win.document.close();
@@ -5775,6 +6365,7 @@ function renderReqDocHistoryPreview(h, box){
       links[i].setAttribute("target", "_blank");
       links[i].setAttribute("rel", "noopener noreferrer");
     }
+    decorateCodeBlocks(box);
   }).catch(function(ex){
     box.innerHTML = '<div class="rh-empty">' + esc(ex.message || "预览组件加载失败") + '</div>';
   });
@@ -7014,6 +7605,49 @@ function populateReqDocSelect(keep){
     openAttPreview({ attachment: { id: m[1], filename: img.getAttribute("alt") || "文档图片" } });
   });
 
+  /* 代码块复制：阅读页 / Markdown 预览 / 历史版本预览共用 */
+  document.addEventListener("click", function(e){
+    var btn = e.target.closest("[data-code-copy]");
+    if(!btn) return;
+    var wrap = btn.closest(".code-block") || btn.closest(".code-modal-panel");
+    var pre = wrap ? wrap.querySelector("pre") : null;
+    if(!pre) return;
+    UI.copyText(codeBlockText(pre), "代码已复制");
+    if(btn.__resetTimer) clearTimeout(btn.__resetTimer);
+    btn.classList.add("is-copied");
+    var label = btn.querySelector("span");
+    if(label) label.textContent = "已复制";
+    btn.__resetTimer = setTimeout(function(){
+      btn.classList.remove("is-copied");
+      if(label) label.textContent = "复制";
+      btn.__resetTimer = null;
+    }, 1600);
+  });
+
+  /* 大纲筛选框：阅读器会整块重绘，只能挂文档级委托 */
+  document.addEventListener("input", function(e){
+    var inp = e.target.closest("#rrdTocSearch");
+    if(!inp) return;
+    rrdTocQuery = String(inp.value || "").trim();
+    renderRrdToc();
+  });
+  /* 阅读页「更多」菜单：点外面 / Esc 收起（菜单项点击由阅读器委托先处理） */
+  document.addEventListener("click", function(e){
+    var menu = $("rrdMoreMenu");
+    if(!menu || menu.hidden) return;
+    if(e.target.closest("[data-rrd-more]") || menu.contains(e.target)) return;
+    closeRrdMore();
+  });
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape") closeRrdMore();
+  });
+
+  /* 阅读大纲跟随滚动：滚动发生在 .view 容器里，用捕获阶段接住任意容器滚动 */
+  document.addEventListener("scroll", scheduleRrdTocActive, true);
+  window.addEventListener("resize", scheduleRrdTocActive);
+  /* 关标签页/刷新时把最后的阅读位置存下来（滚动里的 600ms 防抖可能来不及触发） */
+  window.addEventListener("pagehide", function(){ saveRrdPosNow(); });
+
   /* 分类树右键菜单：点菜单外 / Esc / 滚动 时关闭（菜单项点击由菜单自身委托处理，先于此处） */
   document.addEventListener("click", function(e){
     if(reqDocCtxEl && reqDocCtxEl.classList.contains("open") && !e.target.closest(".reqdoc-ctx")) closeReqDocCtx();
@@ -7212,6 +7846,44 @@ function populateReqDocSelect(keep){
     rd.addEventListener("click", function(e){
       var nn = e.target.closest("[data-rrd-new]");
       if(nn){ var nb = $("reqDocNew"); if(nb) nb.click(); return; }
+      var mb = e.target.closest("[data-rrd-more]");
+      if(mb){
+        var mm = $("rrdMoreMenu");
+        if(mm){
+          var willOpen = mm.hidden;
+          mm.hidden = !willOpen;
+          mb.setAttribute("aria-expanded", willOpen ? "true" : "false");
+        }
+        return;
+      }
+      var ra = e.target.closest("[data-rrd-act]");
+      if(ra){
+        var act = ra.dataset.rrdAct;
+        closeRrdMore();
+        if(act === "copy-body") copyRrdBody();
+        else if(act === "copy-link") copyRrdLink();
+        else if(act === "print") printRrdDoc();
+        return;
+      }
+      if(e.target.closest("#rrdTocDepth")){ setRrdTocDepthOnly(!rrdTocDepthOnly); return; }
+      var ro = e.target.closest("[data-rrd-open]");
+      if(ro){
+        rrdSkipRestore = true;
+        rrdPendingHead = -1;
+        loadReqDocSplitDoc(ro.dataset.rrdOpen);
+        return;
+      }
+      var an = e.target.closest("[data-rrd-anchor]");
+      if(an){
+        e.preventDefault(); e.stopPropagation();
+        UI.copyText(rrdDocLinkUrl(splitDocId, parseInt(an.dataset.rrdAnchor, 10)), "已复制本节链接");
+        an.classList.add("is-copied");
+        setTimeout(function(){ an.classList.remove("is-copied"); }, 1600);
+        return;
+      }
+      var cex = e.target.closest("[data-code-expand]");
+      if(cex){ openCodeFullscreen(cex.closest(".code-block")); return; }
+      if(e.target.closest("#rrdTop")){ scrollRrdTop(); return; }
       var crumb = e.target.closest("[data-rrd-crumb]");
       if(crumb){ loadReqDocSplitDoc(crumb.dataset.rrdCrumb); return; }
       var rn = e.target.closest("[data-rrd-rename]");
@@ -7250,6 +7922,18 @@ function populateReqDocSelect(keep){
       var sh = e.target.closest(".perm-sec-head");
       if(sh){ var sec = sh.closest(".perm-sec"); if(sec) sec.classList.toggle("collapsed"); return; }
       if(e.target.closest("[data-rrd-wide]")){ toggleDocWide(); return; }
+      var tocBtn = e.target.closest("[data-rrd-toc]");
+      if(tocBtn){ setRrdTocVisible(tocBtn.getAttribute("aria-pressed") !== "true"); return; }
+      if(e.target.closest("#rrdTocFold")){ setRrdTocVisible(false); return; }
+      var tf = e.target.closest("[data-rtoc-fold]");
+      if(tf){
+        e.preventDefault(); e.stopPropagation();
+        rrdTocCollapsed[tf.dataset.rtocFold] = !rrdTocCollapsed[tf.dataset.rtocFold];
+        renderRrdToc();
+        return;
+      }
+      var tg = e.target.closest("[data-rtoc-go]");
+      if(tg){ e.preventDefault(); scrollToRrdToc(tg.dataset.rtocGo); return; }
       if(e.target.closest("#rrdCommentsX")){ toggleRrdComments(false); return; }
       if(e.target.closest("#rrdCommentSend")){ submitRrdComment(); return; }
       if(e.target.closest("#rrdQuoteClear")){ setRrdQuote(null); return; }

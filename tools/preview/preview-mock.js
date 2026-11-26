@@ -418,7 +418,7 @@
       owner: "陈工", excerpt: null, taskCount: 0, doneCount: 0,
       createdAt: ts(-3, 14, 10), updatedAt: ts(-3, 14, 10),
       format: "markdown", docType: "other", parentId: "D3", publishedAt: null,
-      content: "## 待补充\n\n- 差异明细怎么存档\n- 保留多久\n" },
+      content: "## 待补充\n\n- 差异明细怎么存档\n- 保留多久\n\n```sql\nselect batch_no, diff_type, count(*)\n  from recon_diff\n where batch_no = '20261125'\n group by batch_no, diff_type;\n```\n" },
 
     { id: "D2", reqId: "R1", reqName: "流程引擎", title: "对账落库需求", status: "done",
       owner: "我", excerpt: "异常明细单独建表，附原流水号便于回溯",
