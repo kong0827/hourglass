@@ -3455,7 +3455,6 @@ export function mountReleaseWorkspace(pageHost, opts){
       {key:"occurredAt", label:"实际发生时间", ok:!!a.occurredAt, need:"用于和计划时间比对，也是审计事实的时间锚点", go:"去填写", sel:'[data-release-occurredAt]'},
       {key:"executorUserId", label:"实际执行人", ok:!!a.executorUserId, need:"执行人独立于记录人，便于追溯是谁操作的", go:"去选择", sel:'[data-release-executorUserId]'},
       {key:"artifactRef", label:"制品标识", ok:!!String(a.artifactRef || "").trim(), need:"证明本次部署的是哪个构建，不能只写版本名", go:"去填写", sel:'[data-release-artifactRef]'},
-      {key:"artifactDigest", label:"制品 SHA256", ok:/^[a-f0-9]{64}$/.test(String(a.artifactDigest || "").trim().toLowerCase()), need:"同一制品的校验值，用于核对部署物一致", go:"去填写", sel:'[data-release-artifactDigest]'},
       {key:"targetKeys", label:"实际目标键", ok:lines(a.targetKeys).length > 0, need:"回滚与影响范围都要按目标键核对", go:"去填写", sel:'[data-release-targetKeys]'},
       {key:"actualTaskIds", label:"实际交付工作项", ok:a.actualTaskIds.length > 0, need:"发布快照按本次实际交付的工作项生成", go:"去勾选", sel:'[data-actual-task]'}
     ];
@@ -3579,7 +3578,7 @@ export function mountReleaseWorkspace(pageHost, opts){
     if(opts.onTab && !syncingFromHash) opts.onTab(key);
   }
   function focusActual(){
-    ["[data-release-occurredAt]", "[data-release-executorUserId]", "[data-release-artifactRef]", "[data-release-artifactDigest]", "[data-release-targetKeys]"].some(function(sel){
+    ["[data-release-occurredAt]", "[data-release-executorUserId]", "[data-release-artifactRef]", "[data-release-targetKeys]"].some(function(sel){
       var el = layer.querySelector(sel);
       if(!el || String(el.value || "").trim()) return false;
       /* 执行人值在隐藏 input 里，焦点落到它前面的人员字段按钮 */
@@ -3595,7 +3594,7 @@ export function mountReleaseWorkspace(pageHost, opts){
   }
   function context(){
     var a = readActual();
-    return {planId:a.planId || null, occurredAt:utc(a.occurredAt), environment:a.environment, targetKeys:lines(a.targetKeys), coverage:a.coverage, artifactRef:a.artifactRef.trim(), artifactDigest:a.artifactDigest.trim().toLowerCase(), operation:a.operation, relatedReleaseId:a.relatedReleaseId || null, executorUserId:a.executorUserId || null, actualTaskIds:a.actualTaskIds.slice(), deviationReason:a.deviationReason.trim() || null, result:a.result, notes:a.notes.trim(), failureReason:a.result === "failed" ? a.failureReason.trim() : null};
+    return {planId:a.planId || null, occurredAt:utc(a.occurredAt), environment:a.environment, targetKeys:lines(a.targetKeys), coverage:a.coverage, artifactRef:a.artifactRef.trim(), artifactDigest:(a.artifactDigest.trim().toLowerCase() || null), operation:a.operation, relatedReleaseId:a.relatedReleaseId || null, executorUserId:a.executorUserId || null, actualTaskIds:a.actualTaskIds.slice(), deviationReason:a.deviationReason.trim() || null, result:a.result, notes:a.notes.trim(), failureReason:a.result === "failed" ? a.failureReason.trim() : null};
   }
   function planBody(){
     var p = selectedPlan(), planned = value("plan", "planned");
@@ -4667,8 +4666,8 @@ export function mountReleaseWorkspace(pageHost, opts){
         + field("实际结果", '<select data-release-result' + actualDisabled + '>' + options([["success", "成功"], ["failed", "失败"]], a.result) + '</select>', "记录本次真实结果；失败必须填写失败原因。") + '</div>'
         + '<div data-release-check-host></div>'
         + '<div class="form-grid">' + field("实际执行人（独立于记录人）", releaseOwnerControl("actual", a.executorUserId, actualDisabled), "实际执行发布的人，独立于记录人。", true)
-        + field("制品标识", '<input type="text" data-release-artifactRef maxlength="500" placeholder="如 hourglass-server.jar#8b44737" value="' + esc(a.artifactRef) + '"' + actualDisabled + '>', "可识别的制品名或构建号，例如 jar 名 + 提交号；不要用普通版本名代替制品证据。", true)
-        + field("SHA256", '<input type="text" data-release-artifactDigest maxlength="64" placeholder="64 位十六进制" value="' + esc(a.artifactDigest) + '"' + actualDisabled + '>', "制品文件的 SHA256，只能填 64 位十六进制；用于证明部署的是同一制品。", true) + '</div>'
+        + field("制品标识", '<input type="text" data-release-artifactRef maxlength="500" placeholder="如 hourglass-server.jar#8b44737" value="' + esc(a.artifactRef) + '"' + actualDisabled + '>', "可识别的制品名或构建号，例如 jar 名#提交号，提交号写在这里；不要用普通版本名代替制品证据。", true)
+        + field("SHA256（选填）", '<input type="text" data-release-artifactDigest maxlength="64" placeholder="64 位十六进制，可留空" value="' + esc(a.artifactDigest) + '"' + actualDisabled + '>', "选填。填就填制品文件的完整 64 位十六进制 SHA-256；commit id 是 40 位源码哈希，不能填在这里。") + '</div>'
         + field("实际目标键（每行一个）", '<textarea data-release-targetKeys placeholder="如 prod-shanghai-a，每行一个"' + actualDisabled + '>' + esc(a.targetKeys) + '</textarea>', "本次实际涉及的部署目标或服务键，每行一个；回滚时必须是引用事件目标的子集。", true)
         + heading("本次实际交付哪些工作项（与计划分别保存）", "只勾选本次真实交付的工作项，至少 1 项；未完成项会触发预检，需要填写原因。") + taskRows("actual", a.actualTaskIds, !!actualDisabled)
         + '<details class="release-advanced" data-release-advanced' + (advancedOpen ? ' open' : '') + '><summary>高级与异常字段 <span class="mute" data-release-advanced-summary></span></summary><div class="form-grid">'
@@ -4735,7 +4734,7 @@ export function mountReleaseWorkspace(pageHost, opts){
   }
   function validate(b){
     if(!b.occurredAt || new Date(b.occurredAt).getTime() > Date.now()) return "请填写不晚于当前时间的实际发生时间";
-    if(!b.artifactRef || !/^[a-f0-9]{64}$/.test(b.artifactDigest)) return "制品标识和 64 位 SHA256 必填";
+    if(!b.artifactRef || (b.artifactDigest && !/^[a-f0-9]{64}$/.test(b.artifactDigest))) return "制品标识必填；SHA256 要么留空，要么填完整 64 位十六进制（commit id 不算）";
     if(!b.executorUserId || !members.some(function(m){ return (m.userId || m.id) === b.executorUserId; })) return "请选择当前成员作为独立实际执行人";
     if(!b.actualTaskIds.length || !b.targetKeys.length) return "请明确选择实际工作项和至少一个目标键";
     if(b.result === "failed" && !b.failureReason) return "记录失败必须填写失败原因（展开「高级与异常字段」）";

@@ -1244,8 +1244,8 @@ public class VersionReleaseService {
         if (c.related == null) return;
         if (rollback || redeploy) {
             if (!"success".equals(c.related.getResult()) || "rollback".equals(c.related.getOperation()) || !r.getEnvironment().equals(c.related.getEnvironment())
-                    || !r.getArtifactRef().equals(c.related.getArtifactRef()) || !r.getArtifactDigest().equals(c.related.getArtifactDigest())
-                    || !c.related.getTargetKeys().containsAll(r.getTargetKeys())) throw AppException.badRequest("关联事件的环境、产物及目标范围不匹配");
+                    || !Objects.equals(r.getArtifactRef(), c.related.getArtifactRef()) || !Objects.equals(r.getArtifactDigest(), c.related.getArtifactDigest())
+                    || !c.related.getTargetKeys().containsAll(r.getTargetKeys())) throw AppException.badRequest("关联事件的环境、产物及目标范围不匹配（回滚 / 重部署须与被引用事件填相同的制品标识与 SHA256）");
             if (redeploy && !version.getId().equals(c.related.getVersionId())) throw AppException.badRequest("重部署必须使用相同版本");
             if (rollback && (r.getDeviationReason() == null || r.getTargetKeys().isEmpty())) throw AppException.badRequest("回滚必须说明原因并明确目标");
         } else if (!"failed".equals(c.related.getResult()) || r.getDeviationReason() == null) throw AppException.badRequest("真实重试必须关联失败事件并说明原因");
@@ -1257,10 +1257,16 @@ public class VersionReleaseService {
         r.setPlanId(Texts.trimToNull(r.getPlanId())); r.setRelatedReleaseId(Texts.trimToNull(r.getRelatedReleaseId())); r.setDeviationReason(Texts.trimToNull(r.getDeviationReason()));
         r.setActualTaskIds(identities(r.getActualTaskIds(), 32, "实际任务")); r.setTargetKeys(identities(r.getTargetKeys(), 128, "发布目标"));
         dimensions(r.getEnvironment(), r.getCoverage(), r.getTargetKeys());
-        if (!Arrays.asList("deploy", "redeploy", "rollback").contains(r.getOperation()) || Texts.trimToNull(r.getArtifactRef()) == null || r.getArtifactRef().length() > 500
-                || r.getArtifactDigest() == null || !r.getArtifactDigest().matches("[a-fA-F0-9]{64}") || Texts.trimToNull(r.getExecutorUserId()) == null)
-            throw AppException.badRequest("操作、产物、SHA-256及实际执行人必填");
-        r.setArtifactDigest(r.getArtifactDigest().toLowerCase(Locale.ROOT));
+        String artifactRef = Texts.trimToNull(r.getArtifactRef());
+        String artifactDigest = Texts.trimToNull(r.getArtifactDigest());
+        if (!Arrays.asList("deploy", "redeploy", "rollback").contains(r.getOperation()) || artifactRef == null || artifactRef.length() > 500
+                || Texts.trimToNull(r.getExecutorUserId()) == null)
+            throw AppException.badRequest("操作、产物及实际执行人必填");
+        /* 制品 SHA-256 选填：有 CI 的团队可填；填了仍必须是完整 64 位，不能拿 commit id 冒充 */
+        if (artifactDigest != null && !artifactDigest.matches("[a-fA-F0-9]{64}"))
+            throw AppException.badRequest("制品 SHA256 必须是 64 位十六进制，或留空表示未记录");
+        r.setArtifactRef(artifactRef);
+        r.setArtifactDigest(artifactDigest == null ? null : artifactDigest.toLowerCase(Locale.ROOT));
         if (r.getPlanId() == null && r.getDeviationReason() == null) throw AppException.badRequest("无计划紧急记录必须说明原因");
     }
 

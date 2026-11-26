@@ -6478,6 +6478,47 @@ html[data-theme="dark"] .project-table-row > .project-row-acts{box-shadow:-8px 0
   background:var(--surface-sunken);overflow:auto;
 }
 .markdown-body pre code{padding:0;background:none;font-size:13px;line-height:1.7;}
+/* 代码块：左上语言标签 + 右上复制/全屏。按钮在滚动容器外，pre 横向滚动时不会被带走 */
+.code-block{position:relative;margin:14px 0;}
+.code-block>pre{margin:0;}
+.code-block[data-lang]>pre{padding-top:30px;}
+.code-lang{
+  position:absolute;top:7px;left:11px;z-index:1;pointer-events:none;
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;
+  line-height:1;color:var(--text-3);letter-spacing:.02em;
+}
+.code-tools{
+  position:absolute;top:6px;right:6px;z-index:1;display:flex;align-items:center;gap:4px;
+  opacity:0;transition:opacity var(--dur-fast) var(--ease-out);
+}
+.code-block:hover .code-tools,.code-tools:focus-within{opacity:1;}
+.code-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:4px;height:22px;padding:0 7px;
+  border:1px solid var(--border);border-radius:var(--r-xs);
+  background:var(--surface);color:var(--text-3);font-family:inherit;font-size:11px;line-height:1;
+  cursor:pointer;
+  transition:color var(--dur-fast) var(--ease-out),background var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out);
+}
+.code-btn:hover{color:var(--text);background:var(--surface-hover);}
+.code-btn.is-copied{color:var(--success-fg);border-color:var(--success-border);background:var(--success-soft);}
+.code-btn svg{width:12px;height:12px;}
+.code-expand{padding:0;width:22px;}
+@media (hover:none){.code-tools{opacity:.75;}}
+/* 代码全屏查看：整屏遮罩 + 可滚动 pre */
+.code-modal{position:fixed;inset:0;z-index:220;display:grid;place-items:center;padding:24px;background:rgba(15,23,42,.45);}
+.code-modal-panel{
+  display:flex;flex-direction:column;width:min(1100px,96vw);max-height:88vh;overflow:hidden;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xl);
+}
+.code-modal-head{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--border);}
+.code-modal-lang{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;color:var(--text-3);}
+.code-modal-pre{
+  margin:0;padding:16px;overflow:auto;
+  background:var(--surface-sunken);
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:13px;line-height:1.7;color:var(--text);
+}
+.markdown-body .table-wrap{overflow-x:auto;margin:14px 0;-webkit-overflow-scrolling:touch;}
+.markdown-body .table-wrap>table{margin:0;width:auto;min-width:100%;}
 .markdown-body table{border-collapse:collapse;width:auto;max-width:100%;margin:14px 0;font-size:14px;}
 .markdown-body th,.markdown-body td{border:1px solid var(--border);padding:var(--space-2) 10px;vertical-align:middle;}
 .markdown-body th{background:var(--surface-sunken);font-weight:650;text-align:left;}
@@ -6898,6 +6939,21 @@ html[data-theme="dark"] .project-table-row > .project-row-acts{box-shadow:-8px 0
 .rrd-acts{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap;}
 .rrd-meta{margin-top:6px;font-size:12px;color:var(--text-3);}
 .rrd-body{font-size:14px;line-height:1.85;min-height:200px;}
+/* 阅读页：正文 + 右侧大纲（大纲沿用编辑页那套 .reqdoc-toc，只是外层改为网格） */
+.rrd-docwrap{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:22px;align-items:start;}
+#reqDocReader.no-toc .rrd-toc{display:none;}
+#reqDocReader.no-toc .rrd-docwrap{grid-template-columns:minmax(0,1fr);}
+.rrd-toc{top:12px;max-height:calc(100vh - 160px);}
+/* 窄屏 / 评论栏张开时让正文优先，大纲收起；点顶部「大纲」仍可强制显示 */
+@media (max-width:1180px){
+  .rrd-toc{display:none !important;}
+  #reqDocReader [data-rrd-toc]{display:none;}
+  #reqDocReader .rrd-docwrap{grid-template-columns:minmax(0,1fr);}
+}
+@media (max-width:1440px){
+  #reqDocReader.with-comments .rrd-toc{display:none;}
+  #reqDocReader.with-comments .rrd-docwrap{grid-template-columns:minmax(0,1fr);}
+}
 /* 正文缩放：阅读与编辑共用 --doc-zoom，只缩正文不缩工具栏。
    宽度取 min(100%, 100%/缩放)：放大时反向补偿填满栏宽，
    缩小时保持栏宽（否则 125% 的布局盒会撑出横向滚动）。 */
@@ -7328,6 +7384,72 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
   #dlgReqDocHistory .rh-foot-hint{display:none;}
   #dlgReqDocHistory .rh-dfold .range{display:none;}
 }
+
+/* ---------------- 阅读页增强：大纲筛选/层级、标题锚点、更多菜单、翻页、进度 ---------------- */
+/* 大纲：头部与筛选常驻，只让列表区滚动（编辑页大纲仍是整块滚动） */
+.rrd-toc{display:flex;flex-direction:column;overflow:hidden;}
+.rrd-toc .reqdoc-toc-head{flex:none;}
+.rrd-toc .reqdoc-toc-body{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;}
+.rt-depth{
+  flex:none;height:20px;padding:0 6px;border:1px solid var(--border);border-radius:var(--r-micro);
+  background:var(--surface);color:var(--text-3);font:inherit;font-size:11px;line-height:1;cursor:pointer;
+}
+.rt-depth:hover{color:var(--text-2);border-color:var(--border-strong);}
+.rt-depth.on{background:var(--primary-soft);border-color:transparent;color:var(--primary-fg);}
+.rt-filter{flex:none;padding:0 8px 8px;}
+.rt-filter input{
+  width:100%;height:26px;padding:0 8px;border:1px solid var(--border);border-radius:var(--r-xs);
+  background:var(--surface);color:var(--text);font:inherit;font-size:12px;
+}
+.rt-filter input:focus{outline:none;border-color:var(--border-strong);}
+
+/* 标题锚点：悬停标题左侧浮出复制按钮 */
+.rrd-body h1,.rrd-body h2,.rrd-body h3,.rrd-body h4,.rrd-body h5,.rrd-body h6{position:relative;}
+.rrd-anchor{
+  position:absolute;left:-22px;top:.16em;display:grid;place-items:center;width:18px;height:18px;padding:0;
+  border:none;border-radius:var(--r-micro);background:none;color:var(--text-3);opacity:0;cursor:pointer;
+  transition:opacity var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out),background var(--dur-fast) var(--ease-out);
+}
+.rrd-body h1:hover>.rrd-anchor,.rrd-body h2:hover>.rrd-anchor,.rrd-body h3:hover>.rrd-anchor,
+.rrd-body h4:hover>.rrd-anchor,.rrd-body h5:hover>.rrd-anchor,.rrd-body h6:hover>.rrd-anchor,
+.rrd-anchor:focus-visible{opacity:1;}
+.rrd-anchor:hover{color:var(--primary-fg);background:var(--primary-soft);}
+.rrd-anchor.is-copied{opacity:1;color:var(--success-fg);}
+@media (hover:none){.rrd-anchor{display:none;}}
+/* 深链定位到的标题闪一下 */
+.rrd-body .rrd-flash{animation:rrd-flash-hl 1.6s var(--ease-out);border-radius:var(--r-xs);}
+@keyframes rrd-flash-hl{0%,45%{background:var(--primary-soft);}100%{background:transparent;}}
+@media (prefers-reduced-motion: reduce){.rrd-body .rrd-flash{animation:none;background:var(--primary-soft);}}
+
+/* 工具栏「更多」菜单 */
+.rrd-more{position:relative;display:inline-flex;}
+.rrd-more-menu{top:calc(100% + 4px);right:0;left:auto;min-width:160px;}
+
+/* 文末上一篇 / 下一篇 */
+.rrd-pager{display:flex;gap:var(--space-3);margin-top:26px;padding-top:16px;border-top:1px solid var(--border);}
+.rrd-pager[hidden]{display:none;}
+.rrd-pager-item{
+  flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;padding:9px 12px;
+  border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);text-align:left;cursor:pointer;
+}
+.rrd-pager-item.next{align-items:flex-end;text-align:right;}
+.rrd-pager-item:hover{border-color:var(--border-strong);background:var(--surface-hover);}
+.pp-dir{font-size:11px;color:var(--text-3);}
+.pp-name{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600;color:var(--text);}
+
+/* 回到顶部 + 右侧阅读进度（避开右下角 AI 入口） */
+.rrd-top{
+  position:fixed;right:24px;bottom:calc(88px + var(--app-foot-h));z-index:99;
+  display:grid;place-items:center;width:36px;height:36px;padding:0;
+  border:1px solid var(--border);border-radius:50%;background:var(--surface);color:var(--text-2);
+  box-shadow:var(--shadow-md);cursor:pointer;
+}
+.rrd-top:hover{color:var(--text);background:var(--surface-hover);}
+.rrd-top[hidden]{display:none;}
+.rrd-progress{position:fixed;top:0;right:0;bottom:var(--app-foot-h);width:3px;z-index:98;pointer-events:none;}
+.rrd-progress[hidden]{display:none;}
+.rrd-progress i{display:block;width:100%;height:100%;background:var(--primary);opacity:.55;transform:scaleY(0);transform-origin:top;}
+@media (max-width:900px){.rrd-top,.rrd-progress{display:none;}}
 
 </style>
 <style>
@@ -8964,6 +9086,14 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
 .version-task-title .tag{flex:0 0 auto;}
 .version-task-main small{font-size:12px;line-height:1.5;color:var(--text-3);}
 .version-change-reason{margin-top:12px;}
+/* 排期弹窗内联带入：沿用版本页工作项行样式，列表压矮，避免把 400px 弹窗撑出屏幕 */
+.dp-task-block{border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px;}
+.dp-task-head{display:flex;align-items:center;gap:10px;}
+.dp-task-toggle{display:flex;align-items:center;gap:8px;flex:1;min-width:0;font-size:13px;cursor:pointer;}
+.dp-task-summary{margin:6px 0 0;font-size:12px;line-height:1.5;color:var(--text-3);}
+.dp-task-picker{margin-top:8px;}
+.dp-task-picker .version-task-tools{margin-bottom:8px;}
+.dp-task-list{max-height:200px;}
 .release-sheet{max-width:960px;max-height:calc(100dvh - 80px);display:flex;flex-direction:column;}
 .release-sheet .sheet-head{flex-shrink:0;}
 .release-sheet .sheet-body{min-height:0;overflow:auto;}
@@ -12483,6 +12613,7 @@ button.vd-link-v:hover{color:var(--primary-fg);}
 .vd-branch-wrap{display:inline-flex;align-items:center;gap:var(--space-1);max-width:100%;}
 .vd-rel-cell{white-space:nowrap;}
 .vd-rel-cell .vd-funnel{margin-left:6px;vertical-align:middle;}
+.vd-rel-cell .vd-backfill{margin-left:8px;vertical-align:middle;}
 .vd-muted{color:var(--text-3);font-size:11px;}
 
 /* ---------- 窄屏 ---------- */
@@ -22514,6 +22645,24 @@ details[open] .rv-rel-chev{transform:rotate(180deg)}
         <label for="dpVersion">目标版本（选填）</label>
         <select id="dpVersion"></select>
       </div>
+      <div class="field dp-task-block" id="fDemandPlanTasks" hidden>
+        <div class="dp-task-head">
+          <label class="dp-task-toggle" for="dpTaskToggle">
+            <input type="checkbox" id="dpTaskToggle" checked />
+            <span>同时把名下工作项加入该版本</span>
+          </label>
+          <button class="link-btn" type="button" id="dpTaskExpandBtn" aria-expanded="false" aria-controls="dpTaskPicker">展开选择</button>
+        </div>
+        <p class="hint dp-task-summary" id="dpTaskSummary" role="status"></p>
+        <div class="dp-task-picker" id="dpTaskPicker" hidden>
+          <div class="version-task-tools">
+            <input type="search" id="dpTaskSearch" placeholder="搜索工作项标题或负责人…" aria-label="搜索候选工作项" autocomplete="off" />
+            <span class="version-task-count" id="dpTaskCount" role="status"></span>
+          </div>
+          <div class="version-task-list dp-task-list" id="dpTaskList"></div>
+          <p class="hint" id="dpTaskEmpty" hidden>没有匹配的工作项</p>
+        </div>
+      </div>
       <div class="form-grid">
         <div class="field">
           <label for="dpPlannedStart">计划开始</label>
@@ -23061,7 +23210,7 @@ details[open] .rv-rel-chev{transform:rotate(180deg)}
       owner: "陈工", excerpt: null, taskCount: 0, doneCount: 0,
       createdAt: ts(-3, 14, 10), updatedAt: ts(-3, 14, 10),
       format: "markdown", docType: "other", parentId: "D3", publishedAt: null,
-      content: "## 待补充\n\n- 差异明细怎么存档\n- 保留多久\n" },
+      content: "## 待补充\n\n- 差异明细怎么存档\n- 保留多久\n\n```sql\nselect batch_no, diff_type, count(*)\n  from recon_diff\n where batch_no = '20261125'\n group by batch_no, diff_type;\n```\n" },
 
     { id: "D2", reqId: "R1", reqName: "流程引擎", title: "对账落库需求", status: "done",
       owner: "我", excerpt: "异常明细单独建表，附原流水号便于回溯",
@@ -56585,7 +56734,7 @@ async function snapshotToExcel(snapshot){
     if (o.tone !== "customer") {
       boxes.push(kv("部署目标", arr(rel.targets).join("、")));
       boxes.push(kvMono("制品标识", rel.artifactRef));
-      if (o.evidence >= 2) boxes.push(kvMono("制品 SHA256", rel.artifactDigest));
+      if (o.evidence >= 2) boxes.push(kvMono("制品 SHA256", rel.artifactDigest || "未记录"));
     }
     if (txt(rel.relatedReleaseId)) boxes.push(kv("关联正式事件", noText("REL", rel.relatedReleaseNo, rel.relatedReleaseId)));
     if (txt(rel.deviationReason)) boxes.push(kv("未按计划发布的原因", rel.deviationReason, "wide"));
@@ -61398,7 +61547,10 @@ var demandReq = $("demandReq"), demandsMeta = $("demandsMeta"), demandBody = $("
     dWsjfB = $("dWsjfB"), dWsjfU = $("dWsjfU"), dWsjfR = $("dWsjfR"), dWsjfE = $("dWsjfE"),
     fDemandTitle = $("fDemandTitle"), btnSaveDemand = $("btnSaveDemand"), demandFormTitle = $("demandFormTitle"),
     dpVersion = $("dpVersion"), dpNote = $("dpNote"), fDemandPlanVer = $("fDemandPlanVer"), btnDoPlan = $("btnDoPlan"),
-    dpPlannedStart = $("dpPlannedStart"), dpPlannedEnd = $("dpPlannedEnd"), dpPriority = $("dpPriority");
+    dpPlannedStart = $("dpPlannedStart"), dpPlannedEnd = $("dpPlannedEnd"), dpPriority = $("dpPriority"),
+    dpTaskBlock = $("fDemandPlanTasks"), dpTaskToggle = $("dpTaskToggle"), dpTaskSummary = $("dpTaskSummary"),
+    dpTaskPicker = $("dpTaskPicker"), dpTaskExpandBtn = $("dpTaskExpandBtn"), dpTaskSearch = $("dpTaskSearch"),
+    dpTaskCount = $("dpTaskCount"), dpTaskList = $("dpTaskList"), dpTaskEmpty = $("dpTaskEmpty");
 
 var COLS = [
   ["review", "待评审", "var(--text-3)"],
@@ -61520,6 +61672,8 @@ var demandOverviewMention = null;  /* 概览「讨论」里快速记录的 @ 提
 var editingDemandRevision = null, editingPlannedStart = null, editingPlannedEnd = null, editingDemandStatus = null;
 var editingDemandReqId = null;  /* 打开编辑时的所属项目，保存成功据此判断是否发生了迁移 */
 var planDemandRevision = null, planAction = "plan";
+/* 排期弹窗内联带入：候选按所选版本懒加载，提交时先排期再补关联 */
+var planTaskState = { seq:0, versionId:"", loaded:false, loading:false, items:[], selected:{}, query:"", total:0 };
 var formPri = "P2";
 var dragSrc = null;           /* 拖动中的卡片 { id, status, canSchedule } */
 var dragOverCol = null;       /* 最近悬停的列：drop 未触发时用 dragend 兜底提示 */
@@ -65062,6 +65216,7 @@ function openPlanDialog(id, replan){
   if(dpPlannedStart) dpPlannedStart.value = d.plannedStart || "";
   if(dpPlannedEnd) dpPlannedEnd.value = d.plannedEnd || "";
   if(dpPriority) dpPriority.value = d.priority || "P2";
+  resetPlanTasks();
   UI.openModal($("dlgDemandPlan"), "select");
   dpVersion.innerHTML = '<option value="">加载中…</option>';
   dpVersion.disabled = true;
@@ -65084,6 +65239,147 @@ function fillPlanVersions(d, list){
   }).join("");
   dpVersion.disabled = false;
   dpVersion.value = d.versionId && usable.some(function(v){ return v.id === d.versionId; }) ? d.versionId : "";
+  loadPlanTaskCandidates();
+}
+/* ---------- 排期内联带入工作项 ---------- */
+
+function resetPlanTasks(){
+  /* 保留 seq：关窗后再开同一需求，旧请求不能覆盖新一轮候选 */
+  var seq = planTaskState.seq;
+  planTaskState = { seq:seq, versionId:"", loaded:false, loading:false, items:[], selected:{}, query:"", total:0 };
+  if(!dpTaskBlock) return;
+  dpTaskBlock.hidden = true;
+  if(dpTaskPicker) dpTaskPicker.hidden = true;
+  if(dpTaskExpandBtn){ dpTaskExpandBtn.hidden = false; dpTaskExpandBtn.setAttribute("aria-expanded", "false"); dpTaskExpandBtn.textContent = "展开选择"; }
+  if(dpTaskToggle){ dpTaskToggle.checked = true; dpTaskToggle.disabled = false; }
+  if(dpTaskList) dpTaskList.innerHTML = "";
+  if(dpTaskSearch) dpTaskSearch.value = "";
+  if(dpTaskSummary) dpTaskSummary.textContent = "";
+  if(dpTaskEmpty) dpTaskEmpty.hidden = true;
+}
+function planTaskIds(){
+  return planTaskState.items.filter(function(t){ return planTaskState.selected[t.id]; }).map(function(t){ return t.id; });
+}
+/* 勾选与否只影响本次提交；没有候选或未加载成功时一律不提交 */
+function planTasksToAdd(){
+  if(!dpTaskBlock || dpTaskBlock.hidden || !planTaskState.loaded) return [];
+  if(dpTaskToggle && !dpTaskToggle.checked) return [];
+  return planTaskIds();
+}
+function planTaskSummaryText(){
+  if(!planTaskState.loaded) return planTaskState.loading ? "正在查找需求名下的工作项…" : "";
+  var total = planTaskState.total || planTaskState.items.length;
+  if(dpTaskToggle && !dpTaskToggle.checked) return "本次不加入工作项（共 " + total + " 项候选）";
+  var n = planTaskIds().length;
+  var cap = planTaskState.total > planTaskState.items.length
+    ? "，仅列出前 " + planTaskState.items.length + " 项" : "";
+  return "将加入 " + n + " 项（共 " + total + " 项候选，默认勾选未完成" + cap + "）";
+}
+function hiddenPlanTaskSelected(){
+  if(!planTaskState.query.trim() || !dpTaskList) return 0;
+  var n = 0;
+  dpTaskList.querySelectorAll("[data-dp-task-row]").forEach(function(row){
+    if(!row.hidden) return;
+    var cb = row.querySelector("[data-dp-task-check]");
+    if(cb && cb.checked) n++;
+  });
+  return n;
+}
+function syncPlanTaskUI(){
+  if(dpTaskSummary) dpTaskSummary.textContent = planTaskSummaryText();
+  if(!dpTaskCount) return;
+  var total = planTaskState.total || planTaskState.items.length;
+  var hidden = hiddenPlanTaskSelected();
+  dpTaskCount.textContent = "已选 " + planTaskIds().length + " / 共 " + total + " 项"
+    + (hidden ? "（筛选外 " + hidden + " 项也会加入）" : "");
+}
+function filterPlanTaskRows(){
+  if(!dpTaskList) return;
+  var q = planTaskState.query.trim().toLowerCase(), shown = 0;
+  dpTaskList.querySelectorAll("[data-dp-task-row]").forEach(function(row){
+    var match = !q || (row.getAttribute("data-task-title") || "").indexOf(q) !== -1;
+    row.hidden = !match;
+    if(match) shown++;
+  });
+  if(dpTaskEmpty) dpTaskEmpty.hidden = shown !== 0;
+}
+function renderPlanTasks(){
+  if(!dpTaskList) return;
+  var versionId = planTaskState.versionId;
+  dpTaskList.innerHTML = planTaskState.items.map(function(t){
+    var bits = [];
+    var typeTag = typeBadgeHTML(t.itemType);
+    if(typeTag) bits.push(typeTag);
+    bits.push(esc(t.owner || "未指派"));
+    bits.push(t.boardColumn === "done" ? '<span class="tag tag-success">已完成</span>'
+      : '<span class="tag tag-info">' + esc(colName(t.boardColumn)) + '</span>');
+    /* 与「补录工作项」弹窗同口径：工作项可同时属于多个版本，列出其他归属避免只看到本版本 */
+    var ids = taskVersionIds(t);
+    var others = ids.filter(function(vid){ return vid !== versionId; });
+    if(others.length){
+      bits.push("其他关联：" + esc(others.map(function(vid){
+        var name = t.versionNames && t.versionNames[ids.indexOf(vid)];
+        return name || vid;
+      }).join("、")));
+    }
+    return '<label class="version-task-row" data-dp-task-row data-task-title="' + esc(String((t.title || "") + " " + (t.owner || "")).toLowerCase()) + '">'
+      + '<input type="checkbox" data-dp-task-check="' + esc(t.id) + '"' + (planTaskState.selected[t.id] ? " checked" : "") + ' />'
+      + '<span class="version-task-main"><span class="version-task-title"><b>' + esc(t.title) + '</b></span>'
+      + '<small>' + bits.join(" · ") + '</small></span></label>';
+  }).join("");
+  filterPlanTaskRows();
+}
+/* 候选口径与「补录工作项」一致：只列需求名下尚未绑定该版本的工作项；pass 需求在排期前也能预览 */
+function loadPlanTaskCandidates(){
+  if(!dpTaskBlock) return;
+  var demandId = planDemandId, verId = dpVersion && dpVersion.value;
+  if(planAction === "replan" || !demandId || !verId){
+    dpTaskBlock.hidden = true;
+    return;
+  }
+  var seq = ++planTaskState.seq;
+  planTaskState.versionId = verId;
+  planTaskState.loading = true;
+  planTaskState.loaded = false;
+  planTaskState.items = [];
+  planTaskState.selected = {};
+  planTaskState.query = "";
+  planTaskState.total = 0;
+  dpTaskBlock.hidden = false;
+  /* 换版本只重置候选与勾选，保留用户已做的「不加工作项」选择 */
+  if(dpTaskToggle) dpTaskToggle.disabled = false;
+  if(dpTaskExpandBtn){ dpTaskExpandBtn.hidden = false; dpTaskExpandBtn.setAttribute("aria-expanded", "false"); dpTaskExpandBtn.textContent = "展开选择"; }
+  if(dpTaskPicker) dpTaskPicker.hidden = true;
+  if(dpTaskList) dpTaskList.innerHTML = "";
+  if(dpTaskSearch) dpTaskSearch.value = "";
+  if(dpTaskEmpty) dpTaskEmpty.hidden = true;
+  if(dpTaskSummary) dpTaskSummary.textContent = "正在查找需求名下的工作项…";
+  API.get("/api/demands/" + encodeURIComponent(demandId) + "/version-task-candidates", {
+    versionId: verId, offset: 0, limit: 100
+  }).then(function(page){
+    if(seq !== planTaskState.seq || planDemandId !== demandId) return;
+    page = page || {};
+    var items = page.items || [];
+    planTaskState.items = items;
+    planTaskState.total = Number(page.total) || items.length;
+    planTaskState.selected = {};
+    /* 已完成工作项通常已随历史版本交付，默认不勾，由用户自己决定是否回填 */
+    items.forEach(function(t){ if(t.boardColumn !== "done") planTaskState.selected[t.id] = true; });
+    planTaskState.loading = false;
+    planTaskState.loaded = true;
+    if(!items.length){ dpTaskBlock.hidden = true; return; }
+    renderPlanTasks();
+    syncPlanTaskUI();
+  }).catch(function(ex){
+    if(seq !== planTaskState.seq) return;
+    planTaskState.loading = false;
+    planTaskState.loaded = true;
+    /* 读候选失败不阻断排期：如实说明，之后仍可在版本页「管理工作项」补录 */
+    dpTaskBlock.hidden = false;
+    if(dpTaskToggle) dpTaskToggle.disabled = true;
+    if(dpTaskExpandBtn) dpTaskExpandBtn.hidden = true;
+    if(dpTaskSummary) dpTaskSummary.textContent = "候选工作项加载失败：" + (ex.message || "稍后可在版本页补录");
+  });
 }
 function doPlan(){
   if(!planDemandId) return;
@@ -65092,36 +65388,54 @@ function doPlan(){
   if(dpVersion.disabled) return;
   if(start && end && start > end){ toast("计划开始日期不能晚于计划结束日期", "warn"); return; }
   if(planAction === "replan" && !dpNote.value.trim()){ toast("请填写调期原因", "warn"); dpNote.focus(); return; }
+  /* 候选还在路上时提交会静默丢掉勾选：等一拍再排期 */
+  if(dpTaskBlock && !dpTaskBlock.hidden && planTaskState.loading){ toast("正在加载需求名下的工作项，请稍候再提交", "warn"); return; }
+  /* 先定下本次要带入的工作项：排期成功后弹窗即关，不能再读勾选状态 */
+  var demandId = planDemandId, action = planAction;
+  var taskIds = action === "plan" ? planTasksToAdd() : [];
   btnDoPlan.disabled = true;
-  API.post("/api/demands/" + encodeURIComponent(planDemandId) + "/" + planAction, {
+  API.post("/api/demands/" + encodeURIComponent(demandId) + "/" + action, {
     versionId: verId || null,
     plannedStart: start || null,
     plannedEnd: end || null,
-    priority: dpPriority ? dpPriority.value : findDemand(planDemandId).priority,
+    priority: dpPriority ? dpPriority.value : findDemand(demandId).priority,
     revision: planDemandRevision,
     note: dpNote.value.trim() || null
   }).then(function(){
-    btnDoPlan.disabled = false;
-    var demandId = planDemandId, action = planAction;
-    UI.closeModal($("dlgDemandPlan"));
-    closeDemandDetailIfOpen();
-    toast("已" + (action === "replan" ? "调期" : "排期") + (verId ? "到「" + versionName(verId) + "」" : "，暂不指定目标版本")
-      + (action === "plan" && verId ? "，关联任务默认不变" : "，关联任务不变"), "fs");
-    planDemandId = null;
-    drawerDemandOpts.reqId = null;
-    loadDemands();
-    /* 首次排期到版本才提示带入；调期不批量迁移，避免把已手工摆放的成员再抄一遍 */
-    if(action === "plan" && verId){
-      openDemandVersionBackfill(demandId, verId, versionName(verId) || verId, { fromPlan:true });
-    }
+    finishPlan(demandId, action, verId, taskIds);
   }).catch(function(ex){
     btnDoPlan.disabled = false;
     toast(ex.message || "排期失败", "bad");
     if(ex.code === 409){ UI.closeModal($("dlgDemandPlan")); planDemandId = null; closeDemandDetailIfOpen(); loadDemands(); }
   });
 }
+/* 排期已落库：补关联失败只能单独提示补录入口，不能当成排期失败让用户重试 */
+function finishPlan(demandId, action, verId, taskIds){
+  btnDoPlan.disabled = false;
+  UI.closeModal($("dlgDemandPlan"));
+  closeDemandDetailIfOpen();
+  var dest = verId ? "到「" + versionName(verId) + "」" : "，暂不指定目标版本";
+  var label = action === "replan" ? "已调期" : "已排期";
+  planDemandId = null;
+  drawerDemandOpts.reqId = null;
+  loadDemands();
+  if(taskIds && taskIds.length){
+    API.post("/api/demands/" + encodeURIComponent(demandId) + "/version-tasks", {
+      versionId: verId, taskIds: taskIds
+    }).then(function(res){
+      var added = Number(res && res.added) || 0, skipped = Number(res && res.skipped) || 0;
+      toast(added
+        ? label + dest + "，已加入 " + added + " 项工作项" + (skipped ? "，" + skipped + " 项已存在跳过" : "")
+        : label + dest + "，所选工作项均已在该版本中", "fs");
+    }).catch(function(ex){
+      toast(label + dest + "，但工作项带入失败：" + (ex.message || "未知原因") + "；可在版本页「管理工作项」补录", "warn");
+    });
+    return;
+  }
+  toast(label + dest + "，关联任务不变", "fs");
+}
 
-/* 排期带入工作项：只新增目标版本关联，不改工作项计划日期；版本页「补录工作项」复用同一入口 */
+/* 补录工作项：只新增目标版本关联，不改工作项计划日期；版本页「补录工作项」与已排需求抽屉共用 */
 function openDemandVersionBackfill(demandId, versionId, label, opts){
   opts = opts || {};
   var versionLabel = label || versionName(versionId) || versionId;
@@ -65136,7 +65450,7 @@ function openDemandVersionBackfill(demandId, versionId, label, opts){
     page = page || {};
     var items = page.items || [], total = Number(page.total) || 0;
     if(!total){
-      if(!opts.fromPlan) toast(opts.emptyText || "没有可带入的工作项（可能已全部在版本中）", "fs");
+      toast(opts.emptyText || "没有可带入的工作项（可能已全部在版本中）", "fs");
       return;
     }
     renderBackfill(items, total);
@@ -68012,6 +68326,27 @@ if($("segDemandPri")) $("segDemandPri").addEventListener("click", function(e){
 });
 if($("dlgDemandPlanX")) $("dlgDemandPlanX").addEventListener("click", function(){ UI.closeModal($("dlgDemandPlan")); });
 if(btnDoPlan) btnDoPlan.addEventListener("click", doPlan);
+if(dpVersion) dpVersion.addEventListener("change", loadPlanTaskCandidates);
+if(dpTaskToggle) dpTaskToggle.addEventListener("change", syncPlanTaskUI);
+if(dpTaskExpandBtn) dpTaskExpandBtn.addEventListener("click", function(){
+  if(!dpTaskPicker) return;
+  var open = dpTaskPicker.hidden;
+  dpTaskPicker.hidden = !open;
+  dpTaskExpandBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  dpTaskExpandBtn.textContent = open ? "收起" : "展开选择";
+  if(open && dpTaskSearch) dpTaskSearch.focus();
+});
+if(dpTaskSearch) dpTaskSearch.addEventListener("input", function(){
+  planTaskState.query = dpTaskSearch.value;
+  filterPlanTaskRows();
+  syncPlanTaskUI();
+});
+if(dpTaskList) dpTaskList.addEventListener("change", function(e){
+  var cb = e.target.closest("[data-dp-task-check]");
+  if(!cb) return;
+  planTaskState.selected[cb.getAttribute("data-dp-task-check")] = cb.checked;
+  syncPlanTaskUI();
+});
 if($("demandModeSeg")) $("demandModeSeg").addEventListener("click", function(e){
   var b = e.target.closest("[data-dem-mode]");
   if(!b) return;
@@ -68962,7 +69297,22 @@ function enterRequirementsView(){
   loadReqDocs(true).then(function(){ renderReqDocMode(); });
   /* 新标签页深链只消费一次：之后在同页里切来切去不再把正文强行推出来 */
   var deepDoc = reqDocDeepLinkDone ? "" : docDeepLinkId();
-  if(deepDoc){ reqDocDeepLinkDone = true; openReqDocEditor(deepDoc); }
+  if(deepDoc){
+    reqDocDeepLinkDone = true;
+    if(rrdHashParam("view") === "read"){
+      var h = parseInt(rrdHashParam("h"), 10);
+      rrdPendingHead = h >= 0 ? h : -1;
+      rrdSkipRestore = false;
+      /* 阅读分栏依赖文档列表判存：等列表到位再开，否则 renderReqDocSplit 会把刚选中的文档当已删除 */
+      loadReqDocs().then(function(){
+        if(activeView !== "requirements") return;
+        setReqDocMode("read");
+        loadReqDocSplitDoc(deepDoc);
+      });
+    }else{
+      openReqDocEditor(deepDoc);
+    }
+  }
 }
 function showReqDocList(){
   /* 同视图内再点「文档」也要先处理未保存正文，不能直接清空编辑态 */
@@ -69637,7 +69987,7 @@ function renderReqDocMode(){
   syncReqDocFilterUI();
   syncReqDocScopeUI();
   syncReqDocLoadError();
-  if(reqDocMode !== "read") disposeReqSheetReader();
+  if(reqDocMode !== "read"){ disposeReqSheetReader(); closeRrdCodeModal(); }
   if(reqDocMode === "kanban") renderReqDocKanban();
   else if(reqDocMode === "read") renderReqDocSplit();
   else if(reqDocMode === "feed") renderReqDocFeed();
@@ -70059,8 +70409,8 @@ function renderReqDocSplit(){
   var box = $("reqDocSplitTree");
   if(!box) return;
   applyDocWideState();
-  /* 选中的文档已被删除：回到占位提示 */
-  if(splitDocId && !reqDocById(splitDocId)){
+  /* 选中的文档已被删除：回到占位提示（列表还没取回时不能判存，先保持加载态） */
+  if(splitDocId && reqDocsLoaded && !reqDocById(splitDocId)){
     splitDocId = null;
     disposeReqSheetReader();
     if($("reqDocReader")) $("reqDocReader").innerHTML = '<div class="rrd-empty"><div class="rrd-empty-title"><span class="desk-only">从左侧选择文档阅读</span><span class="mob-inline">从上方目录选择文档</span></div>'
@@ -70104,6 +70454,9 @@ function renderReqDocSplit(){
   }).join("");
 }
 function loadReqDocSplitDoc(id){
+  /* 切到另一篇前，先把当前这篇的阅读位置记下来 */
+  if(splitDocId != null && splitDocId !== id) saveRrdPosNow();
+  rrdEntryScroll = true;
   splitDocId = id;
   renderReqDocSplit();
   var box = $("reqDocReader");
@@ -70154,6 +70507,8 @@ function reqDocReaderFill(body, cleanHtml){
   var h1 = tpl.content.querySelector("h1");
   if(h1){
     var h2 = document.createElement("h2");
+    /* 只为避免同屏两个一级标题而降级；大纲仍按原来的 H1 层级缩进 */
+    h2.setAttribute("data-rrd-hlevel", "1");
     h2.innerHTML = h1.innerHTML;
     h1.replaceWith(h2);
   }
@@ -70169,9 +70524,536 @@ function reqDocReaderFill(body, cleanHtml){
   body.textContent = "";
   body.appendChild(tpl.content);
 }
+/* 代码块右上角复制 / 全屏：包一层相对定位容器，按钮不随 pre 横向滚动跑掉 */
+function decorateCodeBlocks(root){
+  if(!root) return;
+  var pres = root.querySelectorAll("pre");
+  for(var i = 0; i < pres.length; i++){
+    var pre = pres[i];
+    if(pre.parentElement && (pre.parentElement.classList.contains("code-block") || pre.parentElement.classList.contains("code-modal"))) continue;
+    var wrap = document.createElement("div");
+    wrap.className = "code-block";
+    pre.parentNode.insertBefore(wrap, pre);
+    wrap.appendChild(pre);
+    /* marked 会给围栏代码加 class="language-xxx"，有就显示语言标签 */
+    var code = pre.querySelector("code");
+    var lm = code && String(code.className || "").match(/language-([A-Za-z0-9_+#.-]+)/);
+    var lang = lm ? lm[1].toLowerCase() : "";
+    if(lang){
+      wrap.setAttribute("data-lang", lang);
+      var tag = document.createElement("span");
+      tag.className = "code-lang";
+      tag.textContent = lang;
+      wrap.appendChild(tag);
+    }
+    var tools = document.createElement("div");
+    tools.className = "code-tools";
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "code-btn code-copy";
+    btn.setAttribute("data-code-copy", "1");
+    btn.setAttribute("aria-label", "复制代码");
+    btn.innerHTML = icon("copy", 12) + '<span>复制</span>';
+    tools.appendChild(btn);
+    var exp = document.createElement("button");
+    exp.type = "button";
+    exp.className = "code-btn code-expand";
+    exp.setAttribute("data-code-expand", "1");
+    exp.setAttribute("aria-label", "全屏查看代码");
+    exp.setAttribute("data-tip", "全屏查看");
+    exp.innerHTML = icon("expand", 12);
+    tools.appendChild(exp);
+    wrap.appendChild(tools);
+  }
+}
+/* 宽表格：外面套一层横向滚动容器；列宽不再被压缩到挤字（min-width:min-content 见 CSS） */
+function decorateTables(root){
+  if(!root) return;
+  var tables = root.querySelectorAll("table");
+  for(var i = 0; i < tables.length; i++){
+    var t = tables[i];
+    if(t.parentElement && t.parentElement.classList.contains("table-wrap")) continue;
+    var wrap = document.createElement("div");
+    wrap.className = "table-wrap";
+    t.parentNode.insertBefore(wrap, t);
+    wrap.appendChild(t);
+  }
+}
+function codeBlockText(pre){
+  if(!pre) return "";
+  var clone = pre.cloneNode(true);
+  var stray = clone.querySelector(".code-copy");
+  if(stray) stray.remove();
+  return clone.textContent || "";
+}
+
+/* ---------- 阅读：右侧大纲（复用编辑页样式，状态与编辑页分开） ---------- */
+var rrdTocItems = [];
+var rrdTocCollapsed = {};
+var rrdTocActive = null;
+var rrdTocRaf = 0;
+var rrdTocQuery = "";
+var rrdTocDepthOnly = rrdTocDepthPref();
+var rrdPendingHead = -1;      // 深链 ?h=N：打开后滚到第 N 个标题
+var rrdEntryScroll = false;   // 由 loadReqDocSplitDoc 触发的重绘才做“进入定位”
+var rrdSkipRestore = false;   // 上一篇/下一篇：从正文顶部开始，不恢复旧位置
+var rrdPosTimer = null;
+var rrdCodeEscHandler = null;
+
+function rrdTocVisiblePref(){
+  try{ return localStorage.getItem("ds.reqTocRead") !== "0"; }catch(e){ return true; }
+}
+function rrdTocDepthPref(){
+  try{ return localStorage.getItem("ds.reqTocDepth") === "1"; }catch(e){ return false; }
+}
+function syncRrdTocToggle(rd){
+  if(!rd) return;
+  var b = rd.querySelector("[data-rrd-toc]");
+  if(!b) return;
+  var on = !rd.classList.contains("no-toc");
+  var tip = on ? "隐藏大纲" : "显示大纲";
+  b.setAttribute("aria-pressed", on ? "true" : "false");
+  b.setAttribute("data-tip", tip);
+  b.setAttribute("aria-label", tip);
+}
+function setRrdTocVisible(on){
+  var rd = $("reqDocReader");
+  if(!rd) return;
+  rd.classList.toggle("no-toc", !on);
+  try{ localStorage.setItem("ds.reqTocRead", on ? "1" : "0"); }catch(e){ /* 隐私模式忽略 */ }
+  syncRrdTocToggle(rd);
+  if(on) scheduleRrdTocActive();
+}
+function setRrdTocDepthOnly(on){
+  rrdTocDepthOnly = !!on;
+  try{ localStorage.setItem("ds.reqTocDepth", on ? "1" : "0"); }catch(e){ /* 隐私模式忽略 */ }
+  var b = $("rrdTocDepth");
+  if(b){
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+    b.classList.toggle("on", !!on);
+  }
+  renderRrdToc();
+  refreshRrdTocActive();
+}
+function collectRrdToc(){
+  rrdTocItems = [];
+  var root = $("reqDocReaderBody");
+  if(!root) return;
+  var hs = root.querySelectorAll("h1,h2,h3,h4,h5,h6");
+  var items = [];
+  for(var i = 0; i < hs.length; i++){
+    var el = hs[i];
+    var text = (el.textContent || "").replace(/\s+/g, " ").trim();
+    if(!text) continue;
+    var anchor = "r" + items.length;
+    var level = parseInt(el.getAttribute("data-rrd-hlevel") || el.tagName.charAt(1), 10) || 1;
+    el.setAttribute("data-rtoc", anchor);
+    /* 标题左侧浮出「复制本节链接」，深链参数 h 就是这里的序号 */
+    var linkBtn = document.createElement("button");
+    linkBtn.type = "button";
+    linkBtn.className = "rrd-anchor";
+    linkBtn.setAttribute("data-rrd-anchor", String(items.length));
+    linkBtn.setAttribute("title", "复制本节链接");
+    linkBtn.setAttribute("aria-label", "复制本节链接");
+    linkBtn.innerHTML = icon("link", 12);
+    el.insertBefore(linkBtn, el.firstChild);
+    items.push({ anchor: anchor, level: level, text: text, depth: 0, parent: null, hasChild: false });
+  }
+  /* 与编辑页同一口径：按标题级别栈算缩进，H1 后直接跟 H3 不多缩两层 */
+  var stack = [];
+  items.forEach(function(t){
+    while(stack.length && stack[stack.length - 1].level >= t.level) stack.pop();
+    t.depth = Math.min(stack.length, 3);
+    t.parent = stack.length ? stack[stack.length - 1].anchor : null;
+    stack.push(t);
+  });
+  var byAnchor = {};
+  items.forEach(function(t){ byAnchor[t.anchor] = t; });
+  items.forEach(function(t){
+    if(t.parent && byAnchor[t.parent]) byAnchor[t.parent].hasChild = true;
+  });
+  rrdTocItems = items;
+}
+function renderRrdToc(){
+  var body = $("rrdTocBody");
+  if(!body) return;
+  if(!rrdTocItems.length){
+    body.innerHTML = '<div class="rt-empty">正文里用标题样式写几段（一级/二级标题），这里会自动生成大纲。</div>';
+    return;
+  }
+  var q = rrdTocQuery;
+  var pool = rrdTocDepthOnly
+    ? rrdTocItems.filter(function(t){ return t.level <= 2; })
+    : rrdTocItems.slice();
+  if(!pool.length){
+    body.innerHTML = '<div class="rt-empty">这篇没有一、二级标题；关掉顶部「一二级」可看全部层级。</div>';
+    return;
+  }
+  var hidden = {};
+  if(q){
+    /* 筛选：命中项连同它的上级一起留下，忽略折叠状态 */
+    var idx = {};
+    pool.forEach(function(t){ idx[t.anchor] = t; });
+    var keep = {};
+    var ql = q.toLowerCase();
+    pool.forEach(function(t){
+      if(t.text.toLowerCase().indexOf(ql) < 0) return;
+      keep[t.anchor] = true;
+      var p = t.parent;
+      while(p && idx[p]){ keep[p] = true; p = idx[p].parent; }
+    });
+    pool = pool.filter(function(t){ return keep[t.anchor]; });
+    if(!pool.length){
+      body.innerHTML = '<div class="rt-empty">没有匹配「' + esc(q) + '」的标题。</div>';
+      return;
+    }
+  }else if(!rrdTocDepthOnly){
+    rrdTocItems.forEach(function(t){
+      if(t.parent && (rrdTocCollapsed[t.parent] || hidden[t.parent])) hidden[t.anchor] = true;
+    });
+  }
+  var flat = !!q || rrdTocDepthOnly;
+  var html = "";
+  pool.forEach(function(t){
+    if(hidden[t.anchor]) return;
+    var lv = Math.min(t.depth + 1, 4);
+    var caret = (!flat && t.hasChild)
+      ? '<span class="rt-caret' + (rrdTocCollapsed[t.anchor] ? " collapsed" : "") + '" data-rtoc-fold="' + t.anchor + '">' + icon("down", 11) + '</span>'
+      : '<span class="rt-caret"></span>';
+    html += '<button class="rt-item rt-lv' + lv + (t.anchor === rrdTocActive ? " active" : "") + '"' +
+      ' type="button" data-rtoc-go="' + t.anchor + '" title="' + esc(t.text) + '">' +
+      caret + '<span class="rt-text">' + esc(t.text) + '</span></button>';
+  });
+  body.innerHTML = html;
+}
+function rebuildRrdToc(){
+  collectRrdToc();
+  renderRrdToc();
+  refreshRrdTocActive();
+}
+function rrdScrollRoot(){
+  var el = $("reqDocReader");
+  while(el && el !== document.body && el !== document.documentElement){
+    var cs = window.getComputedStyle(el);
+    if(/(auto|scroll)/.test(cs.overflowY)) return el;
+    el = el.parentElement;
+  }
+  return null;
+}
+function markRrdTocActive(anchor){
+  if(!anchor || anchor === rrdTocActive) return;
+  rrdTocActive = anchor;
+  var body = $("rrdTocBody");
+  if(!body) return;
+  var prev = body.querySelector(".rt-item.active");
+  if(prev) prev.classList.remove("active");
+  var next = body.querySelector('[data-rtoc-go="' + anchor + '"]');
+  if(!next) return;
+  next.classList.add("active");
+  /* 当前项滚出大纲可视区时，在大纲内部跟随，不带动整页滚动 */
+  var br = body.getBoundingClientRect(), nr = next.getBoundingClientRect();
+  if(nr.top < br.top || nr.bottom > br.bottom){
+    body.scrollTop += nr.top - br.top - 8;
+  }
+}
+function scrollToRrdToc(anchor){
+  var root = $("reqDocReaderBody");
+  if(!root) return;
+  var el = root.querySelector('[data-rtoc="' + anchor + '"]');
+  if(!el) return;
+  var sc = rrdScrollRoot();
+  if(sc){
+    var top = sc.scrollTop + el.getBoundingClientRect().top - sc.getBoundingClientRect().top - 20;
+    if(top < 0) top = 0;
+    try{ sc.scrollTo({ top: top, behavior: "smooth" }); }
+    catch(e){ sc.scrollTop = top; }
+  }else{
+    var top2 = el.getBoundingClientRect().top + (window.pageYOffset || 0) - 76;
+    if(top2 < 0) top2 = 0;
+    try{ window.scrollTo({ top: top2, behavior: "smooth" }); }
+    catch(e){ window.scrollTo(0, top2); }
+  }
+  markRrdTocActive(anchor);
+}
+/* ---------- 阅读位置记忆：按文档记「标题 + 偏移」，换缩放也能落回原处 ---------- */
+function rrdPosMap(){
+  try{
+    var o = JSON.parse(localStorage.getItem("hg.docPos") || "{}");
+    return o && typeof o === "object" ? o : {};
+  }catch(e){ return {}; }
+}
+function saveRrdPosNow(){
+  if(!splitDocId) return;
+  var rd = $("reqDocReader"), sc = rrdScrollRoot();
+  if(!rd || !sc || !rd.offsetParent) return;
+  var map = rrdPosMap();
+  var top = Math.round(sc.scrollTop);
+  if(top < 80){
+    delete map[splitDocId];
+  }else{
+    var anchor = rrdTocActive || "";
+    var el = anchor ? document.querySelector('#reqDocReaderBody [data-rtoc="' + anchor + '"]') : null;
+    map[splitDocId] = {
+      a: anchor,
+      /* 标题顶边相对滚动容器顶边的距离：恢复时按同样关系摆放 */
+      d: el ? Math.round(el.getBoundingClientRect().top - sc.getBoundingClientRect().top) : 0,
+      t: top,
+      ts: Date.now()
+    };
+  }
+  var keys = Object.keys(map);
+  if(keys.length > 80){
+    keys.sort(function(a, b){ return (map[a].ts || 0) - (map[b].ts || 0); });
+    keys.slice(0, keys.length - 80).forEach(function(k){ delete map[k]; });
+  }
+  try{ localStorage.setItem("hg.docPos", JSON.stringify(map)); }catch(e){ /* 存储不可用 */ }
+}
+function scheduleRrdPosSave(){
+  if(rrdPosTimer) clearTimeout(rrdPosTimer);
+  rrdPosTimer = setTimeout(function(){ rrdPosTimer = null; saveRrdPosNow(); }, 600);
+}
+function restoreRrdPos(id){
+  if(!id) return false;
+  var rec = rrdPosMap()[id];
+  if(!rec || !rec.ts || Date.now() - rec.ts > 30 * 86400000) return false;
+  var sc = rrdScrollRoot(), body = $("reqDocReaderBody");
+  if(!sc || !body) return false;
+  var el = rec.a ? body.querySelector('[data-rtoc="' + rec.a + '"]') : null;
+  var top = el
+    ? sc.scrollTop + el.getBoundingClientRect().top - sc.getBoundingClientRect().top - (rec.d || 0)
+    : rec.t;
+  if(!(top > 40)) return false;
+  sc.scrollTop = top;
+  refreshRrdTocActive();
+  return true;
+}
+function scrollRrdToBodyTop(){
+  var sc = rrdScrollRoot(), rd = $("reqDocReader");
+  if(!sc || !rd) return;
+  var top = sc.scrollTop + rd.getBoundingClientRect().top - sc.getBoundingClientRect().top - 8;
+  sc.scrollTop = Math.max(0, top);
+}
+function flashRrdHeading(anchor){
+  var body = $("reqDocReaderBody");
+  if(!body) return;
+  var el = body.querySelector('[data-rtoc="' + anchor + '"]');
+  if(!el) return;
+  el.classList.add("rrd-flash");
+  setTimeout(function(){ el.classList.remove("rrd-flash"); }, 1700);
+}
+/* 打开文档后的落点：深链标题 > 翻页置顶 > 上次阅读位置 > 正文顶部 */
+function applyRrdEntryScroll(id){
+  if(!rrdEntryScroll) return;
+  rrdEntryScroll = false;
+  var head = rrdPendingHead;
+  rrdPendingHead = -1;
+  if(head >= 0 && rrdTocItems[head]){
+    scrollToRrdToc(rrdTocItems[head].anchor);
+    flashRrdHeading(rrdTocItems[head].anchor);
+    updateRrdScrollUI();
+    return;
+  }
+  if(rrdSkipRestore){
+    rrdSkipRestore = false;
+    scrollRrdToBodyTop();
+  }else if(!restoreRrdPos(id)){
+    scrollRrdToBodyTop();
+  }
+  updateRrdScrollUI();
+}
+/* ---------- 回到顶部 + 右侧阅读进度 ---------- */
+function updateRrdScrollUI(){
+  var rd = $("reqDocReader");
+  var topBtn = $("rrdTop"), prog = $("rrdProgress"), fill = $("rrdProgressFill");
+  var sc = rrdScrollRoot();
+  if(!rd || !sc || !rd.offsetParent){
+    if(topBtn) topBtn.hidden = true;
+    if(prog) prog.hidden = true;
+    return;
+  }
+  var max = sc.scrollHeight - sc.clientHeight;
+  var y = max > 0 ? Math.max(0, Math.min(1, sc.scrollTop / max)) : 0;
+  if(fill) fill.style.transform = "scaleY(" + y.toFixed(4) + ")";
+  if(prog) prog.hidden = max < 240;
+  if(topBtn) topBtn.hidden = sc.scrollTop < 320;
+}
+function scrollRrdTop(){
+  var sc = rrdScrollRoot();
+  if(!sc) return;
+  try{ sc.scrollTo({ top: 0, behavior: "smooth" }); }
+  catch(e){ sc.scrollTop = 0; }
+}
+/* ---------- 阅读页动作：复制正文 / 复制链接 / 打印 / 代码全屏 / 上一篇下一篇 ---------- */
+function rrdHashParam(name){
+  var h = String(window.location.hash || "");
+  var q = h.indexOf("?");
+  if(q < 0) return "";
+  var parts = h.substring(q + 1).split("&");
+  for(var i = 0; i < parts.length; i++){
+    var kv = parts[i].split("=");
+    if(decodeURIComponent(kv[0]) === name) return decodeURIComponent(kv[1] || "");
+  }
+  return "";
+}
+/* 深链约定：#/requirements?doc=<id>&view=read[&h=标题序号]，h 是阅读大纲里的序号 */
+function rrdDocLinkUrl(id, headIndex){
+  var base = window.location.origin + window.location.pathname;
+  if(location.protocol === "file:") base = String(window.location.href).split("#")[0];
+  return base + "#/requirements?doc=" + encodeURIComponent(id) + "&view=read"
+    + (headIndex >= 0 ? "&h=" + headIndex : "");
+}
+function rrdPlainText(){
+  if(rrdDocDetail && rrdDocDetail.format === "sheet" && reqSheetReaderView){
+    try{ return sheetSnapshotText(reqSheetReaderView.getSnapshot()); }catch(e){ return ""; }
+  }
+  var body = $("reqDocReaderBody");
+  if(!body) return "";
+  /* 按钮文案（复制 / 语言标签）不属于正文；克隆到屏外取 innerText，保留换行与列表结构 */
+  var clone = body.cloneNode(true);
+  clone.querySelectorAll(".code-tools,.code-lang,.rrd-anchor").forEach(function(n){ n.remove(); });
+  var host = document.createElement("div");
+  host.style.cssText = "position:fixed;left:-9999px;top:0;width:760px;";
+  host.appendChild(clone);
+  document.body.appendChild(host);
+  var text = clone.innerText || clone.textContent || "";
+  host.remove();
+  return text;
+}
+function copyRrdBody(){
+  var text = String(rrdPlainText()).replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  if(!text){ toast("正文是空的，没有可复制的内容", "warn"); return; }
+  UI.copyText(text, "已复制正文（" + text.length + " 字）");
+}
+function copyRrdLink(){
+  if(!splitDocId) return;
+  UI.copyText(rrdDocLinkUrl(splitDocId, -1), "已复制文档链接");
+}
+function printRrdDoc(){
+  var body = $("reqDocReaderBody");
+  if(!body || !(body.textContent || "").trim()){ toast("正文为空，没有可打印的内容", "warn"); return; }
+  var clone = body.cloneNode(true);
+  clone.querySelectorAll(".code-tools,.code-btn,.code-lang,.rrd-anchor").forEach(function(n){ n.remove(); });
+  var title = (rrdDocDetail && rrdDocDetail.title) || "文档";
+  var win = window.open("", "_blank");
+  if(!win){ toast("浏览器阻止了弹出窗口，请允许后重试", "warn"); return; }
+  win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + esc(title) + '</title>'
+    + '<style>body{font-family:system-ui,-apple-system,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.7;font-size:14px;color:#222;}'
+    + 'h1{font-size:22px;border-bottom:1px solid #ddd;padding-bottom:8px;}img{max-width:100%;}'
+    + 'table{border-collapse:collapse;width:100%;}td,th{border:1px solid #ccc;padding:6px 8px;}'
+    + '.table-wrap{overflow:visible;}'
+    + 'pre{background:#f6f7f9;padding:10px;border-radius:6px;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;}'
+    + '@media print{body{margin:0;max-width:none;}}</style></head><body>'
+    + '<h1>' + esc(title) + '</h1>' + clone.innerHTML + '</body></html>');
+  win.document.close();
+  setTimeout(function(){ win.print(); }, 300);
+}
+function closeRrdCodeModal(){
+  var m = document.getElementById("rrdCodeModal");
+  if(m) m.remove();
+  if(rrdCodeEscHandler){
+    document.removeEventListener("keydown", rrdCodeEscHandler, true);
+    rrdCodeEscHandler = null;
+  }
+}
+function openCodeFullscreen(block){
+  var pre = block ? block.querySelector("pre") : null;
+  if(!pre) return;
+  closeRrdCodeModal();
+  var lang = block.getAttribute("data-lang") || "";
+  var modal = document.createElement("div");
+  modal.className = "code-modal";
+  modal.id = "rrdCodeModal";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("aria-label", "代码全屏查看");
+  modal.innerHTML = '<div class="code-modal-panel">' +
+      '<div class="code-modal-head">' +
+        '<span class="code-modal-lang">' + esc(lang) + '</span>' +
+        '<button class="code-btn" type="button" data-code-copy="1" aria-label="复制代码">' + icon("copy", 12) + '<span>复制</span></button>' +
+        '<button class="code-btn" type="button" data-code-close="1" aria-label="关闭全屏">' + icon("close", 12) + '</button>' +
+      '</div>' +
+      '<pre class="code-modal-pre"></pre>' +
+    '</div>';
+  modal.querySelector(".code-modal-pre").textContent = codeBlockText(pre);
+  modal.addEventListener("click", function(e){
+    if(e.target === modal || e.target.closest("[data-code-close]")) closeRrdCodeModal();
+  });
+  document.body.appendChild(modal);
+  rrdCodeEscHandler = function(e){
+    if(e.key === "Escape"){
+      e.stopPropagation();
+      closeRrdCodeModal();
+    }
+  };
+  document.addEventListener("keydown", rrdCodeEscHandler, true);
+}
+function closeRrdMore(){
+  var menu = $("rrdMoreMenu");
+  if(menu) menu.hidden = true;
+  var btn = document.querySelector("#reqDocReader [data-rrd-more]");
+  if(btn) btn.setAttribute("aria-expanded", "false");
+}
+/* 左侧文档树的先序顺序 = 阅读时的上一篇/下一篇顺序 */
+function rrdDocOrder(){
+  var out = [];
+  function walk(nodes){
+    (nodes || []).forEach(function(n){
+      if(n.kind === "doc"){ out.push(n.doc); walk(n.children); }
+      else walk(n.children);
+    });
+  }
+  reqDocGroupsCache.forEach(function(g){ walk(g.nodes); });
+  return out;
+}
+function renderRrdPager(docId){
+  var box = $("rrdPager");
+  if(!box) return;
+  var order = rrdDocOrder();
+  var i = -1;
+  for(var k = 0; k < order.length; k++) if(order[k].id === docId){ i = k; break; }
+  var prev = i > 0 ? order[i - 1] : null;
+  var next = i >= 0 && i < order.length - 1 ? order[i + 1] : null;
+  if(!prev && !next){ box.hidden = true; box.innerHTML = ""; return; }
+  function item(d, dir){
+    if(!d) return "";
+    return '<button class="rrd-pager-item ' + dir + '" type="button" data-rrd-open="' + esc(d.id) + '">' +
+      '<span class="pp-dir">' + (dir === "prev" ? "上一篇" : "下一篇") + '</span>' +
+      '<span class="pp-name">' + esc(d.title) + '</span></button>';
+  }
+  box.innerHTML = item(prev, "prev") + item(next, "next");
+  box.hidden = false;
+}
+function refreshRrdTocActive(){
+  if(!rrdTocItems.length || splitDocId == null) return;
+  var rd = $("reqDocReader");
+  if(!rd || !rd.offsetParent) return;
+  var root = $("reqDocReaderBody");
+  if(!root) return;
+  var line = 128;
+  var cur = rrdTocItems[0].anchor;
+  for(var i = 0; i < rrdTocItems.length; i++){
+    var el = root.querySelector('[data-rtoc="' + rrdTocItems[i].anchor + '"]');
+    if(!el) continue;
+    if(el.getBoundingClientRect().top <= line) cur = rrdTocItems[i].anchor;
+    else break;
+  }
+  markRrdTocActive(cur);
+}
+function scheduleRrdTocActive(){
+  if(rrdTocRaf) return;
+  rrdTocRaf = requestAnimationFrame(function(){
+    rrdTocRaf = 0;
+    refreshRrdTocActive();
+    updateRrdScrollUI();
+    scheduleRrdPosSave();
+  });
+}
 function renderReqDocReader(doc){
   var box = $("reqDocReader");
   if(!box) return;
+  closeRrdCodeModal();
+  closeRrdMore();
+  rrdTocQuery = "";
   disposeReqSheetReader();
   rrdDocDetail = doc;
   var pubBadge = doc.publishedAt == null
@@ -70191,11 +71073,17 @@ function renderReqDocReader(doc){
   rrdActiveTab = "comments";
   rrdCanComment = canWrite;
   rrdFlashCommentId = null;
+  rrdTocItems = [];
+  rrdTocCollapsed = {};
+  rrdTocActive = null;
   setRrdQuote(null);
   hideRrdSelBubble();
   hideRrdCellBubble();
   var rrdActTip = doc.format === "sheet" ? "选中单元格可批注" : "选中正文可划线";
   box.classList.remove("with-comments");
+  /* 表格没有标题层级，不挂大纲；正文类文档按本机偏好显示/隐藏 */
+  var tocOn = doc.format !== "sheet" && rrdTocVisiblePref();
+  box.classList.toggle("no-toc", !tocOn);
   box.innerHTML =
     '<div class="rrd-main">' +
     '<div class="rrd-head">' +
@@ -70205,6 +71093,8 @@ function renderReqDocReader(doc){
         '<span class="rrd-acts">' +
           docZoomControlHTML() +
           '<span class="vdiv" aria-hidden="true"></span>' +
+          (doc.format === "sheet" ? '' :
+            '<button class="btn sm ghost ibtn" type="button" data-rrd-toc aria-pressed="' + (tocOn ? "true" : "false") + '" data-tip="' + (tocOn ? "隐藏大纲" : "显示大纲") + '" aria-label="' + (tocOn ? "隐藏大纲" : "显示大纲") + '">' + icon("listUl", 15) + '</button>') +
           '<button class="btn sm ghost ibtn" type="button" data-rrd-wide aria-pressed="false" data-tip="宽屏阅读（收起左侧文档树）" aria-label="宽屏阅读">' + icon("expand", 15) + '</button>' +
           '<span class="vdiv" aria-hidden="true"></span>' +
           (canMut ? '<button class="btn sm ghost ibtn" type="button" data-rrd-rename="' + esc(doc.id) + '" data-tip="重命名文档" aria-label="重命名文档">' + icon("edit", 15) + '</button>' : '') +
@@ -70214,13 +71104,38 @@ function renderReqDocReader(doc){
           '<span class="vdiv" aria-hidden="true"></span>' +
           '<button class="btn sm ghost ibtn" type="button" data-rrd-export="' + esc(doc.id) + '" data-tip="导出 Markdown / HTML" aria-label="导出 Markdown / HTML">' + icon("download", 15) + '</button>' +
           '<button class="btn sm ghost ibtn" type="button" data-rrd-export-word="' + esc(doc.id) + '" data-tip="导出 Word（.docx）" aria-label="导出 Word">' + icon("docW", 15) + '</button>' +
+          '<span class="rrd-more">' +
+            '<button class="btn sm ghost ibtn" type="button" data-rrd-more aria-haspopup="true" aria-expanded="false" data-tip="更多" aria-label="更多操作">' + icon("more", 15) + '</button>' +
+            '<div class="menu rrd-more-menu" id="rrdMoreMenu" hidden>' +
+              '<button class="menu-item" type="button" data-rrd-act="copy-body">' + icon("copy", 14) + '复制正文</button>' +
+              '<button class="menu-item" type="button" data-rrd-act="copy-link">' + icon("link", 14) + '复制链接</button>' +
+              '<button class="menu-item" type="button" data-rrd-act="print">' + icon("print", 14) + '打印 / 导出 PDF</button>' +
+            '</div>' +
+          '</span>' +
           '<span class="vdiv" aria-hidden="true"></span>' +
           '<button class="btn sm soft" type="button" data-rrd-edit="' + esc(doc.id) + '"' + (canMut ? ' data-tip="编辑这篇文档" aria-label="编辑文档"' : ' disabled title="仅文档负责人或空间管理员可编辑"') + '>' + icon("edit", 13) + ' 编辑文档</button>' +
         '</span>' +
       '</div>' +
       '<div class="rrd-meta">' + meta.join(" · ") + '</div>' +
     '</div>' +
-    '<div class="rrd-body markdown-body" id="reqDocReaderBody"></div>' +
+    '<div class="rrd-docwrap">' +
+      '<div class="rrd-body markdown-body" id="reqDocReaderBody"></div>' +
+      (doc.format === "sheet" ? '' :
+        '<aside class="reqdoc-toc rrd-toc" id="rrdToc" aria-label="文档大纲">' +
+          '<div class="reqdoc-toc-head">' +
+            '<span class="rt-title">大纲</span>' +
+            '<button class="rt-depth" type="button" id="rrdTocDepth" aria-pressed="' + (rrdTocDepthOnly ? "true" : "false") + '" title="只看一、二级标题">一二级</button>' +
+            '<button class="rt-fold" type="button" id="rrdTocFold" title="收起大纲" aria-label="收起大纲">' + icon("rail", 14) + '</button>' +
+          '</div>' +
+          '<div class="rt-filter">' +
+            '<input type="search" id="rrdTocSearch" placeholder="筛选标题…" aria-label="筛选大纲标题" autocomplete="off" />' +
+          '</div>' +
+          '<nav class="reqdoc-toc-body" id="rrdTocBody"></nav>' +
+        '</aside>') +
+    '</div>' +
+    '<nav class="rrd-pager" id="rrdPager" aria-label="上一篇 / 下一篇" hidden></nav>' +
+    '<button class="rrd-top" id="rrdTop" type="button" title="回到顶部" aria-label="回到顶部" hidden>' + icon("up", 16) + '</button>' +
+    '<div class="rrd-progress" id="rrdProgress" hidden aria-hidden="true"><i id="rrdProgressFill"></i></div>' +
     '</div>' +
     '<aside class="rrd-comments" id="rrdComments" hidden aria-label="文档侧栏">' +
       '<div class="rrdc-head rrdc-tabhead">' +
@@ -70247,7 +71162,9 @@ function renderReqDocReader(doc){
       '<div class="rrdc-pane rrdc-perm" id="rrdPanePerm" hidden></div>' +
     '</aside>';
   syncDocZoomUI();
+  syncRrdTocToggle(box);
   UI.wireTooltips(box);
+  renderRrdPager(doc.id);
   loadRrdCommentCount(doc.id);
   if(!canWrite){ var cf = $("rrdCommentForm"); if(cf) cf.style.display = "none"; }
   bindRrdMention();
@@ -70290,7 +71207,13 @@ function renderReqDocReader(doc){
     }
     reqDocReaderFill(body, window.DOMPurify.sanitize(html));
     reqDocReaderOpenLinks(body);
+    decorateCodeBlocks(body);
+    decorateTables(body);
+    UI.wireTooltips(body);
+    rebuildRrdToc();
     rrdApplyHighlights();
+    applyRrdEntryScroll(id);
+    updateRrdScrollUI();
   }).catch(function(ex){
     if(splitDocId === id) body.innerHTML = UI.errorState(ex.message || "正文渲染失败");
   });
@@ -73302,6 +74225,7 @@ function renderMarkdownPreview(){
       links[i].setAttribute("target", "_blank");
       links[i].setAttribute("rel", "noopener noreferrer");
     }
+    decorateCodeBlocks(box);
     rebuildToc();
   }).catch(function(ex){
     box.innerHTML = '<div class="rt-empty">' + esc(ex.message || "Markdown 预览加载失败") + '</div>';
@@ -73734,6 +74658,7 @@ function printReqDoc(){
   win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + esc(title) + '</title>'
     + '<style>body{font-family:system-ui,-apple-system,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.7;font-size:14px;color:#222;}'
     + 'h1{font-size:22px;border-bottom:1px solid #ddd;padding-bottom:8px;}img{max-width:100%;}table{border-collapse:collapse;width:100%;}td,th{border:1px solid #ccc;padding:6px 8px;}'
+    + '.code-copy{display:none;}'
     + '@media print{body{margin:0;max-width:none;}}</style></head><body>'
     + '<h1>' + esc(title) + '</h1>' + bodyHtml + '</body></html>');
   win.document.close();
@@ -74218,6 +75143,7 @@ function renderReqDocHistoryPreview(h, box){
       links[i].setAttribute("target", "_blank");
       links[i].setAttribute("rel", "noopener noreferrer");
     }
+    decorateCodeBlocks(box);
   }).catch(function(ex){
     box.innerHTML = '<div class="rh-empty">' + esc(ex.message || "预览组件加载失败") + '</div>';
   });
@@ -75457,6 +76383,49 @@ function populateReqDocSelect(keep){
     openAttPreview({ attachment: { id: m[1], filename: img.getAttribute("alt") || "文档图片" } });
   });
 
+  /* 代码块复制：阅读页 / Markdown 预览 / 历史版本预览共用 */
+  document.addEventListener("click", function(e){
+    var btn = e.target.closest("[data-code-copy]");
+    if(!btn) return;
+    var wrap = btn.closest(".code-block") || btn.closest(".code-modal-panel");
+    var pre = wrap ? wrap.querySelector("pre") : null;
+    if(!pre) return;
+    UI.copyText(codeBlockText(pre), "代码已复制");
+    if(btn.__resetTimer) clearTimeout(btn.__resetTimer);
+    btn.classList.add("is-copied");
+    var label = btn.querySelector("span");
+    if(label) label.textContent = "已复制";
+    btn.__resetTimer = setTimeout(function(){
+      btn.classList.remove("is-copied");
+      if(label) label.textContent = "复制";
+      btn.__resetTimer = null;
+    }, 1600);
+  });
+
+  /* 大纲筛选框：阅读器会整块重绘，只能挂文档级委托 */
+  document.addEventListener("input", function(e){
+    var inp = e.target.closest("#rrdTocSearch");
+    if(!inp) return;
+    rrdTocQuery = String(inp.value || "").trim();
+    renderRrdToc();
+  });
+  /* 阅读页「更多」菜单：点外面 / Esc 收起（菜单项点击由阅读器委托先处理） */
+  document.addEventListener("click", function(e){
+    var menu = $("rrdMoreMenu");
+    if(!menu || menu.hidden) return;
+    if(e.target.closest("[data-rrd-more]") || menu.contains(e.target)) return;
+    closeRrdMore();
+  });
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape") closeRrdMore();
+  });
+
+  /* 阅读大纲跟随滚动：滚动发生在 .view 容器里，用捕获阶段接住任意容器滚动 */
+  document.addEventListener("scroll", scheduleRrdTocActive, true);
+  window.addEventListener("resize", scheduleRrdTocActive);
+  /* 关标签页/刷新时把最后的阅读位置存下来（滚动里的 600ms 防抖可能来不及触发） */
+  window.addEventListener("pagehide", function(){ saveRrdPosNow(); });
+
   /* 分类树右键菜单：点菜单外 / Esc / 滚动 时关闭（菜单项点击由菜单自身委托处理，先于此处） */
   document.addEventListener("click", function(e){
     if(reqDocCtxEl && reqDocCtxEl.classList.contains("open") && !e.target.closest(".reqdoc-ctx")) closeReqDocCtx();
@@ -75655,6 +76624,44 @@ function populateReqDocSelect(keep){
     rd.addEventListener("click", function(e){
       var nn = e.target.closest("[data-rrd-new]");
       if(nn){ var nb = $("reqDocNew"); if(nb) nb.click(); return; }
+      var mb = e.target.closest("[data-rrd-more]");
+      if(mb){
+        var mm = $("rrdMoreMenu");
+        if(mm){
+          var willOpen = mm.hidden;
+          mm.hidden = !willOpen;
+          mb.setAttribute("aria-expanded", willOpen ? "true" : "false");
+        }
+        return;
+      }
+      var ra = e.target.closest("[data-rrd-act]");
+      if(ra){
+        var act = ra.dataset.rrdAct;
+        closeRrdMore();
+        if(act === "copy-body") copyRrdBody();
+        else if(act === "copy-link") copyRrdLink();
+        else if(act === "print") printRrdDoc();
+        return;
+      }
+      if(e.target.closest("#rrdTocDepth")){ setRrdTocDepthOnly(!rrdTocDepthOnly); return; }
+      var ro = e.target.closest("[data-rrd-open]");
+      if(ro){
+        rrdSkipRestore = true;
+        rrdPendingHead = -1;
+        loadReqDocSplitDoc(ro.dataset.rrdOpen);
+        return;
+      }
+      var an = e.target.closest("[data-rrd-anchor]");
+      if(an){
+        e.preventDefault(); e.stopPropagation();
+        UI.copyText(rrdDocLinkUrl(splitDocId, parseInt(an.dataset.rrdAnchor, 10)), "已复制本节链接");
+        an.classList.add("is-copied");
+        setTimeout(function(){ an.classList.remove("is-copied"); }, 1600);
+        return;
+      }
+      var cex = e.target.closest("[data-code-expand]");
+      if(cex){ openCodeFullscreen(cex.closest(".code-block")); return; }
+      if(e.target.closest("#rrdTop")){ scrollRrdTop(); return; }
       var crumb = e.target.closest("[data-rrd-crumb]");
       if(crumb){ loadReqDocSplitDoc(crumb.dataset.rrdCrumb); return; }
       var rn = e.target.closest("[data-rrd-rename]");
@@ -75693,6 +76700,18 @@ function populateReqDocSelect(keep){
       var sh = e.target.closest(".perm-sec-head");
       if(sh){ var sec = sh.closest(".perm-sec"); if(sec) sec.classList.toggle("collapsed"); return; }
       if(e.target.closest("[data-rrd-wide]")){ toggleDocWide(); return; }
+      var tocBtn = e.target.closest("[data-rrd-toc]");
+      if(tocBtn){ setRrdTocVisible(tocBtn.getAttribute("aria-pressed") !== "true"); return; }
+      if(e.target.closest("#rrdTocFold")){ setRrdTocVisible(false); return; }
+      var tf = e.target.closest("[data-rtoc-fold]");
+      if(tf){
+        e.preventDefault(); e.stopPropagation();
+        rrdTocCollapsed[tf.dataset.rtocFold] = !rrdTocCollapsed[tf.dataset.rtocFold];
+        renderRrdToc();
+        return;
+      }
+      var tg = e.target.closest("[data-rtoc-go]");
+      if(tg){ e.preventDefault(); scrollToRrdToc(tg.dataset.rtocGo); return; }
       if(e.target.closest("#rrdCommentsX")){ toggleRrdComments(false); return; }
       if(e.target.closest("#rrdCommentSend")){ submitRrdComment(); return; }
       if(e.target.closest("#rrdQuoteClear")){ setRrdQuote(null); return; }
@@ -89337,7 +90356,6 @@ function mountReleaseWorkspace(pageHost, opts){
       {key:"occurredAt", label:"实际发生时间", ok:!!a.occurredAt, need:"用于和计划时间比对，也是审计事实的时间锚点", go:"去填写", sel:'[data-release-occurredAt]'},
       {key:"executorUserId", label:"实际执行人", ok:!!a.executorUserId, need:"执行人独立于记录人，便于追溯是谁操作的", go:"去选择", sel:'[data-release-executorUserId]'},
       {key:"artifactRef", label:"制品标识", ok:!!String(a.artifactRef || "").trim(), need:"证明本次部署的是哪个构建，不能只写版本名", go:"去填写", sel:'[data-release-artifactRef]'},
-      {key:"artifactDigest", label:"制品 SHA256", ok:/^[a-f0-9]{64}$/.test(String(a.artifactDigest || "").trim().toLowerCase()), need:"同一制品的校验值，用于核对部署物一致", go:"去填写", sel:'[data-release-artifactDigest]'},
       {key:"targetKeys", label:"实际目标键", ok:lines(a.targetKeys).length > 0, need:"回滚与影响范围都要按目标键核对", go:"去填写", sel:'[data-release-targetKeys]'},
       {key:"actualTaskIds", label:"实际交付工作项", ok:a.actualTaskIds.length > 0, need:"发布快照按本次实际交付的工作项生成", go:"去勾选", sel:'[data-actual-task]'}
     ];
@@ -89461,7 +90479,7 @@ function mountReleaseWorkspace(pageHost, opts){
     if(opts.onTab && !syncingFromHash) opts.onTab(key);
   }
   function focusActual(){
-    ["[data-release-occurredAt]", "[data-release-executorUserId]", "[data-release-artifactRef]", "[data-release-artifactDigest]", "[data-release-targetKeys]"].some(function(sel){
+    ["[data-release-occurredAt]", "[data-release-executorUserId]", "[data-release-artifactRef]", "[data-release-targetKeys]"].some(function(sel){
       var el = layer.querySelector(sel);
       if(!el || String(el.value || "").trim()) return false;
       /* 执行人值在隐藏 input 里，焦点落到它前面的人员字段按钮 */
@@ -89477,7 +90495,7 @@ function mountReleaseWorkspace(pageHost, opts){
   }
   function context(){
     var a = readActual();
-    return {planId:a.planId || null, occurredAt:utc(a.occurredAt), environment:a.environment, targetKeys:lines(a.targetKeys), coverage:a.coverage, artifactRef:a.artifactRef.trim(), artifactDigest:a.artifactDigest.trim().toLowerCase(), operation:a.operation, relatedReleaseId:a.relatedReleaseId || null, executorUserId:a.executorUserId || null, actualTaskIds:a.actualTaskIds.slice(), deviationReason:a.deviationReason.trim() || null, result:a.result, notes:a.notes.trim(), failureReason:a.result === "failed" ? a.failureReason.trim() : null};
+    return {planId:a.planId || null, occurredAt:utc(a.occurredAt), environment:a.environment, targetKeys:lines(a.targetKeys), coverage:a.coverage, artifactRef:a.artifactRef.trim(), artifactDigest:(a.artifactDigest.trim().toLowerCase() || null), operation:a.operation, relatedReleaseId:a.relatedReleaseId || null, executorUserId:a.executorUserId || null, actualTaskIds:a.actualTaskIds.slice(), deviationReason:a.deviationReason.trim() || null, result:a.result, notes:a.notes.trim(), failureReason:a.result === "failed" ? a.failureReason.trim() : null};
   }
   function planBody(){
     var p = selectedPlan(), planned = value("plan", "planned");
@@ -90549,8 +91567,8 @@ function mountReleaseWorkspace(pageHost, opts){
         + field("实际结果", '<select data-release-result' + actualDisabled + '>' + options([["success", "成功"], ["failed", "失败"]], a.result) + '</select>', "记录本次真实结果；失败必须填写失败原因。") + '</div>'
         + '<div data-release-check-host></div>'
         + '<div class="form-grid">' + field("实际执行人（独立于记录人）", releaseOwnerControl("actual", a.executorUserId, actualDisabled), "实际执行发布的人，独立于记录人。", true)
-        + field("制品标识", '<input type="text" data-release-artifactRef maxlength="500" placeholder="如 hourglass-server.jar#8b44737" value="' + esc(a.artifactRef) + '"' + actualDisabled + '>', "可识别的制品名或构建号，例如 jar 名 + 提交号；不要用普通版本名代替制品证据。", true)
-        + field("SHA256", '<input type="text" data-release-artifactDigest maxlength="64" placeholder="64 位十六进制" value="' + esc(a.artifactDigest) + '"' + actualDisabled + '>', "制品文件的 SHA256，只能填 64 位十六进制；用于证明部署的是同一制品。", true) + '</div>'
+        + field("制品标识", '<input type="text" data-release-artifactRef maxlength="500" placeholder="如 hourglass-server.jar#8b44737" value="' + esc(a.artifactRef) + '"' + actualDisabled + '>', "可识别的制品名或构建号，例如 jar 名#提交号，提交号写在这里；不要用普通版本名代替制品证据。", true)
+        + field("SHA256（选填）", '<input type="text" data-release-artifactDigest maxlength="64" placeholder="64 位十六进制，可留空" value="' + esc(a.artifactDigest) + '"' + actualDisabled + '>', "选填。填就填制品文件的完整 64 位十六进制 SHA-256；commit id 是 40 位源码哈希，不能填在这里。") + '</div>'
         + field("实际目标键（每行一个）", '<textarea data-release-targetKeys placeholder="如 prod-shanghai-a，每行一个"' + actualDisabled + '>' + esc(a.targetKeys) + '</textarea>', "本次实际涉及的部署目标或服务键，每行一个；回滚时必须是引用事件目标的子集。", true)
         + heading("本次实际交付哪些工作项（与计划分别保存）", "只勾选本次真实交付的工作项，至少 1 项；未完成项会触发预检，需要填写原因。") + taskRows("actual", a.actualTaskIds, !!actualDisabled)
         + '<details class="release-advanced" data-release-advanced' + (advancedOpen ? ' open' : '') + '><summary>高级与异常字段 <span class="mute" data-release-advanced-summary></span></summary><div class="form-grid">'
@@ -90617,7 +91635,7 @@ function mountReleaseWorkspace(pageHost, opts){
   }
   function validate(b){
     if(!b.occurredAt || new Date(b.occurredAt).getTime() > Date.now()) return "请填写不晚于当前时间的实际发生时间";
-    if(!b.artifactRef || !/^[a-f0-9]{64}$/.test(b.artifactDigest)) return "制品标识和 64 位 SHA256 必填";
+    if(!b.artifactRef || (b.artifactDigest && !/^[a-f0-9]{64}$/.test(b.artifactDigest))) return "制品标识必填；SHA256 要么留空，要么填完整 64 位十六进制（commit id 不算）";
     if(!b.executorUserId || !members.some(function(m){ return (m.userId || m.id) === b.executorUserId; })) return "请选择当前成员作为独立实际执行人";
     if(!b.actualTaskIds.length || !b.targetKeys.length) return "请明确选择实际工作项和至少一个目标键";
     if(b.result === "failed" && !b.failureReason) return "记录失败必须填写失败原因（展开「高级与异常字段」）";
@@ -114982,9 +116000,10 @@ function headHTML(){
   var actions = [];
   var canEdit = writable() && !readOnly();
   var canPublish = st.version && st.version.canPublish === true;
-  /* 原型：只保留一个状态驱动的主操作 + 编辑 + 更多；低频动作全部进入更多 */
+  /* 管理范围与记录实际发布不互斥：可编辑时范围入口常驻，有发布主操作时降为次级按钮 */
   if(canEdit){
     actions.push('<button class="btn sm" type="button" data-vd-tool="edit">' + icon("edit", 13) + ' 编辑</button>');
+    if(canPublish) actions.push('<button class="btn sm" type="button" data-vd-tool="tasks">管理范围</button>');
   }
   actions.push(moreMenuHTML(canEdit, canPublish));
   if(canPublish){
@@ -115901,6 +116920,9 @@ function scopeFiltersHTML(){
     + selectHTML("sort", SORTS, f.sort, "排序方式")
     + '<span class="sp"></span>'
     + '<button class="btn sm ghost" type="button" data-vd-filter-reset>清空筛选</button>'
+    + (writable() && !readOnly()
+      ? '<button class="btn sm" type="button" data-vd-tool="tasks" title="勾选关联已有工作项，或在此版本新建工作项">管理工作项</button>'
+      : '')
     + '<button class="btn sm" type="button" data-vd-board title="在看板中按此版本筛选">在看板中查看</button>'
     + '</div>' + linkedBarHTML();
 }
@@ -115956,6 +116978,8 @@ function demandsHTML(){
   }
   var body = slot.rows.map(function(d){
     var linked = st.tasks.filter(function(t){ return t.demandId === d.id; }).length;
+    /* 补录与「管理工作项」同权限口径：需求仍需在排期中，且有项目发布管理权限 */
+    var canFill = writable() && !readOnly() && d.status === "plan" && d.canSchedule === true;
     return '<tr data-vd-demand="' + esc(d.id) + '" tabindex="0" title="打开需求详情">'
       + '<td class="vd-tt"><span class="vd-no">' + esc(demandNoText(d.demandNo) || "—") + '</span>'
       + '<span class="vd-tname">' + esc(d.title) + '</span></td>'
@@ -115965,7 +116989,11 @@ function demandsHTML(){
       + '<td class="num">' + esc(dateText(d.expectDate) || "—") + '</td>'
       + '<td class="num vd-rel-cell">' + (linked
         ? '<span>' + linked + ' 项</span>' + linkBtn("demand", d.id, d.title)
-        : '<span class="vd-muted" title="本版本的工作项还没有挂到这条需求">未挂工作项</span>') + '</td></tr>';
+        : '<span class="vd-muted" title="本版本的工作项还没有挂到这条需求">未挂工作项</span>')
+        + (canFill
+          ? '<button class="btn sm vd-backfill" type="button" data-vd-backfill="' + esc(d.id) + '" title="把该需求名下未加入本版本的工作项补录进来">补录工作项</button>'
+          : '')
+        + '</td></tr>';
   }).join("");
   return panel("已排需求", '<span class="meta-right">' + slot.rows.length + ' 项 · 目标版本指向本版本，不含已关闭</span>',
     tableWrap('<th>需求</th><th>类型</th><th>状态</th><th>优先级</th><th class="num">期望日期</th><th class="num">本版本工作项</th>', body)
@@ -116141,6 +117169,13 @@ function openDemand(id){
   loadView("demands").then(function(m){ m.openDemandDetailById(id); })
     .catch(function(ex){ toast(ex.message || "打开需求详情失败", "bad"); });
 }
+/* 需求页签补录：复用排期带入的同一弹窗与校验，成功后刷新本页工作项与计数 */
+function backfillDemandTasks(id){
+  var versionId = st.id, label = versionName();
+  loadView("demands").then(function(m){
+    m.openDemandVersionBackfill(id, versionId, label, { onDone: function(){ reload(); } });
+  }).catch(function(ex){ toast(ex.message || "打开补录失败", "bad"); });
+}
 function jumpBoard(){
   /* 与版本卡下钻同一口径：清掉旧筛选，按当前项目 + 该版本过滤，已完成列放到全部历史。
      看板有的筛选（关键词 / 模块 / 负责人 / 类型）一并带过去，没有的（分支 / 需求 / 计时窗口 / 状态）如实说明 */
@@ -116280,6 +117315,8 @@ function wire(){
       if(hit) openMilestoneDetail(hit, { canWrite: writable(), onChanged: reload });
       return;
     }
+    var fill = e.target.closest("[data-vd-backfill]");
+    if(fill){ backfillDemandTasks(fill.getAttribute("data-vd-backfill")); return; }
     var dm = e.target.closest("[data-vd-demand]");
     if(dm){ openDemand(dm.getAttribute("data-vd-demand")); return; }
     var exp = e.target.closest("[data-release-export]");
@@ -119003,6 +120040,6 @@ window.__HG_MODULES__["review-team"] = __NS["views/review-team.js"];
 window.__HG_MODULES__["mine"] = __NS["views/mine.js"];
 })();
 </script>
-<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-25 07:48</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-26 02:03</span></div>
 </body>
 </html>

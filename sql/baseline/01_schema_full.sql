@@ -1612,7 +1612,7 @@ CREATE TABLE `version_release` (
   `target_keys` json NOT NULL,
   `coverage` varchar(16) NOT NULL,
   `artifact_ref` varchar(500) NOT NULL,
-  `artifact_digest` varchar(64) NOT NULL,
+  `artifact_digest` varchar(64) DEFAULT NULL,
   `operation` varchar(16) NOT NULL,
   `related_release_id` varchar(32) DEFAULT NULL,
   `executor_user_id` varchar(32) NOT NULL,

@@ -889,7 +889,10 @@ public class DemandService {
         return view;
     }
 
-    /** 排期后二次确认的候选：需求名下、尚未绑定目标版本的工作项；只读，权限同需求详情。 */
+    /**
+     * 带入工作项的候选：需求名下、尚未绑定目标版本的工作项；只读，权限同需求详情。
+     * 排期前（pass）也允许按所选版本预览，供排期弹窗内联勾选；写入仍要求需求已排期且版本一致。
+     */
     public com.hourglass.dto.PageResult<Task> versionTaskCandidates(String workspaceId, String userId, String id,
                                                                      String versionIdRaw, int offset, int limit) {
         Demand d = requireDemand(workspaceId, id);
@@ -898,11 +901,12 @@ public class DemandService {
         if (versionId == null) {
             throw AppException.badRequest("请指定目标版本");
         }
-        /* 只读路径不取写锁；前提与写入同口径，过期页面尽早失败 */
-        if (!"plan".equals(d.getStatus())) {
-            throw AppException.badRequest("只有已排期需求可以带入工作项");
+        /* 只读路径不取写锁；已排期必须与当前目标版本一致，未排期只看所选版本 */
+        boolean planned = "plan".equals(d.getStatus());
+        if (!planned && !"pass".equals(d.getStatus())) {
+            throw AppException.badRequest("只有已通过或已排期的需求可以带入工作项");
         }
-        if (!versionId.equals(d.getVersionId())) {
+        if (planned && !versionId.equals(d.getVersionId())) {
             throw AppException.conflict("目标版本与需求当前排期不一致，请刷新后重试");
         }
         ProjectVersion v = versionMapper.selectById(versionId);

@@ -132,8 +132,22 @@ class DemandVersionBackfillTest {
     }
 
     @Test
-    void candidatesRejectUnplannedDemand() {
+    void candidatesAllowPassPreviewBeforeScheduling() {
         demand.setStatus("pass");
+        demand.setVersionId(null);
+        when(demands.countVersionCandidates("W1", "D1", "V1")).thenReturn(2);
+        when(demands.selectVersionCandidates("W1", "D1", "V1", 0, 100))
+                .thenReturn(Collections.singletonList(task("T1")));
+
+        com.hourglass.dto.PageResult<Task> page = service.versionTaskCandidates("W1", "U1", "D1", "V1", 0, 100);
+
+        assertEquals(2, page.getTotal());
+        assertEquals(1, page.getItems().size());
+    }
+
+    @Test
+    void candidatesRejectDemandOutsideScheduling() {
+        demand.setStatus("review");
 
         AppException ex = assertThrows(AppException.class,
                 () -> service.versionTaskCandidates("W1", "U1", "D1", "V1", 0, 100));

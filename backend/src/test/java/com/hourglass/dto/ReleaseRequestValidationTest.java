@@ -37,10 +37,9 @@ class ReleaseRequestValidationTest {
         assertNamesField("artifactRef", validator.validate(missing));
 
         missing.setArtifactRef("release/app");
-        assertNamesField("artifactDigest", validator.validate(missing));
-
-        missing.setArtifactDigest(repeat('a', 64));
-        assertNamesField("operation", validator.validate(missing));
+        assertTrue(validator.validate(missing).stream()
+                        .noneMatch(v -> v.getPropertyPath().toString().equals("artifactDigest")),
+                "制品 SHA256 已改为选填，缺失时不应报错");
 
         missing.setOperation("deploy");
         assertNamesField("actualTaskIds", validator.validate(missing));
@@ -53,16 +52,12 @@ class ReleaseRequestValidationTest {
     }
 
     @Test
-    void previewRejectsMalformedEnumAndDigest() {
+    void previewRejectsMalformedEnum() {
         ReleasePreviewRequest req = validPreview();
         req.setEnvironment("prod");
         assertViolationLabel("environment", "发布环境", validator.validate(req));
 
         req.setEnvironment("production");
-        req.setArtifactDigest(repeat('z', 64));
-        assertViolationLabel("artifactDigest", "制品摘要", validator.validate(req));
-
-        req.setArtifactDigest(repeat('a', 64));
         req.setOperation("rollback-and-retry");
         assertViolationLabel("operation", "操作类型", validator.validate(req));
 

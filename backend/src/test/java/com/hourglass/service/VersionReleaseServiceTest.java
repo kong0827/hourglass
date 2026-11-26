@@ -338,6 +338,14 @@ class VersionReleaseServiceTest {
         VersionRelease original = confirm(request(plan("production"), "original")); ReleaseConfirmRequest r = request(null, "redeploy"); r.setOperation("redeploy"); r.setRelatedReleaseId(original.getId()); r.setDeviationReason("Reinstall same artifact");
         assertEquals("redeploy", confirm(r).getOperation()); r.setArtifactDigest(String.join("", Collections.nCopies(64, "b"))); code(400, () -> service.preview("U", "W", "V", r));
     }
+    @Test void artifactDigestIsOptionalButRejectsIncompleteValue() {
+        ReleaseConfirmRequest r = request(plan("test"), "optional-digest");
+        r.setArtifactDigest(null);
+        assertNull(confirm(r).getArtifactDigest());
+        ReleaseConfirmRequest shortDigest = request(null, "short-digest");
+        shortDigest.setArtifactDigest("864967b402570fa42e0192315b1e99bd3cb007b4");
+        code(400, () -> service.preview("U", "W", "V", shortDigest));
+    }
     @Test void testRecordsDoNotNotifyAndReplayLookupIsReadOnly() {
         VersionRelease record = confirm(request(plan("test"), "test")); assertTrue(TransactionSynchronizationManager.getSynchronizations().isEmpty());
         when(mapper.selectByKey("W", "V", "test")).thenReturn(record); when(mapper.selectItems("W", record.getId())).thenReturn(record.getItems());

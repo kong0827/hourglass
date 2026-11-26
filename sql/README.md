@@ -98,6 +98,8 @@ mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sq
 
 `124_task_creator.sql` 给 `task` 增加可空列 `created_by_user_id` 与索引 `idx_creator`，记录建单人（「我的工作 → 我发起的」据此跨空间跟踪）。建单写入当前账号，编辑、转派与列流转不改；历史数据按 `task_log` 中每个任务首条 `action='create'` 的 `actor_id` 回填，没有创建日志的留空不做推断。脚本幂等，执行后表数量不变。
 
+`126_release_artifact_digest_optional.sql` 把 `version_release.artifact_digest` 从 `NOT NULL` 放宽为可空：没有 CI / 制品库的团队可以留空表示「未记录校验值」，不再被 64 位哈希卡住。字段长度、历史值、发布判重与回滚的产物比较都不变；填写时后端仍强制 64 位十六进制，commit id 仍不能冒充制品哈希。脚本按 `information_schema` 判断可空性，已放开的库跳过，执行后表数量不变。
+
 `110_task_comment_content_length.sql` 只把 `task_comment.content` 从 `VARCHAR(500)` 放宽到 `VARCHAR(2000)`，让工作项评论能贴下错误日志与会议结论；不新增字段、不回填、不改权限与通知口径。后端截断上限与抽屉输入框 `maxlength` 同步为 2000。脚本按 `information_schema` 判断当前长度，已达标即跳过，可重复执行；执行后表数量不变。
 
 不要执行 `sql/legacy/` 与 `sql/seeds/` 下的文件；前者只保留旧版本结构用于追溯，后者是旧结构的演示种子。

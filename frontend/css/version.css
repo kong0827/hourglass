@@ -476,6 +476,7 @@ button.vd-link-v:hover{color:var(--primary-fg);}
 .vd-branch-wrap{display:inline-flex;align-items:center;gap:var(--space-1);max-width:100%;}
 .vd-rel-cell{white-space:nowrap;}
 .vd-rel-cell .vd-funnel{margin-left:6px;vertical-align:middle;}
+.vd-rel-cell .vd-backfill{margin-left:8px;vertical-align:middle;}
 .vd-muted{color:var(--text-3);font-size:11px;}
 
 /* ---------- 窄屏 ---------- */

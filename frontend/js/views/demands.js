@@ -35,7 +35,10 @@ var demandReq = $("demandReq"), demandsMeta = $("demandsMeta"), demandBody = $("
     dWsjfB = $("dWsjfB"), dWsjfU = $("dWsjfU"), dWsjfR = $("dWsjfR"), dWsjfE = $("dWsjfE"),
     fDemandTitle = $("fDemandTitle"), btnSaveDemand = $("btnSaveDemand"), demandFormTitle = $("demandFormTitle"),
     dpVersion = $("dpVersion"), dpNote = $("dpNote"), fDemandPlanVer = $("fDemandPlanVer"), btnDoPlan = $("btnDoPlan"),
-    dpPlannedStart = $("dpPlannedStart"), dpPlannedEnd = $("dpPlannedEnd"), dpPriority = $("dpPriority");
+    dpPlannedStart = $("dpPlannedStart"), dpPlannedEnd = $("dpPlannedEnd"), dpPriority = $("dpPriority"),
+    dpTaskBlock = $("fDemandPlanTasks"), dpTaskToggle = $("dpTaskToggle"), dpTaskSummary = $("dpTaskSummary"),
+    dpTaskPicker = $("dpTaskPicker"), dpTaskExpandBtn = $("dpTaskExpandBtn"), dpTaskSearch = $("dpTaskSearch"),
+    dpTaskCount = $("dpTaskCount"), dpTaskList = $("dpTaskList"), dpTaskEmpty = $("dpTaskEmpty");
 
 var COLS = [
   ["review", "待评审", "var(--text-3)"],
@@ -157,6 +160,8 @@ var demandOverviewMention = null;  /* 概览「讨论」里快速记录的 @ 提
 var editingDemandRevision = null, editingPlannedStart = null, editingPlannedEnd = null, editingDemandStatus = null;
 var editingDemandReqId = null;  /* 打开编辑时的所属项目，保存成功据此判断是否发生了迁移 */
 var planDemandRevision = null, planAction = "plan";
+/* 排期弹窗内联带入：候选按所选版本懒加载，提交时先排期再补关联 */
+var planTaskState = { seq:0, versionId:"", loaded:false, loading:false, items:[], selected:{}, query:"", total:0 };
 var formPri = "P2";
 var dragSrc = null;           /* 拖动中的卡片 { id, status, canSchedule } */
 var dragOverCol = null;       /* 最近悬停的列：drop 未触发时用 dragend 兜底提示 */
@@ -3699,6 +3704,7 @@ function openPlanDialog(id, replan){
   if(dpPlannedStart) dpPlannedStart.value = d.plannedStart || "";
   if(dpPlannedEnd) dpPlannedEnd.value = d.plannedEnd || "";
   if(dpPriority) dpPriority.value = d.priority || "P2";
+  resetPlanTasks();
   UI.openModal($("dlgDemandPlan"), "select");
   dpVersion.innerHTML = '<option value="">加载中…</option>';
   dpVersion.disabled = true;
@@ -3721,6 +3727,147 @@ function fillPlanVersions(d, list){
   }).join("");
   dpVersion.disabled = false;
   dpVersion.value = d.versionId && usable.some(function(v){ return v.id === d.versionId; }) ? d.versionId : "";
+  loadPlanTaskCandidates();
+}
+/* ---------- 排期内联带入工作项 ---------- */
+
+function resetPlanTasks(){
+  /* 保留 seq：关窗后再开同一需求，旧请求不能覆盖新一轮候选 */
+  var seq = planTaskState.seq;
+  planTaskState = { seq:seq, versionId:"", loaded:false, loading:false, items:[], selected:{}, query:"", total:0 };
+  if(!dpTaskBlock) return;
+  dpTaskBlock.hidden = true;
+  if(dpTaskPicker) dpTaskPicker.hidden = true;
+  if(dpTaskExpandBtn){ dpTaskExpandBtn.hidden = false; dpTaskExpandBtn.setAttribute("aria-expanded", "false"); dpTaskExpandBtn.textContent = "展开选择"; }
+  if(dpTaskToggle){ dpTaskToggle.checked = true; dpTaskToggle.disabled = false; }
+  if(dpTaskList) dpTaskList.innerHTML = "";
+  if(dpTaskSearch) dpTaskSearch.value = "";
+  if(dpTaskSummary) dpTaskSummary.textContent = "";
+  if(dpTaskEmpty) dpTaskEmpty.hidden = true;
+}
+function planTaskIds(){
+  return planTaskState.items.filter(function(t){ return planTaskState.selected[t.id]; }).map(function(t){ return t.id; });
+}
+/* 勾选与否只影响本次提交；没有候选或未加载成功时一律不提交 */
+function planTasksToAdd(){
+  if(!dpTaskBlock || dpTaskBlock.hidden || !planTaskState.loaded) return [];
+  if(dpTaskToggle && !dpTaskToggle.checked) return [];
+  return planTaskIds();
+}
+function planTaskSummaryText(){
+  if(!planTaskState.loaded) return planTaskState.loading ? "正在查找需求名下的工作项…" : "";
+  var total = planTaskState.total || planTaskState.items.length;
+  if(dpTaskToggle && !dpTaskToggle.checked) return "本次不加入工作项（共 " + total + " 项候选）";
+  var n = planTaskIds().length;
+  var cap = planTaskState.total > planTaskState.items.length
+    ? "，仅列出前 " + planTaskState.items.length + " 项" : "";
+  return "将加入 " + n + " 项（共 " + total + " 项候选，默认勾选未完成" + cap + "）";
+}
+function hiddenPlanTaskSelected(){
+  if(!planTaskState.query.trim() || !dpTaskList) return 0;
+  var n = 0;
+  dpTaskList.querySelectorAll("[data-dp-task-row]").forEach(function(row){
+    if(!row.hidden) return;
+    var cb = row.querySelector("[data-dp-task-check]");
+    if(cb && cb.checked) n++;
+  });
+  return n;
+}
+function syncPlanTaskUI(){
+  if(dpTaskSummary) dpTaskSummary.textContent = planTaskSummaryText();
+  if(!dpTaskCount) return;
+  var total = planTaskState.total || planTaskState.items.length;
+  var hidden = hiddenPlanTaskSelected();
+  dpTaskCount.textContent = "已选 " + planTaskIds().length + " / 共 " + total + " 项"
+    + (hidden ? "（筛选外 " + hidden + " 项也会加入）" : "");
+}
+function filterPlanTaskRows(){
+  if(!dpTaskList) return;
+  var q = planTaskState.query.trim().toLowerCase(), shown = 0;
+  dpTaskList.querySelectorAll("[data-dp-task-row]").forEach(function(row){
+    var match = !q || (row.getAttribute("data-task-title") || "").indexOf(q) !== -1;
+    row.hidden = !match;
+    if(match) shown++;
+  });
+  if(dpTaskEmpty) dpTaskEmpty.hidden = shown !== 0;
+}
+function renderPlanTasks(){
+  if(!dpTaskList) return;
+  var versionId = planTaskState.versionId;
+  dpTaskList.innerHTML = planTaskState.items.map(function(t){
+    var bits = [];
+    var typeTag = typeBadgeHTML(t.itemType);
+    if(typeTag) bits.push(typeTag);
+    bits.push(esc(t.owner || "未指派"));
+    bits.push(t.boardColumn === "done" ? '<span class="tag tag-success">已完成</span>'
+      : '<span class="tag tag-info">' + esc(colName(t.boardColumn)) + '</span>');
+    /* 与「补录工作项」弹窗同口径：工作项可同时属于多个版本，列出其他归属避免只看到本版本 */
+    var ids = taskVersionIds(t);
+    var others = ids.filter(function(vid){ return vid !== versionId; });
+    if(others.length){
+      bits.push("其他关联：" + esc(others.map(function(vid){
+        var name = t.versionNames && t.versionNames[ids.indexOf(vid)];
+        return name || vid;
+      }).join("、")));
+    }
+    return '<label class="version-task-row" data-dp-task-row data-task-title="' + esc(String((t.title || "") + " " + (t.owner || "")).toLowerCase()) + '">'
+      + '<input type="checkbox" data-dp-task-check="' + esc(t.id) + '"' + (planTaskState.selected[t.id] ? " checked" : "") + ' />'
+      + '<span class="version-task-main"><span class="version-task-title"><b>' + esc(t.title) + '</b></span>'
+      + '<small>' + bits.join(" · ") + '</small></span></label>';
+  }).join("");
+  filterPlanTaskRows();
+}
+/* 候选口径与「补录工作项」一致：只列需求名下尚未绑定该版本的工作项；pass 需求在排期前也能预览 */
+function loadPlanTaskCandidates(){
+  if(!dpTaskBlock) return;
+  var demandId = planDemandId, verId = dpVersion && dpVersion.value;
+  if(planAction === "replan" || !demandId || !verId){
+    dpTaskBlock.hidden = true;
+    return;
+  }
+  var seq = ++planTaskState.seq;
+  planTaskState.versionId = verId;
+  planTaskState.loading = true;
+  planTaskState.loaded = false;
+  planTaskState.items = [];
+  planTaskState.selected = {};
+  planTaskState.query = "";
+  planTaskState.total = 0;
+  dpTaskBlock.hidden = false;
+  /* 换版本只重置候选与勾选，保留用户已做的「不加工作项」选择 */
+  if(dpTaskToggle) dpTaskToggle.disabled = false;
+  if(dpTaskExpandBtn){ dpTaskExpandBtn.hidden = false; dpTaskExpandBtn.setAttribute("aria-expanded", "false"); dpTaskExpandBtn.textContent = "展开选择"; }
+  if(dpTaskPicker) dpTaskPicker.hidden = true;
+  if(dpTaskList) dpTaskList.innerHTML = "";
+  if(dpTaskSearch) dpTaskSearch.value = "";
+  if(dpTaskEmpty) dpTaskEmpty.hidden = true;
+  if(dpTaskSummary) dpTaskSummary.textContent = "正在查找需求名下的工作项…";
+  API.get("/api/demands/" + encodeURIComponent(demandId) + "/version-task-candidates", {
+    versionId: verId, offset: 0, limit: 100
+  }).then(function(page){
+    if(seq !== planTaskState.seq || planDemandId !== demandId) return;
+    page = page || {};
+    var items = page.items || [];
+    planTaskState.items = items;
+    planTaskState.total = Number(page.total) || items.length;
+    planTaskState.selected = {};
+    /* 已完成工作项通常已随历史版本交付，默认不勾，由用户自己决定是否回填 */
+    items.forEach(function(t){ if(t.boardColumn !== "done") planTaskState.selected[t.id] = true; });
+    planTaskState.loading = false;
+    planTaskState.loaded = true;
+    if(!items.length){ dpTaskBlock.hidden = true; return; }
+    renderPlanTasks();
+    syncPlanTaskUI();
+  }).catch(function(ex){
+    if(seq !== planTaskState.seq) return;
+    planTaskState.loading = false;
+    planTaskState.loaded = true;
+    /* 读候选失败不阻断排期：如实说明，之后仍可在版本页「管理工作项」补录 */
+    dpTaskBlock.hidden = false;
+    if(dpTaskToggle) dpTaskToggle.disabled = true;
+    if(dpTaskExpandBtn) dpTaskExpandBtn.hidden = true;
+    if(dpTaskSummary) dpTaskSummary.textContent = "候选工作项加载失败：" + (ex.message || "稍后可在版本页补录");
+  });
 }
 function doPlan(){
   if(!planDemandId) return;
@@ -3729,36 +3876,54 @@ function doPlan(){
   if(dpVersion.disabled) return;
   if(start && end && start > end){ toast("计划开始日期不能晚于计划结束日期", "warn"); return; }
   if(planAction === "replan" && !dpNote.value.trim()){ toast("请填写调期原因", "warn"); dpNote.focus(); return; }
+  /* 候选还在路上时提交会静默丢掉勾选：等一拍再排期 */
+  if(dpTaskBlock && !dpTaskBlock.hidden && planTaskState.loading){ toast("正在加载需求名下的工作项，请稍候再提交", "warn"); return; }
+  /* 先定下本次要带入的工作项：排期成功后弹窗即关，不能再读勾选状态 */
+  var demandId = planDemandId, action = planAction;
+  var taskIds = action === "plan" ? planTasksToAdd() : [];
   btnDoPlan.disabled = true;
-  API.post("/api/demands/" + encodeURIComponent(planDemandId) + "/" + planAction, {
+  API.post("/api/demands/" + encodeURIComponent(demandId) + "/" + action, {
     versionId: verId || null,
     plannedStart: start || null,
     plannedEnd: end || null,
-    priority: dpPriority ? dpPriority.value : findDemand(planDemandId).priority,
+    priority: dpPriority ? dpPriority.value : findDemand(demandId).priority,
     revision: planDemandRevision,
     note: dpNote.value.trim() || null
   }).then(function(){
-    btnDoPlan.disabled = false;
-    var demandId = planDemandId, action = planAction;
-    UI.closeModal($("dlgDemandPlan"));
-    closeDemandDetailIfOpen();
-    toast("已" + (action === "replan" ? "调期" : "排期") + (verId ? "到「" + versionName(verId) + "」" : "，暂不指定目标版本")
-      + (action === "plan" && verId ? "，关联任务默认不变" : "，关联任务不变"), "fs");
-    planDemandId = null;
-    drawerDemandOpts.reqId = null;
-    loadDemands();
-    /* 首次排期到版本才提示带入；调期不批量迁移，避免把已手工摆放的成员再抄一遍 */
-    if(action === "plan" && verId){
-      openDemandVersionBackfill(demandId, verId, versionName(verId) || verId, { fromPlan:true });
-    }
+    finishPlan(demandId, action, verId, taskIds);
   }).catch(function(ex){
     btnDoPlan.disabled = false;
     toast(ex.message || "排期失败", "bad");
     if(ex.code === 409){ UI.closeModal($("dlgDemandPlan")); planDemandId = null; closeDemandDetailIfOpen(); loadDemands(); }
   });
 }
+/* 排期已落库：补关联失败只能单独提示补录入口，不能当成排期失败让用户重试 */
+function finishPlan(demandId, action, verId, taskIds){
+  btnDoPlan.disabled = false;
+  UI.closeModal($("dlgDemandPlan"));
+  closeDemandDetailIfOpen();
+  var dest = verId ? "到「" + versionName(verId) + "」" : "，暂不指定目标版本";
+  var label = action === "replan" ? "已调期" : "已排期";
+  planDemandId = null;
+  drawerDemandOpts.reqId = null;
+  loadDemands();
+  if(taskIds && taskIds.length){
+    API.post("/api/demands/" + encodeURIComponent(demandId) + "/version-tasks", {
+      versionId: verId, taskIds: taskIds
+    }).then(function(res){
+      var added = Number(res && res.added) || 0, skipped = Number(res && res.skipped) || 0;
+      toast(added
+        ? label + dest + "，已加入 " + added + " 项工作项" + (skipped ? "，" + skipped + " 项已存在跳过" : "")
+        : label + dest + "，所选工作项均已在该版本中", "fs");
+    }).catch(function(ex){
+      toast(label + dest + "，但工作项带入失败：" + (ex.message || "未知原因") + "；可在版本页「管理工作项」补录", "warn");
+    });
+    return;
+  }
+  toast(label + dest + "，关联任务不变", "fs");
+}
 
-/* 排期带入工作项：只新增目标版本关联，不改工作项计划日期；版本页「补录工作项」复用同一入口 */
+/* 补录工作项：只新增目标版本关联，不改工作项计划日期；版本页「补录工作项」与已排需求抽屉共用 */
 function openDemandVersionBackfill(demandId, versionId, label, opts){
   opts = opts || {};
   var versionLabel = label || versionName(versionId) || versionId;
@@ -3773,7 +3938,7 @@ function openDemandVersionBackfill(demandId, versionId, label, opts){
     page = page || {};
     var items = page.items || [], total = Number(page.total) || 0;
     if(!total){
-      if(!opts.fromPlan) toast(opts.emptyText || "没有可带入的工作项（可能已全部在版本中）", "fs");
+      toast(opts.emptyText || "没有可带入的工作项（可能已全部在版本中）", "fs");
       return;
     }
     renderBackfill(items, total);
@@ -6649,6 +6814,27 @@ if($("segDemandPri")) $("segDemandPri").addEventListener("click", function(e){
 });
 if($("dlgDemandPlanX")) $("dlgDemandPlanX").addEventListener("click", function(){ UI.closeModal($("dlgDemandPlan")); });
 if(btnDoPlan) btnDoPlan.addEventListener("click", doPlan);
+if(dpVersion) dpVersion.addEventListener("change", loadPlanTaskCandidates);
+if(dpTaskToggle) dpTaskToggle.addEventListener("change", syncPlanTaskUI);
+if(dpTaskExpandBtn) dpTaskExpandBtn.addEventListener("click", function(){
+  if(!dpTaskPicker) return;
+  var open = dpTaskPicker.hidden;
+  dpTaskPicker.hidden = !open;
+  dpTaskExpandBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  dpTaskExpandBtn.textContent = open ? "收起" : "展开选择";
+  if(open && dpTaskSearch) dpTaskSearch.focus();
+});
+if(dpTaskSearch) dpTaskSearch.addEventListener("input", function(){
+  planTaskState.query = dpTaskSearch.value;
+  filterPlanTaskRows();
+  syncPlanTaskUI();
+});
+if(dpTaskList) dpTaskList.addEventListener("change", function(e){
+  var cb = e.target.closest("[data-dp-task-check]");
+  if(!cb) return;
+  planTaskState.selected[cb.getAttribute("data-dp-task-check")] = cb.checked;
+  syncPlanTaskUI();
+});
 if($("demandModeSeg")) $("demandModeSeg").addEventListener("click", function(e){
   var b = e.target.closest("[data-dem-mode]");
   if(!b) return;

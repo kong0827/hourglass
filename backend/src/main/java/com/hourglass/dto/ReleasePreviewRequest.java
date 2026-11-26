@@ -23,8 +23,7 @@ public class ReleasePreviewRequest {
     @NotBlank(message = "请填写制品标识 artifactRef")
     @Size(max = 500, message = "制品标识不能超过 500 字符")
     private String artifactRef;
-    @NotBlank(message = "请填写制品摘要 artifactDigest")
-    @Pattern(regexp = "[a-fA-F0-9]{64}", message = "制品摘要必须是 64 位十六进制 SHA-256")
+    /** 选填：填了必须是 64 位十六进制 SHA-256；留空表示未记录校验值，格式由服务层统一校验 */
     private String artifactDigest;
     @NotBlank(message = "请填写操作类型 operation")
     @Pattern(regexp = "deploy|redeploy|rollback", message = "操作类型只能是 deploy/redeploy/rollback")

@@ -705,7 +705,7 @@ import { icon } from "../core/icons.js";
     if (o.tone !== "customer") {
       boxes.push(kv("部署目标", arr(rel.targets).join("、")));
       boxes.push(kvMono("制品标识", rel.artifactRef));
-      if (o.evidence >= 2) boxes.push(kvMono("制品 SHA256", rel.artifactDigest));
+      if (o.evidence >= 2) boxes.push(kvMono("制品 SHA256", rel.artifactDigest || "未记录"));
     }
     if (txt(rel.relatedReleaseId)) boxes.push(kv("关联正式事件", noText("REL", rel.relatedReleaseNo, rel.relatedReleaseId)));
     if (txt(rel.deviationReason)) boxes.push(kv("未按计划发布的原因", rel.deviationReason, "wide"));

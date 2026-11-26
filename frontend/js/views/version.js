@@ -629,9 +629,10 @@ function headHTML(){
   var actions = [];
   var canEdit = writable() && !readOnly();
   var canPublish = st.version && st.version.canPublish === true;
-  /* 原型：只保留一个状态驱动的主操作 + 编辑 + 更多；低频动作全部进入更多 */
+  /* 管理范围与记录实际发布不互斥：可编辑时范围入口常驻，有发布主操作时降为次级按钮 */
   if(canEdit){
     actions.push('<button class="btn sm" type="button" data-vd-tool="edit">' + icon("edit", 13) + ' 编辑</button>');
+    if(canPublish) actions.push('<button class="btn sm" type="button" data-vd-tool="tasks">管理范围</button>');
   }
   actions.push(moreMenuHTML(canEdit, canPublish));
   if(canPublish){
@@ -1548,6 +1549,9 @@ function scopeFiltersHTML(){
     + selectHTML("sort", SORTS, f.sort, "排序方式")
     + '<span class="sp"></span>'
     + '<button class="btn sm ghost" type="button" data-vd-filter-reset>清空筛选</button>'
+    + (writable() && !readOnly()
+      ? '<button class="btn sm" type="button" data-vd-tool="tasks" title="勾选关联已有工作项，或在此版本新建工作项">管理工作项</button>'
+      : '')
     + '<button class="btn sm" type="button" data-vd-board title="在看板中按此版本筛选">在看板中查看</button>'
     + '</div>' + linkedBarHTML();
 }
@@ -1603,6 +1607,8 @@ function demandsHTML(){
   }
   var body = slot.rows.map(function(d){
     var linked = st.tasks.filter(function(t){ return t.demandId === d.id; }).length;
+    /* 补录与「管理工作项」同权限口径：需求仍需在排期中，且有项目发布管理权限 */
+    var canFill = writable() && !readOnly() && d.status === "plan" && d.canSchedule === true;
     return '<tr data-vd-demand="' + esc(d.id) + '" tabindex="0" title="打开需求详情">'
       + '<td class="vd-tt"><span class="vd-no">' + esc(demandNoText(d.demandNo) || "—") + '</span>'
       + '<span class="vd-tname">' + esc(d.title) + '</span></td>'
@@ -1612,7 +1618,11 @@ function demandsHTML(){
       + '<td class="num">' + esc(dateText(d.expectDate) || "—") + '</td>'
       + '<td class="num vd-rel-cell">' + (linked
         ? '<span>' + linked + ' 项</span>' + linkBtn("demand", d.id, d.title)
-        : '<span class="vd-muted" title="本版本的工作项还没有挂到这条需求">未挂工作项</span>') + '</td></tr>';
+        : '<span class="vd-muted" title="本版本的工作项还没有挂到这条需求">未挂工作项</span>')
+        + (canFill
+          ? '<button class="btn sm vd-backfill" type="button" data-vd-backfill="' + esc(d.id) + '" title="把该需求名下未加入本版本的工作项补录进来">补录工作项</button>'
+          : '')
+        + '</td></tr>';
   }).join("");
   return panel("已排需求", '<span class="meta-right">' + slot.rows.length + ' 项 · 目标版本指向本版本，不含已关闭</span>',
     tableWrap('<th>需求</th><th>类型</th><th>状态</th><th>优先级</th><th class="num">期望日期</th><th class="num">本版本工作项</th>', body)
@@ -1788,6 +1798,13 @@ function openDemand(id){
   loadView("demands").then(function(m){ m.openDemandDetailById(id); })
     .catch(function(ex){ toast(ex.message || "打开需求详情失败", "bad"); });
 }
+/* 需求页签补录：复用排期带入的同一弹窗与校验，成功后刷新本页工作项与计数 */
+function backfillDemandTasks(id){
+  var versionId = st.id, label = versionName();
+  loadView("demands").then(function(m){
+    m.openDemandVersionBackfill(id, versionId, label, { onDone: function(){ reload(); } });
+  }).catch(function(ex){ toast(ex.message || "打开补录失败", "bad"); });
+}
 function jumpBoard(){
   /* 与版本卡下钻同一口径：清掉旧筛选，按当前项目 + 该版本过滤，已完成列放到全部历史。
      看板有的筛选（关键词 / 模块 / 负责人 / 类型）一并带过去，没有的（分支 / 需求 / 计时窗口 / 状态）如实说明 */
@@ -1927,6 +1944,8 @@ function wire(){
       if(hit) openMilestoneDetail(hit, { canWrite: writable(), onChanged: reload });
       return;
     }
+    var fill = e.target.closest("[data-vd-backfill]");
+    if(fill){ backfillDemandTasks(fill.getAttribute("data-vd-backfill")); return; }
     var dm = e.target.closest("[data-vd-demand]");
     if(dm){ openDemand(dm.getAttribute("data-vd-demand")); return; }
     var exp = e.target.closest("[data-release-export]");

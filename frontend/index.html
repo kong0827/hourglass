@@ -4201,6 +4201,24 @@
         <label for="dpVersion">目标版本（选填）</label>
         <select id="dpVersion"></select>
       </div>
+      <div class="field dp-task-block" id="fDemandPlanTasks" hidden>
+        <div class="dp-task-head">
+          <label class="dp-task-toggle" for="dpTaskToggle">
+            <input type="checkbox" id="dpTaskToggle" checked />
+            <span>同时把名下工作项加入该版本</span>
+          </label>
+          <button class="link-btn" type="button" id="dpTaskExpandBtn" aria-expanded="false" aria-controls="dpTaskPicker">展开选择</button>
+        </div>
+        <p class="hint dp-task-summary" id="dpTaskSummary" role="status"></p>
+        <div class="dp-task-picker" id="dpTaskPicker" hidden>
+          <div class="version-task-tools">
+            <input type="search" id="dpTaskSearch" placeholder="搜索工作项标题或负责人…" aria-label="搜索候选工作项" autocomplete="off" />
+            <span class="version-task-count" id="dpTaskCount" role="status"></span>
+          </div>
+          <div class="version-task-list dp-task-list" id="dpTaskList"></div>
+          <p class="hint" id="dpTaskEmpty" hidden>没有匹配的工作项</p>
+        </div>
+      </div>
       <div class="form-grid">
         <div class="field">
           <label for="dpPlannedStart">计划开始</label>
