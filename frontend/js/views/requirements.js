@@ -2184,21 +2184,34 @@ function copyRrdLink(){
 function printRrdDoc(){
   var body = $("reqDocReaderBody");
   if(!body || !(body.textContent || "").trim()){ toast("正文为空，没有可打印的内容", "warn"); return; }
-  var clone = body.cloneNode(true);
-  clone.querySelectorAll(".code-tools,.code-btn,.code-lang,.rrd-anchor").forEach(function(n){ n.remove(); });
   var title = (rrdDocDetail && rrdDocDetail.title) || "文档";
-  var win = window.open("", "_blank");
-  if(!win){ toast("浏览器阻止了弹出窗口，请允许后重试", "warn"); return; }
-  win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + esc(title) + '</title>'
-    + '<style>body{font-family:system-ui,-apple-system,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.7;font-size:14px;color:#222;}'
-    + 'h1{font-size:22px;border-bottom:1px solid #ddd;padding-bottom:8px;}img{max-width:100%;}'
-    + 'table{border-collapse:collapse;width:100%;}td,th{border:1px solid #ccc;padding:6px 8px;}'
-    + '.table-wrap{overflow:visible;}'
-    + 'pre{background:#f6f7f9;padding:10px;border-radius:6px;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;}'
-    + '@media print{body{margin:0;max-width:none;}}</style></head><body>'
-    + '<h1>' + esc(title) + '</h1>' + clone.innerHTML + '</body></html>');
-  win.document.close();
-  setTimeout(function(){ win.print(); }, 300);
+  var write = function(relHtml){
+    var clone = body.cloneNode(true);
+    clone.querySelectorAll(".code-tools,.code-btn,.code-lang,.rrd-anchor").forEach(function(n){ n.remove(); });
+    var win = window.open("", "_blank");
+    if(!win){ toast("浏览器阻止了弹出窗口，请允许后重试", "warn"); return; }
+    win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + esc(title) + '</title>'
+      + '<style>body{font-family:system-ui,-apple-system,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.7;font-size:14px;color:#222;}'
+      + 'h1{font-size:22px;border-bottom:1px solid #ddd;padding-bottom:8px;}img{max-width:100%;}'
+      + 'table{border-collapse:collapse;width:100%;}td,th{border:1px solid #ccc;padding:6px 8px;}'
+      + '.table-wrap{overflow:visible;}'
+      + 'pre{background:#f6f7f9;padding:10px;border-radius:6px;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;}'
+      + '.rr-print-rel{margin-top:28px;padding-top:14px;border-top:1px solid #ddd;page-break-inside:avoid;}'
+      + '.rr-print-rel h2{font-size:15px;margin:14px 0 4px;}'
+      + '.rr-print-rel ul{margin:0;padding-left:20px;}'
+      + '.rr-print-rel .ri-meta{color:#666;font-size:12px;}'
+      + '.rr-print-rel .ri-none{color:#666;font-size:13px;margin:0;}'
+      + '@media print{body{margin:0;max-width:none;}}</style></head><body>'
+      + '<h1>' + esc(title) + '</h1>' + clone.innerHTML + relHtml + '</body></html>');
+    win.document.close();
+    setTimeout(function(){ win.print(); }, 300);
+  };
+  /* 关联区是进视口才取数的，打印时可能还没数据，先补取再拼到正文后面 */
+  if(!rrdRelBoxLoaded(splitDocId)){
+    loadRrdRelLists(splitDocId).then(function(){ write(rrdRelPrintHtml()); }, function(){ write(""); });
+    return;
+  }
+  write(rrdRelPrintHtml());
 }
 function closeRrdCodeModal(){
   var m = document.getElementById("rrdCodeModal");
@@ -2246,6 +2259,18 @@ function closeRrdMore(){
   if(menu) menu.hidden = true;
   var btn = document.querySelector("#reqDocReader [data-rrd-more]");
   if(btn) btn.setAttribute("aria-expanded", "false");
+}
+function closeRrdAiMenu(){
+  var menu = $("rrdAiMenu");
+  if(menu) menu.hidden = true;
+  var btn = document.querySelector("#reqDocReader [data-rrd-ai]");
+  if(btn) btn.setAttribute("aria-expanded", "false");
+}
+function reqDocReaderSrc(){
+  var doc = rrdDocDetail;
+  if(!doc || !splitDocId || doc.id !== splitDocId) return null;
+  /* 工具条按钮是纯图标，不适合替换成「生成中…」文案，进度由 AI 进度弹窗承载 */
+  return { mode: "read", docId: doc.id, title: doc.title, reqId: doc.reqId };
 }
 /* 左侧文档树的先序顺序 = 阅读时的上一篇/下一篇顺序 */
 function rrdDocOrder(){
@@ -2405,11 +2430,105 @@ function rrdCommentEmptyHint(doc){
     ? "点击单元格后选择「批注」即可添加单元格批注"
     : "选中正文即可划线评论";
 }
+function rrdMetaParts(doc){
+  var meta = [esc(docTypeName(doc.docType)), "负责人 " + esc(doc.owner || "—")];
+  /* 发布态由标题旁徽标统一表达，meta 不再重复「草稿」，避免同屏自相矛盾 */
+  if(doc.status === "active" || doc.status === "done") meta.push(reqDocStatusLabel(doc.status));
+  if(doc.updatedAt) meta.push("更新于 " + esc(fmtTs(doc.updatedAt)));
+  if(doc.taskCount) meta.push('<button class="link-btn" type="button" data-rrd-jump="tasks" title="跳到关联工作项清单">'
+    + doc.doneCount + "/" + doc.taskCount + " 工作项</button>");
+  return meta;
+}
+/* 阅读页正文之后的只读关联区（排在上一篇/下一篇下方）：需求 / 工作项 / 附件，点行直接开详情，不切编辑页。
+   这块在长文末尾，打开文档时通常还看不见，所以进视口才取数，
+   免得在左树里连着翻文档时每次点选都刷三个分页请求。 */
+var rrdRelObserver = null;
+function rrdRelSec(key, title, listId, countId){
+  return '<section class="rrd-rel-sec" data-rel-sec="' + key + '">' +
+    '<h3 class="rrd-rel-title">' + esc(title) + ' <span class="rrd-rel-cnt" id="' + countId + '"></span></h3>' +
+    '<div class="reqdoc-task-list rrd-rel-list" id="' + listId + '"></div>' +
+    '</section>';
+}
+function rrdRelBoxLoaded(id){
+  var box = $("rrdRel");
+  return !!box && box.dataset.docId === String(id);
+}
+function loadRrdRelLists(id, force){
+  var box = $("rrdRel");
+  /* 只给当前打开的文档取数：进视口的回调可能晚于换文档到达，否则会串篇 */
+  if(!box || !id || String(splitDocId) !== String(id)) return Promise.resolve();
+  if(!force && box.dataset.docId === String(id)) return Promise.resolve();
+  box.dataset.docId = String(id);
+  return Promise.all([
+    loadReqDocDemands(id, { list: $("rrdRelDemands"), count: $("rrdRelDemandCount"), reader: true }),
+    loadReqDocTasks(id, { list: $("rrdRelTasks"), count: $("rrdRelTaskCount"), reader: true }),
+    loadReqDocAttachments(id, { list: $("rrdRelAtts"), count: $("rrdRelAttCount"), reader: true })
+  ]);
+}
+function watchRrdRel(id){
+  if(rrdRelObserver){ rrdRelObserver.disconnect(); rrdRelObserver = null; }
+  var box = $("rrdRel");
+  if(!box) return;
+  if(!("IntersectionObserver" in window)){ loadRrdRelLists(id); return; }
+  var ob = new IntersectionObserver(function(entries){
+    /* 换文档后旧观察器的末次回调可能仍在队列里：认领者不对就直接退出，
+       否则会顺手 disconnect 掉新文档的观察器，关联区再也取不到数 */
+    if(rrdRelObserver !== ob) return;
+    if(!entries.some(function(en){ return en.isIntersecting; })) return;
+    rrdRelObserver.disconnect();
+    rrdRelObserver = null;
+    loadRrdRelLists(id);
+  }, { rootMargin: "160px 0px" });
+  rrdRelObserver = ob;
+  ob.observe(box);
+}
+function scrollRrdRel(sec){
+  var el = document.querySelector('#rrdRel [data-rel-sec="' + sec + '"]');
+  if(!el) return;
+  var flash = function(){
+    el.classList.remove("rrd-flash");
+    void el.offsetWidth;
+    el.classList.add("rrd-flash");
+    setTimeout(function(){ el.classList.remove("rrd-flash"); }, 1600);
+  };
+  el.scrollIntoView({ behavior: "smooth", block: "start" });
+  flash();
+  /* 首次跳转会顺带补取数据：条目落地后再亮一次，免得高亮只落在「加载中…」上 */
+  if(!rrdRelBoxLoaded(splitDocId)) loadRrdRelLists(splitDocId).then(flash);
+}
+/* 打印 / 导出 PDF 用的关联清单纯文本版：阅读页那份是交互组件，直接搬进打印窗口会带一堆按钮 */
+function rrdRelPrintHtml(){
+  var secs = [["rrdRelDemands", "关联需求"], ["rrdRelTasks", "关联工作项"], ["rrdRelAtts", "附件"]];
+  var out = "";
+  secs.forEach(function(pair){
+    var list = $(pair[0]);
+    if(!list) return;
+    var items = [];
+    list.querySelectorAll(".req-expand-doc").forEach(function(row){
+      var name = row.querySelector(".rd-title");
+      var meta = row.querySelector(".rd-meta");
+      var text = (name ? name.textContent : row.textContent).trim();
+      if(!text) return;
+      items.push("<li>" + esc(text)
+        + (meta ? ' <span class="ri-meta">' + esc(meta.textContent.trim()) + "</span>" : "") + "</li>");
+    });
+    list.querySelectorAll(".att-chip").forEach(function(chip){
+      var name = chip.querySelector(".att-chip-name");
+      var text = (name ? name.textContent : chip.textContent).trim();
+      if(text) items.push("<li>" + esc(text) + "</li>");
+    });
+    if(!items.length && !list.querySelector(".rrd-rel-none")) return;
+    out += "<h2>" + esc(pair[1]) + "</h2>"
+      + (items.length ? "<ul>" + items.join("") + "</ul>" : '<p class="ri-none">无</p>');
+  });
+  return out ? '<div class="rr-print-rel">' + out + "</div>" : "";
+}
 function renderReqDocReader(doc){
   var box = $("reqDocReader");
   if(!box) return;
   closeRrdCodeModal();
   closeRrdMore();
+  closeRrdAiMenu();
   rrdTocQuery = "";
   disposeReqSheetReader();
   rrdDocDetail = doc;
@@ -2419,11 +2538,7 @@ function renderReqDocReader(doc){
   var pubBadge = doc.publishedAt == null
     ? '<span class="rr-draft">草稿</span>'
     : '<span class="rr-published" title="已发布">已发布</span>';
-  var meta = [esc(docTypeName(doc.docType)), "负责人 " + esc(doc.owner || "—")];
-  /* 发布态由标题旁徽标统一表达，meta 不再重复「草稿」，避免同屏自相矛盾 */
-  if(doc.status === "active" || doc.status === "done") meta.push(reqDocStatusLabel(doc.status));
-  if(doc.updatedAt) meta.push("更新于 " + esc(fmtTs(doc.updatedAt)));
-  if(doc.taskCount) meta.push(doc.doneCount + "/" + doc.taskCount + " 工作项");
+  var meta = rrdMetaParts(doc);
   var canWrite = !roleReadOnly() && canEditReq(doc.reqId);
   /* 正文编辑：可见范围内的项目成员；删除/发布/可见范围仍限负责人或管理员（canMut） */
   var canMut = canEditDoc(doc);
@@ -2467,6 +2582,13 @@ function renderReqDocReader(doc){
           '<button class="btn sm ghost ibtn" type="button" data-rrd-export="' + esc(doc.id) + '" data-tip="导出 Markdown / HTML" aria-label="导出 Markdown / HTML">' + icon("download", 15) + '</button>' +
           '<button class="btn sm ghost ibtn" type="button" data-rrd-export-word="' + esc(doc.id) + '" data-tip="导出 Word（.docx）" aria-label="导出 Word">' + icon("docW", 15) + '</button>' +
           '<span class="rrd-more">' +
+            '<button class="btn sm ghost ibtn" type="button" data-rrd-ai aria-haspopup="true" aria-expanded="false" data-tip="AI 辅助：拆成工作项 / 检查完成度" aria-label="AI 辅助">' + icon("ai", 15) + '</button>' +
+            '<div class="menu rrd-more-menu" id="rrdAiMenu" hidden>' +
+              (canBody ? '<button class="menu-item" type="button" data-rrd-ai-act="split">' + icon("ai", 14) + '拆成工作项</button>' : '') +
+              '<button class="menu-item" type="button" data-rrd-ai-act="audit">' + icon("ai", 14) + '检查完成度</button>' +
+            '</div>' +
+          '</span>' +
+          '<span class="rrd-more">' +
             '<button class="btn sm ghost ibtn" type="button" data-rrd-more aria-haspopup="true" aria-expanded="false" data-tip="更多" aria-label="更多操作">' + icon("more", 15) + '</button>' +
             '<div class="menu rrd-more-menu" id="rrdMoreMenu" hidden>' +
               '<button class="menu-item" type="button" data-rrd-act="copy-body">' + icon("copy", 14) + '复制正文</button>' +
@@ -2480,7 +2602,7 @@ function renderReqDocReader(doc){
           '<button class="btn sm soft" type="button" data-rrd-edit="' + esc(doc.id) + '"' + (canBody ? ' data-tip="编辑这篇文档" aria-label="编辑文档"' : ' disabled title="你对该项目只有查看权限"') + '>' + icon("edit", 13) + ' 编辑文档</button>' +
         '</span>' +
       '</div>' +
-      '<div class="rrd-meta">' + meta.join(" · ") + '</div>' +
+      '<div class="rrd-meta" id="rrdMeta">' + meta.join(" · ") + '</div>' +
     '</div>' +
     (doc.format === "sheet" ? '' :
       '<div class="rrd-find" id="rrdFindBar" hidden>' +
@@ -2507,6 +2629,11 @@ function renderReqDocReader(doc){
         '</aside>') +
     '</div>' +
     '<nav class="rrd-pager" id="rrdPager" aria-label="上一篇 / 下一篇" hidden></nav>' +
+    '<section class="rrd-rel" id="rrdRel" aria-label="文档关联内容">' +
+      rrdRelSec("demands", "关联需求", "rrdRelDemands", "rrdRelDemandCount") +
+      rrdRelSec("tasks", "关联工作项", "rrdRelTasks", "rrdRelTaskCount") +
+      rrdRelSec("attach", "附件", "rrdRelAtts", "rrdRelAttCount") +
+    '</section>' +
     '<button class="rrd-top" id="rrdTop" type="button" title="回到顶部" aria-label="回到顶部" hidden>' + icon("up", 16) + '</button>' +
     '<div class="rrd-progress" id="rrdProgress" hidden aria-hidden="true"><i id="rrdProgressFill"></i></div>' +
     '</div>' +
@@ -2543,6 +2670,7 @@ function renderReqDocReader(doc){
   UI.wireTooltips(box);
   renderRrdPager(doc.id);
   loadRrdCommentCount(doc.id);
+  watchRrdRel(doc.id);
   if(!canWrite){ var cf = $("rrdCommentForm"); if(cf) cf.style.display = "none"; }
   bindRrdMention();
   renderReqDocCrumb($("rrdCrumb"), doc.id);
@@ -3465,6 +3593,14 @@ function rrdCommentToTask(commentId){
     API.post("/api/req-docs/" + encodeURIComponent(rrdCommentsDocId) + "/comments/" + encodeURIComponent(commentId) + "/to-task")
       .then(function(task){
         loadRrdComments();
+        /* 阅读页就能建工作项：底部关联清单、页头计数、左树角标跟着刷新（正文不动，保留阅读位置） */
+        if(rrdRelBoxLoaded(rrdCommentsDocId)) loadReqDocTasks(rrdCommentsDocId, { list: $("rrdRelTasks"), count: $("rrdRelTaskCount"), reader: true });
+        if(rrdDocDetail && rrdDocDetail.id === rrdCommentsDocId){
+          rrdDocDetail.taskCount = (rrdDocDetail.taskCount || 0) + 1;
+          var rmeta = $("rrdMeta");
+          if(rmeta) rmeta.innerHTML = rrdMetaParts(rrdDocDetail).join(" · ");
+        }
+        loadReqDocs(true).then(function(){ if(!isReqDocEditorOpen()) renderReqDocSplit(); });
         toast("已创建工作项「" + (task.title || "") + "」", "fs");
       }).catch(function(ex){ toast(ex.message || "转工作项失败", "bad"); });
   });
@@ -4705,23 +4841,41 @@ function closeNewReqDocDialog(){
   var d = $("dlgNewReqDoc");
   if(d) UI.closeModal(d);
 }
-function loadReqDocTasks(id){
-  var list = $("reqDocTaskList");
+/* 阅读页文末关联区的空态/失败态：一行灰字即可，不用编辑页那种虚线大框 */
+function rrdRelNone(text, retry){
+  return '<div class="rrd-rel-none">' + esc(text)
+    + (retry ? ' <button class="link-btn" type="button" data-rrd-rel-retry>重试</button>' : "") + '</div>';
+}
+/* 关联清单渲染：编辑页与阅读页共用一套行，容器与空态由 opts 给；
+   过期响应按容器上记录的 docId 判定，两个视图各自刷新互不覆盖。 */
+function reqDocTaskRow(t){
+  var status = t.boardColumn === "done" ? "已完成" : colName(t.boardColumn);
+  return '<button class="req-expand-doc" type="button" data-reqdoc-task="' + esc(t.id) + '">'
+    + '<span class="rd-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + taskPublicationHTML(t) + '</span>'
+    + '<span class="rd-meta">' + esc(status) + ' · ' + esc(t.owner || "未指派")
+    + (t.dueDate ? ' · 截止 ' + esc(String(t.dueDate).substring(0, 10)) : '') + '</span></button>';
+}
+function loadReqDocTasks(id, opts){
+  opts = opts || {};
+  var list = opts.list || $("reqDocTaskList");
+  var count = opts.count || $("reqDocTaskCount");
   if(!list || !id) return;
+  var key = String(id);
+  list.dataset.docId = key;
   list.innerHTML = '<div class="tl-empty">加载中…</div>';
-  if($("reqDocTaskCount")) $("reqDocTaskCount").textContent = "";
-  API.getAllPages("/api/req-docs/" + encodeURIComponent(id) + "/tasks").then(function(tasks){
-    if(editingDocId !== id) return;
-    if($("reqDocTaskCount")) $("reqDocTaskCount").textContent = "（" + tasks.length + "）";
-    list.innerHTML = tasks.length ? tasks.map(function(t){
-      var status = t.boardColumn === "done" ? "已完成" : colName(t.boardColumn);
-      return '<button class="req-expand-doc" type="button" data-reqdoc-task="' + esc(t.id) + '">'
-        + '<span class="rd-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + taskPublicationHTML(t) + '</span>'
-        + '<span class="rd-meta">' + esc(status) + ' · ' + esc(t.owner || "未指派")
-        + (t.dueDate ? ' · 截止 ' + esc(String(t.dueDate).substring(0, 10)) : '') + '</span></button>';
-    }).join("") : UI.colEmpty("还没有关联工作项", "inbox", "可从当前文档直接新建");
+  if(count) count.textContent = "";
+  return API.getAllPages("/api/req-docs/" + encodeURIComponent(id) + "/tasks").then(function(tasks){
+    if(list.dataset.docId !== key) return;
+    if(count) count.textContent = (!opts.reader || tasks.length) ? "（" + tasks.length + "）" : "";
+    if(!tasks.length){
+      list.innerHTML = opts.reader ? rrdRelNone("还没有关联工作项")
+        : UI.colEmpty("还没有关联工作项", "inbox", "可从当前文档直接新建");
+      return;
+    }
+    list.innerHTML = tasks.map(reqDocTaskRow).join("");
   }).catch(function(ex){
-    if(editingDocId === id) list.innerHTML = UI.errorState(ex.message || "关联工作项加载失败");
+    if(list.dataset.docId !== key) return;
+    list.innerHTML = opts.reader ? rrdRelNone("关联工作项加载失败", true) : UI.errorState(ex.message || "关联工作项加载失败");
   });
 }
 function demandStatusName(st){
@@ -4733,17 +4887,22 @@ function demandStatusName(st){
   if(st === "canceled" || st === "cancelled") return "已取消";
   return "待评审";
 }
-function loadReqDocDemands(id){
-  var list = $("reqDocDemandList");
+function loadReqDocDemands(id, opts){
+  opts = opts || {};
+  var list = opts.list || $("reqDocDemandList");
+  var count = opts.count || $("reqDocDemandCount");
   if(!list || !id) return;
+  var key = String(id);
+  list.dataset.docId = key;
   list.innerHTML = '<div class="tl-empty">加载中…</div>';
-  if($("reqDocDemandCount")) $("reqDocDemandCount").textContent = "";
-  API.getAllPages("/api/req-docs/" + encodeURIComponent(id) + "/demands").then(function(rows){
-    if(editingDocId !== id) return;
+  if(count) count.textContent = "";
+  return API.getAllPages("/api/req-docs/" + encodeURIComponent(id) + "/demands").then(function(rows){
+    if(list.dataset.docId !== key) return;
     rows = rows || [];
-    if($("reqDocDemandCount")) $("reqDocDemandCount").textContent = rows.length ? "（" + rows.length + "）" : "";
+    if(count) count.textContent = rows.length ? "（" + rows.length + "）" : "";
     if(!rows.length){
-      list.innerHTML = UI.colEmpty("还没有关联需求", "inbox", "到需求池打开需求详情，在「关联文档」里挑这份文档");
+      list.innerHTML = opts.reader ? rrdRelNone("还没有关联需求")
+        : UI.colEmpty("还没有关联需求", "inbox", "到需求池打开需求详情，在「关联文档」里挑这份文档");
       return;
     }
     list.innerHTML = rows.map(function(d){
@@ -4752,7 +4911,8 @@ function loadReqDocDemands(id){
         + '<span class="rd-meta">' + esc(demandStatusName(d.status)) + ' · ' + esc(priName(d.priority)) + '</span></button>';
     }).join("");
   }).catch(function(ex){
-    if(editingDocId === id) list.innerHTML = UI.errorState(ex.message || "关联需求加载失败");
+    if(list.dataset.docId !== key) return;
+    list.innerHTML = opts.reader ? rrdRelNone("关联需求加载失败", true) : UI.errorState(ex.message || "关联需求加载失败");
   });
 }
 function refreshReqDocTasksIfOpen(){
@@ -5015,6 +5175,8 @@ function continueReqDocRoute(){
 }
 var aiSplitDrafts = [];
 var aiBusy = false;
+/* 本轮草稿的归属文档：编辑页和阅读页共用同一个确认弹窗，创建时以它为准而非当前编辑器 */
+var aiSplitCtx = null;
 function ensureReqDocSaved(fn){
   if(!reqDocDirty){ fn(); return; }
   saveReqDoc().then(function(doc){ if(doc) fn(); });
@@ -5031,20 +5193,27 @@ function aiBtnBusy(btn, busy, label){
     delete btn.dataset.html;
   }
 }
-function runAiSplit(){
-  if(!editingDocId || aiBusy) return;
-  if(reqDocReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
-  var btn = $("reqDocAiBtn");
-  ensureReqDocSaved(function(){
+function reqDocEditAiSrc(){
+  return {
+    mode: "edit", docId: editingDocId, title: editingMeta.title, reqId: editingMeta.reqId,
+    btn: $("reqDocAiBtn"), readOnly: reqDocReadOnly
+  };
+}
+function runAiSplit(src){
+  if(!src) src = reqDocEditAiSrc();
+  if(!src.docId || aiBusy) return;
+  if(src.readOnly){ toast("你对该项目只有查看权限", "warn"); return; }
+  var start = function(){
+    aiSplitCtx = src;
     aiBusy = true;
-    aiBtnBusy(btn, true, "生成中…");
+    aiBtnBusy(src.btn, true, "生成中…");
     AIProgress.run({
       title: "AI 拆成工作项",
-      desc: "正在读「" + (editingMeta.title || "当前文档") + "」，拆成可执行的工作单元…",
+      desc: "正在读「" + (src.title || "当前文档") + "」，拆成可执行的工作单元…",
       hint: "通常需要 20–60 秒，可以随时取消",
       errorText: aiErrMsg,
       request: function(signal){
-        return API.postWithSignal("/api/ai/reqdoc/" + encodeURIComponent(editingDocId) + "/split", {}, signal);
+        return API.postWithSignal("/api/ai/reqdoc/" + encodeURIComponent(src.docId) + "/split", {}, signal);
       },
       onSuccess: function(d){
         aiSplitDrafts = d.tasks || [];
@@ -5053,12 +5222,15 @@ function runAiSplit(){
       }
     }).then(function(){
       aiBusy = false;
-      aiBtnBusy(btn, false);
+      aiBtnBusy(src.btn, false);
     });
-  });
+  };
+  /* 编辑页可能带着未保存的正文，先落库再拆；阅读页读到的就是已保存版本 */
+  if(src.mode === "edit") ensureReqDocSaved(start); else start();
 }
 function renderAiSplit(d){
-  var proj = editingMeta.reqId ? reqNameById(editingMeta.reqId) : "";
+  var ctx = aiSplitCtx || {};
+  var proj = ctx.reqId ? reqNameById(ctx.reqId) : "";
   var hasDep = aiSplitDrafts.some(function(t){ return t.dependsOnIndex >= 0; });
   $("dlgAiSplitMsg").textContent = "「" + (d.reqDocTitle || "") + "」正文 " + (d.docChars || 0)
     + " 字，AI 拆出 " + aiSplitDrafts.length + " 条。勾选的会创建到"
@@ -5085,6 +5257,8 @@ function renderAiSplit(d){
   $("aiSplitUsage").textContent = aiUsageText(d.usage);
 }
 function applyAiSplit(){
+  var ctx = aiSplitCtx;
+  if(!ctx || !ctx.docId){ toast("请先重新发起一次 AI 拆分", "warn"); return; }
   var picked = [];
   var nodes = document.querySelectorAll("#aiSplitList .ai-item");
   for(var i = 0; i < nodes.length; i++){
@@ -5108,7 +5282,7 @@ function applyAiSplit(){
 
   var btn = $("dlgAiSplitOk");
   btn.disabled = true;
-  API.post("/api/ai/reqdoc/" + encodeURIComponent(editingDocId) + "/tasks", { tasks: picked }).then(function(r){
+  API.post("/api/ai/reqdoc/" + encodeURIComponent(ctx.docId) + "/tasks", { tasks: picked }).then(function(r){
     btn.disabled = false;
     UI.closeModal($("dlgAiSplit"));
     var msg = "已创建 " + r.created + " 个工作项";
@@ -5117,26 +5291,36 @@ function applyAiSplit(){
     msg += aiApplyFailText(r.failed, "个");
     toast(msg, r.failed && r.failed.length ? "warn" : "fs");
     /* 任务数变了：列表页的「任务/完成」计数要跟着动 */
-    loadReqDocs(true);
+    loadReqDocs(true).then(function(){
+      if(ctx.mode !== "read") return;
+      /* 阅读页正文不重渲染（会丢阅读位置），只就地补计数 */
+      if(rrdDocDetail && rrdDocDetail.id === ctx.docId){
+        rrdDocDetail.taskCount = (rrdDocDetail.taskCount || 0) + r.created;
+        var meta = $("rrdMeta");
+        if(meta) meta.innerHTML = rrdMetaParts(rrdDocDetail).join(" · ");
+        if(r.created && rrdRelBoxLoaded(ctx.docId)) loadReqDocTasks(ctx.docId, { list: $("rrdRelTasks"), count: $("rrdRelTaskCount"), reader: true });
+      }
+      renderReqDocSplit();
+    });
   }).catch(function(ex){
     btn.disabled = false;
     toast(aiErrMsg(ex && ex.message), "bad");
   });
 }
-function runAiAudit(){
-  if(!editingDocId || aiBusy) return;
-  if(reqDocReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
-  var btn = $("reqDocAiBtn");
-  ensureReqDocSaved(function(){
+function runAiAudit(src){
+  if(!src) src = reqDocEditAiSrc();
+  if(!src.docId || aiBusy) return;
+  if(src.readOnly){ toast("你对该项目只有查看权限", "warn"); return; }
+  var start = function(){
     aiBusy = true;
-    aiBtnBusy(btn, true, "检查中…");
+    aiBtnBusy(src.btn, true, "检查中…");
     AIProgress.run({
       title: "AI 检查完成度",
-      desc: "正在对照「" + (editingMeta.title || "当前文档") + "」和关联工作项，找出还没覆盖的功能点…",
+      desc: "正在对照「" + (src.title || "当前文档") + "」和关联工作项，找出还没覆盖的功能点…",
       hint: "文档越长耗时越久，可以随时取消",
       errorText: aiErrMsg,
       request: function(signal){
-        return API.postWithSignal("/api/ai/reqdoc/" + encodeURIComponent(editingDocId) + "/audit", {}, signal);
+        return API.postWithSignal("/api/ai/reqdoc/" + encodeURIComponent(src.docId) + "/audit", {}, signal);
       },
       onSuccess: function(d){
         renderAiAudit(d);
@@ -5144,9 +5328,10 @@ function runAiAudit(){
       }
     }).then(function(){
       aiBusy = false;
-      aiBtnBusy(btn, false);
+      aiBtnBusy(src.btn, false);
     });
-  });
+  };
+  if(src.mode === "edit") ensureReqDocSaved(start); else start();
 }
 function renderAiAudit(d){
   var V = { done: "已完成", mostly: "基本完成", partial: "做了一部分", not_started: "基本没开始" };
@@ -5709,6 +5894,7 @@ function rdaToTask(){
         }, signal);
       },
       onSuccess: function(d){
+        aiSplitCtx = reqDocEditAiSrc();
         aiSplitDrafts = d.tasks || [];
         renderAiSplit(d);
         UI.openModal($("dlgAiSplit"));
@@ -5734,8 +5920,8 @@ if($("reqDocAiSplit")){
       if(e.target.closest(".menu-item")) UI.closeAllPops();
     });
   }
-  $("reqDocAiSplit").addEventListener("click", runAiSplit);
-  $("reqDocAiAudit").addEventListener("click", runAiAudit);
+  $("reqDocAiSplit").addEventListener("click", function(){ runAiSplit(); });
+  $("reqDocAiAudit").addEventListener("click", function(){ runAiAudit(); });
   $("dlgAiSplitCancel").addEventListener("click", function(){ UI.closeModal($("dlgAiSplit")); });
   $("dlgAiSplitX").addEventListener("click", function(){ UI.closeModal($("dlgAiSplit")); });
   $("dlgAiSplitOk").addEventListener("click", applyAiSplit);
@@ -6290,25 +6476,34 @@ function deleteReqDocComment(commentId){
 
 /* ---------- 文档附件 ---------- */
 
-function loadReqDocAttachments(docId){
-  var list = $("reqDocAttachList");
-  var count = $("reqDocAttachCount");
-  var uploadBtn = $("reqDocAttachUpload");
-  var kit = $("reqDocAttachKit");
+function loadReqDocAttachments(docId, opts){
+  opts = opts || {};
+  var list = opts.list || $("reqDocAttachList");
+  var count = opts.count || $("reqDocAttachCount");
   if(!list) return;
-  if(uploadBtn) uploadBtn.style.display = roleReadOnly() ? "none" : "";
-  if(kit) kit.style.display = roleReadOnly() ? "none" : "";
+  if(!opts.reader){
+    var uploadBtn = $("reqDocAttachUpload");
+    var kit = $("reqDocAttachKit");
+    if(uploadBtn) uploadBtn.style.display = roleReadOnly() ? "none" : "";
+    if(kit) kit.style.display = roleReadOnly() ? "none" : "";
+  }
+  var key = String(docId);
+  list.dataset.docId = key;
   list.innerHTML = '<div class="tl-empty">加载中…</div>';
-  API.getAllPages("/api/req-docs/" + encodeURIComponent(docId) + "/attachments").then(function(rows){
-    if(editingDocId !== docId) return;
+  return API.getAllPages("/api/req-docs/" + encodeURIComponent(docId) + "/attachments").then(function(rows){
+    if(list.dataset.docId !== key) return;
     rows = rows || [];
     list.__attList = rows;
     if(count) count.textContent = rows.length ? "（" + rows.length + "）" : "";
-    if(!rows.length){ list.innerHTML = UI.colEmpty("暂无附件", "inbox"); return; }
+    if(!rows.length){ list.innerHTML = opts.reader ? rrdRelNone("暂无附件") : UI.colEmpty("暂无附件", "inbox"); return; }
+    /* 阅读页只给下载 / 预览，上传与删除留在编辑页 */
     list.innerHTML = '<div class="att-chips">' + rows.map(function(a){
-      return attachmentChipHTML(a, { removable: !roleReadOnly() });
+      return attachmentChipHTML(a, { removable: !opts.reader && !roleReadOnly() });
     }).join("") + '</div>';
-  }).catch(function(){ if(editingDocId === docId) list.innerHTML = UI.colEmpty("附件加载失败", "alertCircle"); });
+  }).catch(function(){
+    if(list.dataset.docId !== key) return;
+    list.innerHTML = opts.reader ? rrdRelNone("附件加载失败", true) : UI.colEmpty("附件加载失败", "alertCircle");
+  });
 }
 function uploadReqDocAttachments(files){
   if(!editingDocId || roleReadOnly() || !files || !files.length) return;
@@ -8386,12 +8581,14 @@ function populateReqDocSelect(keep){
   /* 阅读页「更多」菜单：点外面 / Esc 收起（菜单项点击由阅读器委托先处理） */
   document.addEventListener("click", function(e){
     var menu = $("rrdMoreMenu");
-    if(!menu || menu.hidden) return;
-    if(e.target.closest("[data-rrd-more]") || menu.contains(e.target)) return;
-    closeRrdMore();
+    if(menu && !menu.hidden
+      && !e.target.closest("[data-rrd-more]") && !menu.contains(e.target)) closeRrdMore();
+    var aiMenu = $("rrdAiMenu");
+    if(aiMenu && !aiMenu.hidden
+      && !e.target.closest("[data-rrd-ai]") && !aiMenu.contains(e.target)) closeRrdAiMenu();
   });
   document.addEventListener("keydown", function(e){
-    if(e.key === "Escape") closeRrdMore();
+    if(e.key === "Escape"){ closeRrdMore(); closeRrdAiMenu(); }
   });
 
   /* 阅读大纲跟随滚动：滚动发生在 .view 容器里，用捕获阶段接住任意容器滚动 */
@@ -8618,6 +8815,25 @@ function populateReqDocSelect(keep){
         else if(act === "print") printRrdDoc();
         return;
       }
+      var ab = e.target.closest("[data-rrd-ai]");
+      if(ab){
+        var am = $("rrdAiMenu");
+        if(am){
+          var willOpenAi = am.hidden;
+          am.hidden = !willOpenAi;
+          ab.setAttribute("aria-expanded", willOpenAi ? "true" : "false");
+        }
+        return;
+      }
+      var aac = e.target.closest("[data-rrd-ai-act]");
+      if(aac){
+        closeRrdAiMenu();
+        var rsrc = reqDocReaderSrc();
+        if(!rsrc) return;
+        if(aac.dataset.rrdAiAct === "split") runAiSplit(rsrc);
+        else runAiAudit(rsrc);
+        return;
+      }
       var fb = e.target.closest("[data-rrd-find]");
       if(fb){
         var f = fb.dataset.rrdFind;
@@ -8677,6 +8893,25 @@ function populateReqDocSelect(keep){
       if(pb){ openRrdSide("perm"); return; }
       var ve = e.target.closest("[data-doc-vis-edit]");
       if(ve){ openDocVisDialog(ve.dataset.docVisEdit); return; }
+      var rj = e.target.closest("[data-rrd-jump]");
+      if(rj){ scrollRrdRel(rj.dataset.rrdJump); return; }
+      var rtk = e.target.closest("#rrdRel [data-reqdoc-task]");
+      if(rtk){ openTaskById(rtk.dataset.reqdocTask); return; }
+      var rdm = e.target.closest("#rrdRel [data-doc-demand]");
+      if(rdm){ openDemandDetailById(rdm.dataset.docDemand); return; }
+      var rdl = e.target.closest("#rrdRel [data-att-download]");
+      if(rdl){ window.open(downloadUrl(rdl.dataset.attDownload), "_blank", "noopener"); return; }
+      var rop = e.target.closest("#rrdRel [data-att-open]");
+      if(rop){
+        e.preventDefault();
+        var rlist = rop.closest(".rrd-rel-list");
+        var ratt = ((rlist && rlist.__attList) || []).filter(function(a){ return a.id === rop.dataset.attOpen; })[0];
+        if(ratt) openAttachment(ratt);
+        return;
+      }
+      var rretry = e.target.closest("#rrdRel [data-rrd-rel-retry]");
+      if(rretry){ loadRrdRelLists(splitDocId, true); return; }
+
       var tb = e.target.closest("[data-rrd-tab]");
       if(tb){ setRrdTab(tb.getAttribute("data-rrd-tab")); return; }
       var sh = e.target.closest(".perm-sec-head");

@@ -1243,11 +1243,25 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
 @keyframes rrd-flash-hl{0%,45%{background:var(--primary-soft);}100%{background:transparent;}}
 @media (prefers-reduced-motion: reduce){.rrd-body .rrd-flash{animation:none;background:var(--primary-soft);}}
 
+/* 阅读页文末关联区（在上一篇/下一篇之后）：需求 / 工作项 / 附件只读清单，点行开详情、附件可预览下载；上传与删除留编辑页 */
+.rrd-rel{display:flex;flex-direction:column;gap:14px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);}
+.rrd-rel-sec{min-width:0;}
+.rrd-rel-title{display:flex;align-items:center;gap:4px;margin:0 0 4px;font-size:13px;font-weight:650;color:var(--text-2);}
+.rrd-rel-cnt{font-size:12px;font-weight:500;color:var(--text-3);}
+.rrd-rel-none{padding:2px 0 4px;font-size:12px;color:var(--text-3);}
+.rrd-rel-none .link-btn{font-size:12px;}
+.rrd-rel .req-expand-doc{padding-left:6px;padding-right:6px;}
+.rrd-rel .att-chips{margin-top:2px;}
+.rrd-rel-sec.rrd-flash{animation:rrd-flash-hl 1.6s var(--ease-out);border-radius:var(--r-sm);}
+@media (prefers-reduced-motion: reduce){.rrd-rel-sec.rrd-flash{animation:none;background:var(--primary-soft);}}
+/* 页头「2/5 工作项」是跳转按钮，字号跟 meta 走 */
+.rrd-meta .link-btn{padding:0 2px;font-size:12px;font-weight:600;}
+
 /* 工具栏「更多」菜单 */
 .rrd-more{position:relative;display:inline-flex;}
 .rrd-more-menu{top:calc(100% + 4px);right:0;left:auto;min-width:160px;}
 
-/* 文末上一篇 / 下一篇 */
+/* 正文与关联区之间的上一篇 / 下一篇 */
 .rrd-pager{display:flex;gap:var(--space-3);margin-top:26px;padding-top:16px;border-top:1px solid var(--border);}
 .rrd-pager[hidden]{display:none;}
 .rrd-pager-item{
