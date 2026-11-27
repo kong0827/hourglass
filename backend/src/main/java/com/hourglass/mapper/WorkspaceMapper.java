@@ -29,6 +29,11 @@ public interface WorkspaceMapper {
 
     int updateReleaseAccessScope(@Param("id") String id, @Param("scope") String scope);
 
+    /** 空间级人工标记发布权限（逗号分隔身份集合；空值按默认管理者口径处理） */
+    String selectPublicationAccessScope(@Param("id") String id);
+
+    int updatePublicationAccessScope(@Param("id") String id, @Param("scope") String scope);
+
     int deleteById(String id);
 
     /** 该账号是唯一空间主的共享空间数量（删账号前校验，其他空间主不受影响） */

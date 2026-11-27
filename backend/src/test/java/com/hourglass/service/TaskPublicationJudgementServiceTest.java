@@ -85,7 +85,7 @@ class TaskPublicationJudgementServiceTest {
         assertEquals("历史数据迁移", saved.getValue().getJudgeReason());
         assertEquals("张三", saved.getValue().getJudgedByName());
         verify(audit).log(eq("U1"), eq("W1"), eq("T1"), eq("update"), contains("历史数据迁移"));
-        verify(permissions).assertManageProject("U1", "W1", "R1");
+        verify(permissions).assertJudgePublication("U1", "W1", "R1");
     }
 
     @Test
@@ -99,12 +99,13 @@ class TaskPublicationJudgementServiceTest {
 
     @Test
     void markRewritesPermissionMessageForNonManagers() {
-        doThrow(new AppException(403, "forbidden")).when(permissions).assertManageProject("U1", "W1", "R1");
+        doThrow(new AppException(403, "空间把「人工标记工作项发布」限定为「空间主、管理员、项目负责人」"))
+                .when(permissions).assertJudgePublication("U1", "W1", "R1");
 
         AppException error = assertThrows(AppException.class,
                 () -> service.mark("U1", "W1", "T1", body(LocalDate.now(), "补录")));
         assertEquals(403, error.getCode());
-        assertTrue(error.getMessage().contains("仅空间主、管理员或项目负责人"));
+        assertTrue(error.getMessage().contains("人工标记工作项发布"));
     }
 
     @Test
@@ -138,7 +139,7 @@ class TaskPublicationJudgementServiceTest {
         second.setReqId("R2");
         when(tasks.selectById("T1")).thenReturn(first);
         when(tasks.selectById("T2")).thenReturn(second);
-        doThrow(new AppException(403, "forbidden")).when(permissions).assertManageProject("U1", "W1", "R2");
+        doThrow(new AppException(403, "forbidden")).when(permissions).assertJudgePublication("U1", "W1", "R2");
 
         AppException error = assertThrows(AppException.class,
                 () -> service.markBatch("U1", "W1", batch("补录", "T1", "T2")));

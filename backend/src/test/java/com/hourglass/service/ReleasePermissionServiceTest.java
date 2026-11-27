@@ -97,11 +97,63 @@ class ReleasePermissionServiceTest {
         member("admin");
         assertTrue(service.canManageRelease("U", "W", "P"), "回落默认口径保留管理员");
     }
+    @Test void publicationScopeIsIndependentFromReleaseScope() {
+        member("member"); writableProject(); scope("owner,admin,project_owner,project_write");
+        assertTrue(service.canManageRelease("U", "W", "P"));
+        assertFalse(service.canJudgePublication("U", "W", "P"), "发布维护放开项目可写成员，不自动放开人工标记");
+        AppException restricted = assertThrows(AppException.class, () -> service.assertJudgePublication("U", "W", "P"));
+        assertEquals(403, restricted.getCode());
+        assertTrue(restricted.getMessage().contains("人工标记工作项发布"));
+
+        pubScope("owner,admin,project_owner,project_write");
+        assertTrue(service.canJudgePublication("U", "W", "P"));
+        assertDoesNotThrow(() -> service.assertJudgePublication("U", "W", "P"));
+    }
+
+    @Test void publicationDefaultsKeepProjectOwnerAndRejectPlainWritableMember() {
+        member("member"); writableProject();
+        assertFalse(service.canJudgePublication("U", "W", "P"), "默认口径不含项目可写成员");
+        Requirement project = new Requirement();
+        project.setWorkspaceId("W"); project.setOwnerUserId("U");
+        when(projects.selectById("P")).thenReturn(project);
+        assertTrue(service.canJudgePublication("U", "W", "P"), "默认口径包含项目负责人");
+    }
+
+    @Test void markJudgeableCachesByProjectAndFlagsEachTask() {
+        member("member"); writableProject();
+        Requirement mine = new Requirement();
+        mine.setWorkspaceId("W"); mine.setOwnerUserId("U");
+        Requirement other = new Requirement();
+        other.setWorkspaceId("W"); other.setOwnerUserId("OTHER");
+        when(projects.selectById("P")).thenReturn(mine);
+        when(projects.selectById("Q")).thenReturn(other);
+
+        Task first = task("t1", "P"), second = task("t2", "P"), third = task("t3", "Q");
+        service.markJudgeable("U", "W", Arrays.asList(first, second, third));
+
+        assertTrue(first.getCanJudgePublication());
+        assertTrue(second.getCanJudgePublication());
+        assertFalse(third.getCanJudgePublication());
+        verify(projects, times(1)).selectById("P");
+    }
+
+    @Test void markJudgeableLeavesViewerWithoutEntry() {
+        member("viewer");
+        Task task = task("t1", "P");
+        service.markJudgeable("U", "W", Collections.singletonList(task));
+        assertFalse(task.getCanJudgePublication());
+    }
+
+    private Task task(String id, String reqId) {
+        Task t = new Task(); t.setId(id); t.setReqId(reqId); return t;
+    }
+
     private void member(String role) { WorkspaceMember m = new WorkspaceMember(); m.setRole(role); when(members.selectMember("W", "U")).thenReturn(m); }
     private void writableProject() {
         when(access.canWrite(any(WorkspaceMember.class), eq("W"), eq("P"))).thenReturn(true);
     }
     private void scope(String value) { when(workspaces.selectReleaseAccessScope("W")).thenReturn(value); }
+    private void pubScope(String value) { when(workspaces.selectPublicationAccessScope("W")).thenReturn(value); }
     private void current(String role, String grant, String owner) {
         Map<String, Object> m = new HashMap<String, Object>(); m.put("role", role); m.put("access", grant); m.put("projectOwnerUserId", owner);
         when(members.selectDeliveryAccessForUpdate("W", "U", "P")).thenReturn(m);

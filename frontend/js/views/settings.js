@@ -1936,70 +1936,87 @@ $("btnPriorityReset").addEventListener("click", function(){
     toast(ex.message || "恢复默认失败", "bad");
   });
 });
-/* 发布维护权限：配置哪些身份可以维护发布计划、预览与记录实际发布 */
-var releaseAccessScope = null;
-var releaseAccessBusy = false;
-function releaseAccessUrl(){
+/* 空间级发布权限：两组独立配置（发布维护 / 人工标记发布） */
+var releaseScopeConfigs = {
+  release: {
+    listId: "releaseAccessList", hintId: "releaseAccessHint", btnId: "btnReleaseAccessSave",
+    path: "release-access", emptyMsg: "至少保留一项可维护发布权限的身份", okMsg: "发布维护权限已保存",
+    data: null, busy: false
+  },
+  publication: {
+    listId: "publicationAccessList", hintId: "publicationAccessHint", btnId: "btnPublicationAccessSave",
+    path: "publication-access", emptyMsg: "至少保留一项可人工标记工作项发布的身份", okMsg: "人工标记发布权限已保存",
+    data: null, busy: false
+  }
+};
+function releaseScopeUrl(cfg){
   var wsId = rt.currentWs && rt.currentWs.id;
-  return wsId ? "/api/workspaces/" + encodeURIComponent(wsId) + "/release-access" : null;
+  return wsId ? "/api/workspaces/" + encodeURIComponent(wsId) + "/" + cfg.path : null;
 }
 function canManageReleaseAccess(){
   var role = rt.currentWs && rt.currentWs.myRole;
   return role === "owner" || role === "admin";
 }
-function renderReleaseAccessCfg(){
-  var box = $("releaseAccessList");
+function renderReleaseScopeCfg(cfg){
+  var box = $(cfg.listId);
   if(!box) return;
   var canManage = canManageReleaseAccess();
-  var scope = releaseAccessScope || { selected: [], options: [] };
+  var scope = cfg.data || { selected: [], options: [] };
   var selected = scope.selected || [];
   var options = scope.options || [];
   box.innerHTML = options.map(function(opt){
     var checked = selected.indexOf(opt.value) >= 0;
     return '<label class="cfg-row release-scope-row' + (canManage ? "" : " is-locked") + '" data-release-scope="' + esc(opt.value) + '">' +
-      '<input type="checkbox"' + (checked ? " checked" : "") + (canManage && !releaseAccessBusy ? "" : " disabled") + ' data-release-scope-check />' +
+      '<input type="checkbox"' + (checked ? " checked" : "") + (canManage && !cfg.busy ? "" : " disabled") + ' data-release-scope-check />' +
       '<span class="release-scope-main"><b>' + esc(opt.label) + '</b><span>' + esc(opt.description || "") + '</span></span>' +
     '</label>';
   }).join("");
-  if($("btnReleaseAccessSave")) $("btnReleaseAccessSave").disabled = !canManage || releaseAccessBusy;
-  if($("releaseAccessHint")) $("releaseAccessHint").textContent = canManage
+  if($(cfg.btnId)) $(cfg.btnId).disabled = !canManage || cfg.busy;
+  if($(cfg.hintId)) $(cfg.hintId).textContent = canManage
     ? "保存后对之后的发布操作生效；已打开的页面重新进入时刷新"
     : "仅空间主、管理员可修改，这里以只读展示当前配置";
 }
-function loadReleaseAccessCfg(){
-  var box = $("releaseAccessList");
-  var url = releaseAccessUrl();
+function loadReleaseScopeCfg(key){
+  var cfg = releaseScopeConfigs[key];
+  var box = cfg && $(cfg.listId);
+  var url = cfg && releaseScopeUrl(cfg);
   if(!box || !url) return;
   box.innerHTML = UI.skeletonRows(2);
   API.get(url).then(function(data){
-    releaseAccessScope = data || { selected: [], options: [] };
-    renderReleaseAccessCfg();
+    cfg.data = data || { selected: [], options: [] };
+    renderReleaseScopeCfg(cfg);
   }).catch(function(ex){
     box.innerHTML = '<div class="foot-note">加载失败：' + esc(ex.message || "网络异常") + '</div>';
-    if($("btnReleaseAccessSave")) $("btnReleaseAccessSave").disabled = true;
+    if($(cfg.btnId)) $(cfg.btnId).disabled = true;
   });
 }
-function saveReleaseAccessCfg(){
-  var url = releaseAccessUrl();
-  if(!url || releaseAccessBusy || !canManageReleaseAccess()) return;
-  var checked = Array.prototype.slice.call($("releaseAccessList").querySelectorAll("[data-release-scope-check]"))
+function saveReleaseScopeCfg(key){
+  var cfg = releaseScopeConfigs[key];
+  var url = cfg && releaseScopeUrl(cfg);
+  if(!url || cfg.busy || !canManageReleaseAccess()) return;
+  var checked = Array.prototype.slice.call($(cfg.listId).querySelectorAll("[data-release-scope-check]"))
     .filter(function(input){ return input.checked; })
     .map(function(input){ return input.closest("[data-release-scope]").dataset.releaseScope; });
-  if(!checked.length){ toast("至少保留一项可维护发布权限的身份", "warn"); return; }
-  releaseAccessBusy = true;
-  renderReleaseAccessCfg();
+  if(!checked.length){ toast(cfg.emptyMsg, "warn"); return; }
+  cfg.busy = true;
+  renderReleaseScopeCfg(cfg);
   API.put(url, { selected: checked }).then(function(data){
-    releaseAccessBusy = false;
-    releaseAccessScope = data || releaseAccessScope;
-    renderReleaseAccessCfg();
-    toast("发布维护权限已保存", "fs");
+    cfg.busy = false;
+    cfg.data = data || cfg.data;
+    renderReleaseScopeCfg(cfg);
+    toast(cfg.okMsg, "fs");
   }).catch(function(ex){
-    releaseAccessBusy = false;
-    renderReleaseAccessCfg();
+    cfg.busy = false;
+    renderReleaseScopeCfg(cfg);
     toast(ex.message || "保存失败", "bad");
   });
 }
-if($("btnReleaseAccessSave")) $("btnReleaseAccessSave").addEventListener("click", saveReleaseAccessCfg);
+function loadReleaseAccessCfg(){
+  loadReleaseScopeCfg("release");
+  loadReleaseScopeCfg("publication");
+}
+if($("btnReleaseAccessSave")) $("btnReleaseAccessSave").addEventListener("click", function(){ saveReleaseScopeCfg("release"); });
+if($("btnPublicationAccessSave")) $("btnPublicationAccessSave").addEventListener("click", function(){ saveReleaseScopeCfg("publication"); });
 
 var CHANNEL_LABEL = { webhook:"企业微信 / 钉钉 webhook", serverchan:"Server 酱", pushplus:"PushPlus" };
 function loadNotifyStatus(){

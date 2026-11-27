@@ -12,7 +12,7 @@ import { openPeoplePicker, optionSubText } from "../lib/people-picker.js";
 import { $, attachCount, attachList, btnActualAdd, btnCommentAttach, btnCommentSend, btnDeleteTask, btnTaskNew, btnSaveTask, btnSaveTaskContinue, btnTaskWatch, btnTimer, btnTimerAdd, rfHoursAdd, commentAttachChips, commentAttachTip, commentCount, commentList, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iCommentFiles, iDesc, iDue, iEstimate, iTestEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeProject, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
 import { icon } from "./icons.js";
 import { createMentionPicker } from "./mention-picker.js";
-import { canEditReq, canEditTask, canManageProject, catNameById, colRuleOf, projectGroups, projectOptionsHTML, projectRefsEnriched, reqNameById, roleReadOnly, rt, state, taskById, taskCacheExtra, timerAllowed } from "./state.js";
+import { canEditReq, canEditTask, catNameById, colRuleOf, projectGroups, projectOptionsHTML, projectRefsEnriched, reqNameById, roleReadOnly, rt, state, taskById, taskCacheExtra, timerAllowed } from "./state.js";
 import { loadRunningTimer } from "./task-actions.js";
 import { guard, serverDecision } from "./transitions.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "./ui.js";
@@ -279,7 +279,7 @@ function publicationEvidenceRow(t){
     ? '<button type="button" class="ev-link" data-ev-goto="publication" title="查看生产发布记录">' + esc(text) + '</button>'
     : '<span class="' + (manual ? "" : "ev-empty") + '">' + esc(text) + '</span>';
   var actions = "";
-  if(t.id && !t.deletedAt && canManageProject(t.reqId)){
+  if(t.id && !t.deletedAt && t.canJudgePublication === true){
     actions = '<span class="ev-actions">'
       + '<button type="button" class="link-btn" data-pub-judge title="补录从其他系统迁移的历史发布事实">'
       + (manual ? "修改标记" : "标记已发布") + '</button>'
@@ -1859,7 +1859,7 @@ function loadTaskReleaseRecords(task){
     if(fresh){
       var current = taskCacheExtra[task.id];
       ["publicationState", "everPublished", "publicationTargets", "publishedAt", "publishSource", "publishedReleaseId",
-        "manualPublished", "manualPublishedAt", "manualJudgeName", "manualJudgeReason"].forEach(function(key){ current[key] = fresh[key]; });
+        "manualPublished", "manualPublishedAt", "manualJudgeName", "manualJudgeReason", "canJudgePublication"].forEach(function(key){ current[key] = fresh[key]; });
       syncTaskPublication(current);
     }
     var recordsHTML = records.length
@@ -1878,8 +1878,8 @@ function loadTaskReleaseRecords(task){
 /* 人工发布标记：只补录「有没有发布过」，不写正式发布记录，也不改需求交付阶段 */
 function openPublicationJudgementDialog(task){
   if(!task || !task.id) return;
-  if(!canManageProject(task.reqId)){
-    toast("仅空间主、管理员或项目负责人可标记工作项发布状态", "warn");
+  if(!task.canJudgePublication){
+    toast("你当前无权标记该工作项发布，请确认空间「人工标记工作项发布」配置与项目写权限", "warn");
     return;
   }
   var date = task.manualPublishedAt || rt.TODAY_ISO;
@@ -1922,8 +1922,8 @@ function openPublicationJudgementDialog(task){
 }
 function revokePublicationJudgement(task){
   if(!task || !task.id) return;
-  if(!canManageProject(task.reqId)){
-    toast("仅空间主、管理员或项目负责人可撤销工作项发布标记", "warn");
+  if(!task.canJudgePublication){
+    toast("你当前无权撤销该工作项发布标记，请确认空间「人工标记工作项发布」配置与项目写权限", "warn");
     return;
   }
   UI.showPrompt({ title:"撤销人工发布标记", desc:"撤销后该工作项回落为未发布，正式发布记录不受影响；历史记录保留。",
@@ -7200,7 +7200,7 @@ if(drawerBodyEl){
   };
   drawerBodyEl.addEventListener("click", assocEditActivate);
   drawerBodyEl.addEventListener("keydown", assocEditActivate);
-  /* 人工发布标记入口：只补录历史发布事实，权限与后端 assertManageProject 同口径 */
+  /* 人工发布标记入口：只补录历史发布事实，权限以后端 assertJudgePublication 为准 */
   var pubActivate = function(e){
     var el = e.target.closest ? e.target.closest("[data-pub-judge],[data-pub-revoke]") : null;
     if(!el) return;

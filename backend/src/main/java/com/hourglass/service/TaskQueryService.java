@@ -117,6 +117,7 @@ public class TaskQueryService {
             return null;
         }
         mergeTaskExtras(t.getWorkspaceId(), Collections.singletonList(t));
+        permissions.markJudgeable(userId, t.getWorkspaceId(), Collections.singletonList(t));
         return t;
     }
 
@@ -562,6 +563,7 @@ public class TaskQueryService {
         List<Task> items = total <= safeOffset || total == 0 ? new ArrayList<Task>()
                 : taskMapper.selectTaskList(workspaceId, gq, columnOrder(workspaceId), s, safeLimit, safeOffset);
         mergeTaskExtras(workspaceId, items);
+        permissions.markJudgeable(userId, workspaceId, items);
 
         TaskListResponse resp = new TaskListResponse();
         resp.setTotal(total);

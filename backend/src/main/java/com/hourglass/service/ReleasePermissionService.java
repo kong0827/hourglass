@@ -8,6 +8,7 @@ import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.WorkspaceMemberMapper;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -56,8 +57,37 @@ public class ReleasePermissionService {
      */
     public boolean canManageRelease(String userId, String workspaceId, String reqId) {
         WorkspaceMember member = memberMapper.selectMember(workspaceId, userId);
-        return member != null && allowsRelease(member, userId, workspaceId, reqId,
+        return member != null && allowsScope(member, userId, workspaceId, reqId,
                 releaseAccessScopes.get(workspaceId));
+    }
+
+    /** 人工标记工作项发布：按空间级「人工标记工作项发布」配置判定。 */
+    public boolean canJudgePublication(String userId, String workspaceId, String reqId) {
+        WorkspaceMember member = memberMapper.selectMember(workspaceId, userId);
+        return member != null && allowsScope(member, userId, workspaceId, reqId,
+                releaseAccessScopes.getPublication(workspaceId));
+    }
+
+    /**
+     * 列表批量下发人工标记入口：同一项目只判一次，避免逐任务重复查项目成员与负责人。
+     * 只用于展示入口，写操作仍走 assertJudgePublication。
+     */
+    public void markJudgeable(String userId, String workspaceId, List<Task> tasks) {
+        if (tasks == null || tasks.isEmpty()) {
+            return;
+        }
+        WorkspaceMember member = memberMapper.selectMember(workspaceId, userId);
+        List<String> scope = member == null ? null : releaseAccessScopes.getPublication(workspaceId);
+        Map<String, Boolean> byProject = new HashMap<String, Boolean>();
+        for (Task task : tasks) {
+            String key = task.getReqId() == null ? "" : task.getReqId();
+            Boolean can = byProject.get(key);
+            if (can == null) {
+                can = member != null && allowsScope(member, userId, workspaceId, task.getReqId(), scope);
+                byProject.put(key, can);
+            }
+            task.setCanJudgePublication(can);
+        }
     }
 
     public void assertManageRelease(String userId, String workspaceId, String reqId) {
@@ -67,7 +97,7 @@ public class ReleasePermissionService {
             throw new AppException(403, "你在此空间是查看者，只能查看不能修改");
         }
         List<String> scope = releaseAccessScopes.get(workspaceId);
-        if (member != null && allowsRelease(member, userId, workspaceId, reqId, scope)) {
+        if (member != null && allowsScope(member, userId, workspaceId, reqId, scope)) {
             return;
         }
         if (member == null || !projectAccess.canWrite(member, workspaceId, reqId)) {
@@ -78,9 +108,28 @@ public class ReleasePermissionService {
                 + "」；如需放开，请在「设置 → 工作流 → 发布权限」中勾选你的身份");
     }
 
+    /** 人工标记工作项发布：按空间配置判定，查看者与只读成员始终无权。 */
+    public void assertJudgePublication(String userId, String workspaceId, String reqId) {
+        projectAccess.assertView(workspaceId, userId, reqId);
+        WorkspaceMember member = memberMapper.selectMember(workspaceId, userId);
+        if (member != null && ProjectAccessService.isViewer(member.getRole())) {
+            throw new AppException(403, "你在此空间是查看者，只能查看不能修改");
+        }
+        List<String> scope = releaseAccessScopes.getPublication(workspaceId);
+        if (member != null && allowsScope(member, userId, workspaceId, reqId, scope)) {
+            return;
+        }
+        if (member == null || !projectAccess.canWrite(member, workspaceId, reqId)) {
+            throw new AppException(403, "你对该项目没有写权限，不能标记工作项发布状态");
+        }
+        throw new AppException(403, "空间把「人工标记工作项发布」限定为「"
+                + ReleaseAccessScopeService.text(scope)
+                + "」；如需放开，请在「设置 → 工作流 → 发布权限」中勾选你的身份");
+    }
+
     /** 身份与空间配置的匹配；写权限只在「项目负责人 / 项目可写成员」两档下才需要。 */
-    private boolean allowsRelease(WorkspaceMember member, String userId, String workspaceId, String reqId,
-                                  List<String> scope) {
+    private boolean allowsScope(WorkspaceMember member, String userId, String workspaceId, String reqId,
+                                List<String> scope) {
         String role = member.getRole();
         if (ProjectAccessService.isViewer(role)) {
             return false;

@@ -104,6 +104,10 @@ mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sq
 
 `128_doc_edit_trash_share.sql` 给 `requirement_doc` 增加 `deleted_at` / `deleted_by` 与 `idx_ws_deleted`，让「删除文档」改为移入回收站（保留 30 天，可恢复 / 彻底删除）；正常列表、搜索与需求统计只查 `deleted_at IS NULL`。同时给 `req_doc_share` 增加 `allow_copy`（默认 1），分享链接可选择是否允许查看者复制与打印；有效期仍沿用 `expires_at`，不新增列。脚本按 `information_schema` 判断列 / 索引是否存在，可重复执行，表数量不变。
 
+`129_workspace_publication_access_scope.sql` 给 `workspace` 增加 `publication_access_scope`，把「谁能人工标记工作项发布状态」做成空间级多选配置：`owner`（空间主）、`admin`（管理员）、`project_owner`（项目负责人且该项目可写）、`project_write`（该项目可写成员），逗号分隔，默认 `owner,admin,project_owner`，与调整前的管理者口径一致。只增列并给默认值、不回填；人工标记仍只影响徽标与「发布态」筛选，不写发布记录、不进交付统计。脚本按 `information_schema` 判断列是否存在，可重复执行，表数量不变。
+
+`130_backfill_publication_list_column.sql` 给已有列表列偏好补入「发布态」列：工作项列表新增 `publication` 并进入默认列集，但默认值只对新用户生效；这里只对 `view_key='task-list'` 且尚未包含 `publication` 的行追加该列（优先插到 `updatedAt` 之前），不动结构、不动业务数据。已包含该列的行跳过，可重复执行；用户后续在「显示字段」里主动隐藏后不会再次补回。
+
 `110_task_comment_content_length.sql` 只把 `task_comment.content` 从 `VARCHAR(500)` 放宽到 `VARCHAR(2000)`，让工作项评论能贴下错误日志与会议结论；不新增字段、不回填、不改权限与通知口径。后端截断上限与抽屉输入框 `maxlength` 同步为 2000。脚本按 `information_schema` 判断当前长度，已达标即跳过，可重复执行；执行后表数量不变。
 
 不要执行 `sql/legacy/` 与 `sql/seeds/` 下的文件；前者只保留旧版本结构用于追溯，后者是旧结构的演示种子。

@@ -47,7 +47,7 @@ public class TaskPublicationController {
                 offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
-    /** 人工标记已发布：空间主、管理员或项目负责人可操作，仅用于无发布记录的历史迁移数据。 */
+    /** 人工标记已发布：按空间「人工标记工作项发布」配置判定，仅用于无发布记录的历史迁移数据。 */
     @PostMapping("/api/tasks/{id}/publication-judgement")
     public ApiResult<TaskPublicationJudgement> mark(@PathVariable String id,
                                                     @RequestBody TaskPublicationJudgementRequest body,

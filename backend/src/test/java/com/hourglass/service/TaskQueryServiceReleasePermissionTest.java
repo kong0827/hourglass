@@ -80,7 +80,9 @@ class TaskQueryServiceReleasePermissionTest {
         assertSame(task, result);
         assertFalse(result.getCanPublish());
         assertFalse(result.getCanUnpublish());
-        verifyNoInteractions(permissions);
+        assertFalse(result.getCanJudgePublication());
+        verify(permissions).markJudgeable(USER, WS, Collections.singletonList(task));
+        verify(permissions, never()).canManageRelease(anyString(), anyString(), anyString());
         verify(versions).selectVersionRowsByTaskIds(WS, Collections.singletonList("T1"));
         org.junit.jupiter.api.Assertions.assertEquals(Collections.singletonList("V1"), result.getVersionIds());
     }
@@ -121,7 +123,7 @@ class TaskQueryServiceReleasePermissionTest {
         task.setDeletedAt(LocalDateTime.now());
         assertFalse(service.forDeepLink(USER, "T1").getCanUnpublish());
         assertFalse(task.getCanPublish());
-        verifyNoInteractions(permissions);
+        verify(permissions, never()).canManageRelease(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -189,7 +191,8 @@ class TaskQueryServiceReleasePermissionTest {
         verify(versions, never()).selectVersionIdsByTask(anyString(), anyString());
         org.junit.jupiter.api.Assertions.assertEquals(2, result.getItems().size());
         org.junit.jupiter.api.Assertions.assertEquals(Collections.emptyList(), second.getVersionIds());
-        verifyNoInteractions(permissions);
+        verify(permissions).markJudgeable(USER, WS, Arrays.asList(task, second));
+        verify(permissions, never()).canManageRelease(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -223,7 +226,7 @@ class TaskQueryServiceReleasePermissionTest {
         org.junit.jupiter.api.Assertions.assertEquals(Collections.singletonList("V1"), result.getVersionIds());
         assertFalse(result.getCanPublish());
         assertFalse(result.getCanUnpublish());
-        verifyNoInteractions(permissions);
+        verify(permissions, never()).canManageRelease(anyString(), anyString(), anyString());
     }
 
     private com.hourglass.entity.VersionRelease publication(String id, String operation, String disposition, LocalDate day) {

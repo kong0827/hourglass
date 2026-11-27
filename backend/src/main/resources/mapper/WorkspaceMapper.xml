@@ -5,12 +5,13 @@
   <sql id="cols">
     w.id, w.name, w.type, w.notify_webhook, w.notify_channel, w.notify_enabled,
     w.notify_in_app_enabled, w.notify_token,
-    w.notify_last_at, w.notify_last_status, w.release_access_scope, w.owner_id, w.created_at, w.updated_at
+    w.notify_last_at, w.notify_last_status, w.release_access_scope, w.publication_access_scope,
+    w.owner_id, w.created_at, w.updated_at
   </sql>
 
   <sql id="plainCols">
     id, name, type, notify_webhook, notify_channel, notify_enabled, notify_in_app_enabled, notify_token,
-    notify_last_at, notify_last_status, release_access_scope, owner_id, created_at, updated_at
+    notify_last_at, notify_last_status, release_access_scope, publication_access_scope, owner_id, created_at, updated_at
   </sql>
 
   <select id="selectByUser" resultType="Workspace">
@@ -61,6 +62,14 @@
   </select>
   <update id="updateReleaseAccessScope">
     UPDATE workspace SET release_access_scope = #{scope}, updated_at = NOW() WHERE id = #{id}
+  </update>
+
+  <!-- 人工标记发布权限：与发布维护权限分开配置，互不覆盖 -->
+  <select id="selectPublicationAccessScope" resultType="string">
+    SELECT publication_access_scope FROM workspace WHERE id = #{id}
+  </select>
+  <update id="updatePublicationAccessScope">
+    UPDATE workspace SET publication_access_scope = #{scope}, updated_at = NOW() WHERE id = #{id}
   </update>
 
   <delete id="deleteById">

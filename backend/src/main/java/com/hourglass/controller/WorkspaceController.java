@@ -253,6 +253,24 @@ public class WorkspaceController {
         return ApiResult.ok(releaseAccessScopes.view(id));
     }
 
+    /** 人工标记发布权限（成员可读，用于解释「为什么我不能标记已发布」） */
+    @GetMapping("/api/workspaces/{id}/publication-access")
+    public ApiResult<ReleaseAccessScopeDto> publicationAccess(@PathVariable String id) {
+        workspaceService.requireMember(CurrentUser.id(), id);
+        return ApiResult.ok(releaseAccessScopes.viewPublication(id));
+    }
+
+    /** 修改人工标记发布权限：仅空间主 / 管理员；只影响人工补录徽标与筛选 */
+    @PutMapping("/api/workspaces/{id}/publication-access")
+    public ApiResult<ReleaseAccessScopeDto> updatePublicationAccess(@PathVariable String id,
+                                                                   @RequestBody ReleaseAccessScopeDto req) {
+        String me = CurrentUser.id();
+        workspaceService.requireManager(me, id);
+        if (req == null) throw AppException.badRequest("请提交人工标记发布权限");
+        releaseAccessScopes.savePublication(id, req.getSelected(), me);
+        return ApiResult.ok(releaseAccessScopes.viewPublication(id));
+    }
+
     @PutMapping("/api/workspaces/{id}/projects/{projectId}/member-roles")
     public ApiResult<Map<String, Integer>> saveProjectRoles(@PathVariable String id, @PathVariable String projectId,
             @RequestBody ProjectMemberRoleBatchRequest req) {

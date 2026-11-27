@@ -570,6 +570,8 @@ html[data-theme="dark"] .project-table-row > .project-row-acts{box-shadow:-8px 0
 .release-scope-main span{font-size:12px;line-height:1.5;color:var(--text-2);}
 .release-scope-row.is-locked{cursor:not-allowed;background:var(--surface-sunken);}
 .release-scope-row.is-locked b{color:var(--text-3);}
+/* 同一面板内的多组权限配置分隔 */
+.cfg-sep{height:1px;margin:var(--space-4) 0;background:var(--border);}
 
 /* 看板列配置：图例 + 列头 + 固定列宽，避免规则列与操作列左右漂移 */
 .rule-legend{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-2);margin:0 0 10px;}

@@ -31,7 +31,7 @@ public class ListPreferenceService {
 
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final Set<String> TASK_COLUMNS = Collections.unmodifiableSet(new LinkedHashSet<String>(Arrays.asList(
-            "title", "type", "column", "priority", "owner", "dueDate", "progress", "project", "demand",
+            "title", "type", "column", "publication", "priority", "owner", "dueDate", "progress", "project", "demand",
             "version", "category", "startDate", "tags", "subtasks", "work", "comments", "updatedAt")));
     private static final Set<String> MY_TASK_COLUMNS = Collections.unmodifiableSet(new LinkedHashSet<String>(Arrays.asList(
             "title", "type", "priority", "status", "dueDate", "startDate", "progress", "work", "project", "updatedAt")));

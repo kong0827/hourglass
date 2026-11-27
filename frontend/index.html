@@ -3422,9 +3422,18 @@
                 <button class="btn primary" type="button" id="btnReleaseAccessSave">保存发布权限</button>
                 <span class="foot-note" id="releaseAccessHint"></span>
               </div>
+
+              <div class="cfg-sep"></div>
+              <p class="set-hint">勾选可以<b>人工标记工作项「已发布」</b>的身份。该标记只是补录历史事实，只影响工作项徽标与「发布态」筛选，不写版本发布记录、不参与需求交付派生与统计。默认同上；勾选「项目可写成员」后，对该项目可写的成员都能标记。查看者始终无权。</p>
+              <div class="cfg-list" id="publicationAccessList"></div>
+              <div class="set-actions">
+                <button class="btn primary" type="button" id="btnPublicationAccessSave">保存标记权限</button>
+                <span class="foot-note" id="publicationAccessHint"></span>
+              </div>
+
               <div class="wf-sync-cards">
-                <div class="wf-sync"><b>只影响发布侧</b>发布计划、预览与记录实际发布（含重部署 / 回滚）</div>
-                <div class="wf-sync"><b>不受影响</b>新建 / 编辑版本、调整版本内容仍按项目写权限；排期、模块、人工补录、检查策略与推送通知仍限空间主、管理员或项目负责人</div>
+                <div class="wf-sync"><b>只影响发布侧</b>发布计划、预览与记录实际发布（含重部署 / 回滚）；人工标记只影响徽标与「发布态」筛选</div>
+                <div class="wf-sync"><b>不受影响</b>新建 / 编辑版本、调整版本内容仍按项目写权限；排期、模块、检查策略与推送通知仍限空间主、管理员或项目负责人</div>
               </div>
               </div>
             </div>

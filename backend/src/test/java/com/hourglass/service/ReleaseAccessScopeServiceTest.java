@@ -88,4 +88,48 @@ class ReleaseAccessScopeServiceTest {
         assertEquals("项目可写成员", view.getOptions().get(3).getLabel());
         assertTrue(view.getOptions().get(3).getDescription().contains("最宽松"));
     }
+
+    @Test
+    void publicationSaveWritesOwnColumnAndAudit() {
+        when(workspaces.selectPublicationAccessScope("W")).thenReturn(null);
+
+        service.savePublication("W", Arrays.asList("project_write", "owner"), "U1");
+
+        verify(workspaces).updatePublicationAccessScope("W", "owner,project_write");
+        verify(activity).logConfig(eq("W"), eq("U1"),
+                eq("更新人工标记发布权限：空间主、管理员、项目负责人 → 空间主、项目可写成员"));
+        verify(workspaces, never()).updateReleaseAccessScope(anyString(), anyString());
+    }
+
+    @Test
+    void publicationSaveSkipsWriteWhenUnchanged() {
+        when(workspaces.selectPublicationAccessScope("W")).thenReturn("owner,admin,project_owner");
+
+        service.savePublication("W", Arrays.asList("project_owner", "admin", "owner"), "U1");
+
+        verify(workspaces, never()).updatePublicationAccessScope(anyString(), anyString());
+        verify(activity, never()).logConfig(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void publicationViewUsesMarkDescriptions() {
+        when(workspaces.selectPublicationAccessScope("W")).thenReturn(null);
+
+        ReleaseAccessScopeDto view = service.viewPublication("W");
+
+        assertEquals(Arrays.asList(ReleaseAccessScopeService.SCOPE_OWNER,
+                ReleaseAccessScopeService.SCOPE_ADMIN, ReleaseAccessScopeService.SCOPE_PROJECT_OWNER), view.getSelected());
+        assertTrue(view.getOptions().get(0).getDescription().contains("标记"));
+        assertTrue(view.getOptions().get(3).getDescription().contains("标记"));
+    }
+
+    @Test
+    void normalizeNamesTheConfiguredScopeInErrors() {
+        AppException unknown = assertThrows(AppException.class,
+                () -> ReleaseAccessScopeService.normalize(Arrays.asList("bogus"), "人工标记工作项发布"));
+        assertTrue(unknown.getMessage().contains("人工标记工作项发布"));
+        AppException empty = assertThrows(AppException.class,
+                () -> ReleaseAccessScopeService.normalize(Collections.<String>emptyList(), "人工标记工作项发布"));
+        assertTrue(empty.getMessage().contains("人工标记工作项发布"));
+    }
 }

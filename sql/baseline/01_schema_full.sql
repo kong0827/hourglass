@@ -1436,6 +1436,7 @@ CREATE TABLE `workspace` (
   `notify_last_at` datetime DEFAULT NULL COMMENT '上次推送尝试时间',
   `notify_last_status` varchar(160) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'success / failed:原因',
   `release_access_scope` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'owner,admin,project_owner' COMMENT '可维护发布计划与发布记录的身份：owner,admin,project_owner,project_write',
+  `publication_access_scope` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'owner,admin,project_owner' COMMENT '可人工标记工作项发布状态的身份：owner,admin,project_owner,project_write',
   `owner_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '空间主用户ID',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',

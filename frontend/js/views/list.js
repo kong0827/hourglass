@@ -10,12 +10,12 @@ import { activeView } from "../core/router.js";
 import { GROUP_IDS, groupOptionsHTML } from "../core/group-dims.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
 import { guard, serverDecision } from "../core/transitions.js";
-import { canCreateNow, canEditTask, canManageProject, catNameById, catTag, dueDateMD, dueDateTip, dueFlag, dueState, filterOn, progressOf, reqNameById, reqSetId, rt, setSortOf, setNameById, state, tagChip } from "../core/state.js";
+import { canCreateNow, canEditTask, catNameById, catTag, dueDateMD, dueDateTip, dueFlag, dueState, filterOn, progressOf, reqNameById, reqSetId, rt, setSortOf, setNameById, state, tagChip } from "../core/state.js";
 import { moveTaskToColumn, openDuePopover, openOwnerMenu, openPriorityMenu, openStatusMenu, taskLink, toggleTaskDone, toggleTaskTimer } from "../core/task-actions.js";
 import { deleteTask, openTaskDrawer, ownerOptions } from "../core/task-drawer.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { taskVersionsText, taskVersionLinksHTML, assocLinkHTML, taskPublicationHTML, CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, avatarHTML, colMeta, colName, demandNoText, duePresetDate, fmtShortMD, fmtTs, parseDate, priName, priTagHTML, severityBadgeHTML, spanText, typeBadgeHTML, typeName } from "../lib/format.js";
+import { taskVersionsText, taskVersionLinksHTML, assocLinkHTML, taskIsPublished, taskPublicationHTML, taskPublicationText, CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, avatarHTML, colMeta, colName, demandNoText, duePresetDate, fmtShortMD, fmtTs, parseDate, priName, priTagHTML, severityBadgeHTML, spanText, typeBadgeHTML, typeName } from "../lib/format.js";
 import { loadBoard, loadReqs } from "./board.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { triggerDownload } from "../lib/download.js";
@@ -42,6 +42,14 @@ registerHelp({
       ["不含", "预估工时、进行中和暂停中的计时都不计入。", "mute"],
       ["预估在哪看", "预估工时是计划值，在详情抽屉或版本页单独展示，不与本列相加。", "info"]
     ]
+  },
+  "list.publication": {
+    title:"发布态",
+    rows:[
+      ["已发布", "有正式生产发布成功记录，或人工补录过历史发布事实；回滚过仍算发布过。", "ok"],
+      ["未发布", "没有正式生产发布记录，也没有人工标记；不代表未上线到其他环境。", "mute"],
+      ["人工补录", "只影响徽标与「发布态」筛选，不写版本发布记录，不参与需求交付派生与统计。", "info"]
+    ]
   }
 });
 initCaliberHelp();
@@ -65,13 +73,13 @@ var VERSION_GROUP_MAX = 500;
 /* 列头排序：dueDate/updatedAt/work 复用服务端已有的 due/updated/actual，其余按列 key 本地排序 */
 var SORT_DEFAULT_DIR = {
   due:"asc", priority:"asc", estimate:"desc", actual:"desc", updated:"desc",
-  title:"asc", type:"asc", column:"asc", owner:"asc", progress:"desc",
+  title:"asc", type:"asc", column:"asc", publication:"asc", owner:"asc", progress:"desc",
   project:"asc", demand:"asc", version:"asc", category:"asc", startDate:"asc", tags:"asc",
   subtasks:"desc", comments:"desc"
 };
 var HEAD_SORT_MAP = { dueDate:"due", updatedAt:"updated", work:"actual" };
 var LIST_SORTS = ["default"].concat(Object.keys(SORT_DEFAULT_DIR));
-var COL_WIDTHS = { title:"minmax(240px,1fr)", type:"80px", column:"96px", priority:"72px", owner:"96px", dueDate:"104px", progress:"108px", project:"132px", demand:"180px", version:"112px", category:"100px", startDate:"110px", tags:"160px", subtasks:"90px", work:"100px", comments:"80px", updatedAt:"168px" };
+var COL_WIDTHS = { title:"minmax(240px,1fr)", type:"80px", column:"96px", publication:"104px", priority:"72px", owner:"96px", dueDate:"104px", progress:"108px", project:"132px", demand:"180px", version:"112px", category:"100px", startDate:"110px", tags:"160px", subtasks:"90px", work:"100px", comments:"80px", updatedAt:"168px" };
 
 function renderSmartTabs(){
   updateMobFilterSummary();
@@ -389,7 +397,7 @@ function applyGrid(el){
   el.style.gridTemplateColumns = ["40px"].concat(widths, tail).join(" ");
 }
 /* 列头带口径提示的字段；标记必须与排序按钮平级，避免按钮嵌套按钮 */
-var LIST_HEAD_HELP = { progress:"list.progress", work:"list.work" };
+var LIST_HEAD_HELP = { progress:"list.progress", work:"list.work", publication:"list.publication" };
 function renderListHead(){
   var labels = listPrefs.labels("task-list");
   var cols = listPrefs.columns("task-list");
@@ -425,8 +433,18 @@ function minutesText(value){
 }
 function taskCell(t, key, hasTypeCol, rowEdit){
   if(key === "title") return '<span class="lr-task"><span class="lr-t" title="' + esc(t.title) + '">' + (hasTypeCol ? "" : typeBadgeHTML(t.itemType) + severityBadgeHTML(t.severity)) + esc(t.title)
-    + taskPublicationHTML(t) + '</span></span>';
+    + '</span></span>';
   if(key === "type") return '<span class="cell">' + (typeBadgeHTML(t.itemType) || esc(typeName(t.itemType))) + severityBadgeHTML(t.severity) + '</span>';
+  if(key === "publication"){
+    if(!taskIsPublished(t)) return '<span class="cell muted" title="没有正式生产发布记录，也没有人工标记">未发布</span>';
+    var formal = !!(t.publishedAt || t.everPublished === true
+      || (t.publicationState && t.publicationState !== "unpublished")
+      || (Array.isArray(t.publicationTargets) && t.publicationTargets.length));
+    var label = formal ? "已发布" : "已发布（人工）";
+    var tone = formal ? "tag-success" : "tag-neutral";
+    var tip = formal ? taskPublicationText(t) : "人工补录的历史发布事实；不代表当前生产生效，也不参与需求交付统计";
+    return '<span class="cell"><span class="tag ' + tone + '" title="' + esc(tip) + '">' + label + '</span></span>';
+  }
   if(key === "column"){
     var colC = colMeta(t.boardColumn), color = colC ? colC.color : CAT_DEFAULT_COLOR;
     var chip = '<span class="tag tag-cat" style="--tag-c:' + color + '"><span class="dot" aria-hidden="true"></span>' + esc(colName(t.boardColumn)) + '</span>';
@@ -543,6 +561,7 @@ function sortValue(t, key){
   if(key === "owner") return String(t.owner || "");
   if(key === "due") return t.dueDate || null;
   if(key === "progress") return progressOf(t);
+  if(key === "publication") return taskIsPublished(t) ? 0 : 1;
   if(key === "project") return t.reqId ? String(reqNameById(t.reqId) || "") : "";
   if(key === "demand") return t.demandId ? String(t.demandTitle || "") : "";
   if(key === "version") return taskVersionsText(t);
@@ -729,6 +748,7 @@ function taskCsvValue(t, key){
   if(key === "owner") return t.owner || "";
   if(key === "dueDate") return t.dueDate || "";
   if(key === "progress") return progressOf(t) + "%";
+  if(key === "publication") return taskPublicationText(t);
   if(key === "project") return t.reqId ? reqNameById(t.reqId) : "";
   if(key === "demand") return t.demandId ? (t.demandTitle || "") : "";
   if(key === "version") return taskVersionsText(t);
@@ -961,13 +981,13 @@ function syncListSelectionUI(){
 function bulkIds(){
   return Object.keys(rt.listSelected).filter(function(k){ return rt.listSelected[k]; });
 }
-/* 人工发布标记单次上限与后端一致；选区里任一工作项无管理权限就不提供批量入口 */
+/* 人工发布标记单次上限与后端一致；选区里有任一项当前身份无权标记就不提供批量入口 */
 var MAX_PUBLICATION_BATCH = 100;
 function canBulkPublish(ids){
   if(!ids || !ids.length || ids.length > MAX_PUBLICATION_BATCH) return false;
   for(var i = 0; i < ids.length; i++){
     var t = rt.listCache[ids[i]];
-    if(!t || t.deletedAt || !canManageProject(t.reqId)) return false;
+    if(!t || t.deletedAt || !t.canJudgePublication) return false;
   }
   return true;
 }
@@ -981,7 +1001,7 @@ function openBulkPublicationDialog(){
   var ids = bulkIds();
   if(!ids.length) return;
   if(ids.length > MAX_PUBLICATION_BATCH){ toast("单次最多标记 " + MAX_PUBLICATION_BATCH + " 项，请减少选择", "warn"); return; }
-  if(!canBulkPublish(ids)){ toast("所选工作项中有不可管理的项目，请分开操作", "warn"); return; }
+  if(!canBulkPublish(ids)){ toast("所选中存在你无权标记发布的工作项，请分开操作", "warn"); return; }
   var layer = document.createElement("div");
   layer.className = "modal-layer";
   layer.setAttribute("role", "dialog");
@@ -1026,7 +1046,7 @@ function revokeBulkPublication(){
   var ids = bulkIds();
   if(!ids.length) return;
   if(ids.length > MAX_PUBLICATION_BATCH){ toast("单次最多撤销 " + MAX_PUBLICATION_BATCH + " 项，请减少选择", "warn"); return; }
-  if(!canBulkPublish(ids)){ toast("所选工作项中有不可管理的项目，请分开操作", "warn"); return; }
+  if(!canBulkPublish(ids)){ toast("所选中存在你无权标记发布的工作项，请分开操作", "warn"); return; }
   UI.showPrompt({ title:"撤销 " + ids.length + " 项的发布标记", desc:"撤销后回落为未发布；正式发布记录不受影响，历史记录保留。没有生效标记的条目会自动跳过。",
     label:"撤销原因（必填）", required:true, maxLength:500, okText:"撤销标记" }).then(function(note){
     if(note === null) return;

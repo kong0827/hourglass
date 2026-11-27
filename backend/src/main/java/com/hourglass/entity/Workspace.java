@@ -32,6 +32,9 @@ public class Workspace {
     /** 可维护发布计划与发布记录的身份，逗号分隔：owner,admin,project_owner,project_write */
     private String releaseAccessScope;
 
+    /** 可人工标记工作项发布状态的身份，逗号分隔：owner,admin,project_owner,project_write */
+    private String publicationAccessScope;
+
     /** 非表字段：当前用户在该空间的角色 owner/member */
     private String myRole;
     /** 非表字段：成员数 */

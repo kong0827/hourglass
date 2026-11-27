@@ -83,6 +83,9 @@ public class Task {
     /** 非表字段：详情查询按当前身份计算，客户端不能通过普通保存授予发布权限。 */
     private Boolean canPublish = Boolean.FALSE;
     private Boolean canUnpublish = Boolean.FALSE;
+    /** 非表字段：当前身份能否人工标记该工作项「已发布」，由空间配置 + 项目写权限决定。 */
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    private Boolean canJudgePublication = Boolean.FALSE;
     /** daily/weekly/monthly，空为不循环 */
     private String recurType;
     /** 循环任务派生的下一次任务ID（重新打开后再次完成时复用，不重复生成） */

@@ -219,11 +219,10 @@ public class TaskPublicationJudgementService {
 
     private void assertCanJudge(String userId, String workspaceId, Task task, String prefix) {
         try {
-            releasePermission.assertManageProject(userId, workspaceId, task.getReqId());
+            releasePermission.assertJudgePublication(userId, workspaceId, task.getReqId());
         } catch (AppException e) {
             if (e.getCode() == 403) {
-                throw new AppException(403,
-                        (prefix == null ? "" : prefix) + "仅空间主、管理员或项目负责人可标记工作项发布状态");
+                throw new AppException(403, (prefix == null ? "" : prefix) + e.getMessage());
             }
             throw e;
         }
