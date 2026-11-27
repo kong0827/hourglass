@@ -45,4 +45,6 @@ public class RequirementDoc {
     private String deletedBy;
     /** 指定可见成员账号 ID（visibility=members 时由服务层按需装载，不落库） */
     private transient java.util.List<String> memberIds;
+    /** 当前查看人是否已收藏（服务层按查看人装配，不落库） */
+    private transient Boolean favored;
 }

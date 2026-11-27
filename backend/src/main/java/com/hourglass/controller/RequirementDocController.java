@@ -163,6 +163,47 @@ public class RequirementDocController {
         return ApiResult.ok(docService.create(userId, ws.getId(), req));
     }
 
+    /** 我的收藏：按收藏时间倒序，可见口径与文档列表一致 */
+    @GetMapping("/api/req-docs/favorites")
+    public ApiResult<PageResult<ReqDocView>> favorites(@RequestParam(required = false) String workspace,
+                                                       @RequestParam(required = false) Integer offset,
+                                                       @RequestParam(required = false) Integer limit) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(docService.favorites(ws.getId(), userId,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
+    }
+
+    /** 收藏 / 取消收藏：对当前查看人幂等 */
+    @PutMapping("/api/req-docs/{id}/favorite")
+    public ApiResult<Map<String, Object>> favorite(@PathVariable String id,
+                                                   @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        Map<String, Object> data = new LinkedHashMap<String, Object>();
+        data.put("favored", docService.setFavorite(ws.getId(), userId, id, true));
+        return ApiResult.ok(data);
+    }
+
+    @DeleteMapping("/api/req-docs/{id}/favorite")
+    public ApiResult<Map<String, Object>> unfavorite(@PathVariable String id,
+                                                     @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        Map<String, Object> data = new LinkedHashMap<String, Object>();
+        data.put("favored", docService.setFavorite(ws.getId(), userId, id, false));
+        return ApiResult.ok(data);
+    }
+
+    /** 复制文档：副本为草稿，负责人为操作者，不复制需求与工作项关联 */
+    @PostMapping("/api/req-docs/{id}/duplicate")
+    public ApiResult<RequirementDoc> duplicate(@PathVariable String id,
+                                               @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(docService.duplicate(userId, ws.getId(), id));
+    }
+
     /** 导入 Word 文件（docx 保留排版，doc 提取纯文本），返回清洗后的 HTML 正文 */
     @PostMapping("/api/req-docs/import-word")
     public ApiResult<Map<String, String>> importWord(@RequestParam("file") MultipartFile file,

@@ -141,6 +141,7 @@ public class RequirementDocTrashService {
         historyMapper.deleteByDoc(workspaceId, d.getId());
         shareMapper.deleteByDoc(workspaceId, d.getId());
         docMapper.deleteVisibilityMembersByDoc(workspaceId, d.getId());
+        docMapper.deleteFavoritesByDoc(workspaceId, d.getId());
         attachmentService.deleteByTarget(workspaceId, d.getId(), AttachmentService.KIND_DOC);
         docMapper.delete(d.getId());
         if (!silent) {

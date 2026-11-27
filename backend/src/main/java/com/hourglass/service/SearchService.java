@@ -116,6 +116,11 @@ public class SearchService {
                 h.setSnippet(snippetAround(h.getSnippet(), q));
             }
             hits.addAll(docHits);
+            /* 章节级命中：在命中文档的标题里再找一轮，给全局搜索「文档 > 章节」直达入口。
+               只覆盖 html / markdown；在线文档快照与表格不提取（口径见 DocHeadings）。 */
+            if (needle != null) {
+                hits.addAll(docSectionHits(docHits, needle));
+            }
         }
 
         if (wants(query, "demand")) {
@@ -174,6 +179,48 @@ public class SearchService {
     /** 类型为空表示「全部」；指定类型后只查该类，避免无关查询。 */
     private static boolean wants(SearchQuery query, String type) {
         return query.getType() == null || type.equals(query.getType());
+    }
+
+    /**
+     * 章节级命中：在已命中的文档里按标题再找一轮（大小写不敏感的包含匹配）。
+     * 每篇最多 2 节、全部最多 5 节，避免整屏被同一篇的章节刷屏；
+     * head 是标题在全文里的序号，前端用 ?h= 深链直达。
+     */
+    private List<SearchHit> docSectionHits(List<SearchHit> docHits, String lowerNeedle) {
+        List<SearchHit> out = new ArrayList<SearchHit>();
+        int cap = 5;
+        for (SearchHit docHit : docHits) {
+            if (out.size() >= cap) {
+                break;
+            }
+            List<String> headings;
+            try {
+                headings = DocHeadings.of(docMapper.selectById(docHit.getId()));
+            } catch (Exception ignored) {
+                continue;
+            }
+            int perDoc = 0;
+            for (int i = 0; i < headings.size() && perDoc < 2 && out.size() < cap; i++) {
+                String text = headings.get(i);
+                if (!text.toLowerCase().contains(lowerNeedle)) {
+                    continue;
+                }
+                SearchHit h = new SearchHit();
+                h.setType("doc");
+                h.setId(docHit.getId());
+                h.setTitle(docHit.getTitle());
+                h.setReqId(docHit.getReqId());
+                h.setReqName(docHit.getReqName());
+                h.setStatus(docHit.getStatus());
+                h.setExtra(docHit.getExtra());
+                h.setSection(text);
+                h.setHead(i);
+                h.setUpdatedAt(docHit.getUpdatedAt());
+                out.add(h);
+                perDoc++;
+            }
+        }
+        return out;
     }
 
     private static SearchQuery normalize(SearchQuery raw) {

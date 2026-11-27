@@ -253,6 +253,78 @@ public class RequirementDocService {
         return com.hourglass.dto.PageResult.of(rows, total, safeOffset, safeLimit);
     }
 
+    /** 我的收藏：按收藏时间倒序；可见口径与文档列表一致，收回/收窄后不可见的文档不出现 */
+    public com.hourglass.dto.PageResult<ReqDocView> favorites(String workspaceId, String userId,
+                                                               int offset, int limit) {
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        String viewerId = projectAccess.viewerScope(workspaceId, userId);
+        boolean seeAllDrafts = ProjectAccessService.isPrivileged(projectAccess.roleOf(workspaceId, userId));
+        int total = docMapper.countFavoriteVisible(workspaceId, null, null, false, null, viewerId, userId, seeAllDrafts);
+        List<ReqDocView> rows = total <= safeOffset ? new java.util.ArrayList<ReqDocView>()
+                : docMapper.selectFavoriteViews(workspaceId, null, null, false, null, viewerId, userId,
+                        seeAllDrafts, safeOffset, safeLimit);
+        for (ReqDocView v : rows) {
+            v.setExcerpt(excerptOf(v.getContentBrief()));
+            v.setContentBrief(null);
+        }
+        return com.hourglass.dto.PageResult.of(rows, total, safeOffset, safeLimit);
+    }
+
+    /** 收藏 / 取消收藏：先按可见性校验，再幂等写入或删除 */
+    public boolean setFavorite(String workspaceId, String userId, String docId, boolean on) {
+        getVisible(workspaceId, userId, docId);
+        if (on) {
+            docMapper.insertFavorite(workspaceId, userId, docId);
+        } else {
+            docMapper.deleteFavorite(workspaceId, userId, docId);
+        }
+        return on;
+    }
+
+    /**
+     * 复制文档：正文 / 格式 / 类型 / 分类 / 父级 / 可见范围一并复制，不复制需求与工作项关联。
+     * 副本恒为草稿（走正常发布流程），负责人为操作者；members 档连同名单复制，避免副本谁都打不开。
+     */
+    @Transactional
+    public RequirementDoc duplicate(String userId, String workspaceId, String id) {
+        RequirementDoc src = getVisible(workspaceId, userId, id);
+        projectAccess.assertWrite(workspaceId, userId, src.getReqId());
+        RequirementDoc d = new RequirementDoc();
+        d.setId(Ids.gen("D"));
+        d.setWorkspaceId(workspaceId);
+        d.setReqId(src.getReqId());
+        d.setParentId(src.getParentId());
+        d.setCategoryId(src.getCategoryId());
+        d.setTitle(duplicateTitle(src.getTitle()));
+        d.setDocType(src.getDocType());
+        d.setContent(src.getContent());
+        d.setSheetContent(src.getSheetContent());
+        d.setFormat(src.getFormat());
+        d.setContentBrief(src.getContentBrief());
+        d.setSortOrder(0);
+        d.setStatus("draft");
+        d.setVisibility(src.getVisibility());
+        AppUser me = userMapper.selectById(userId);
+        d.setOwner(me == null ? null : Texts.cut(me.getDisplayName(), 32));
+        d.setOwnerUserId(userId);
+        docMapper.insert(d);
+        if (VIS_MEMBERS.equals(d.getVisibility())) {
+            List<String> members = docMapper.selectVisibilityMemberIds(id);
+            if (members != null && !members.isEmpty()) {
+                docMapper.insertVisibilityMembers(workspaceId, d.getId(), members);
+            }
+        }
+        workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, d.getId(), userId,
+                "create", "复制文档「" + src.getTitle() + "」创建了「" + d.getTitle() + "」");
+        return withMembers(docMapper.selectById(d.getId()));
+    }
+
+    private static String duplicateTitle(String title) {
+        String base = Texts.trimToNull(title);
+        return Texts.cut((base == null ? "未命名文档" : base) + " 副本", 100);
+    }
+
     /**
      * 草稿可见性：已发布（publishedAt 非空）按项目可见范围走；草稿仅作者与空间 owner/admin 可见。
      * 静态工具供评论服务复用，保持同一口径。
@@ -311,6 +383,7 @@ public class RequirementDocService {
                 projectAccess.roleOf(workspaceId, userId), isVisibilityMember(d, userId))) {
             throw AppException.notFound("文档不存在：" + id);
         }
+        d.setFavored(docMapper.countFavorite(workspaceId, userId, d.getId()) > 0);
         return withMembers(d);
     }
 
@@ -801,6 +874,7 @@ public class RequirementDocService {
             workActivityService.deleteByEntity(workspaceId, WorkActivityService.REQUIREMENT_DOC, docId);
         }
         docMapper.deleteVisibilityMembersByReq(workspaceId, reqId);
+        docMapper.deleteFavoritesByReq(workspaceId, reqId);
         return docMapper.deleteByReq(workspaceId, reqId);
     }
 

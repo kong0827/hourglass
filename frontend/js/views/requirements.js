@@ -955,6 +955,7 @@ function openReqDocCtx(x, y, target){
     /* 正文可编辑：新建子文档、重命名都按项目可写；删除仍是负责人 / 管理员的结构操作 */
     items += '<button type="button" data-ctx-act="subdoc"><span class="ic">' + icon("note", 14) + '</span>新建子文档</button>'; any = true;
     items += '<button type="button" data-ctx-act="rename"><span class="ic">' + icon("edit", 14) + '</span>重命名</button>';
+    items += '<button type="button" data-ctx-act="duplicate"><span class="ic">' + icon("copy", 14) + '</span>复制文档</button>';
     if(canEditDoc(node.doc)){
       items += '<div class="sep"></div><button type="button" data-ctx-act="del" class="danger"><span class="ic">' + icon("trash", 14) + '</span>删除</button>';
     }
@@ -993,8 +994,22 @@ function runReqDocCtxAct(act, t){
     var d = n.doc;
     if(act === "subdoc") openNewReqDocDialog(d.reqId || undefined, { categoryId: d.categoryId || "", parentId: d.id });
     else if(act === "rename") renameDocFromCtx(d.id);
+    else if(act === "duplicate") reqDocDuplicate(d.id, true);
     else if(act === "del") deleteDocFromCtx(d.id);
   }
+}
+/* 复制文档：副本为草稿、负责人为操作者；成功后刷新列表，openAfter 时直接进副本编辑页 */
+function reqDocDuplicate(id, openAfter){
+  if(!id) return;
+  var newId = null;
+  API.post("/api/req-docs/" + encodeURIComponent(id) + "/duplicate").then(function(doc){
+    newId = doc && doc.id ? doc.id : null;
+    toast("已创建副本「" + ((doc && doc.title) || "") + "」", "fs");
+    return loadReqDocs(true);
+  }).then(function(){
+    if(reqDocMode !== "read" || !splitDocId) renderReqDocMode();
+    if(openAfter && newId && !isReqDocEditing()) openReqDocEditor(newId);
+  }).catch(function(ex){ toast(ex.message || "复制失败", "bad"); });
 }
 /* 行内名称输入：新建分类用临时输入框（不落服务端占位），回车提交 / Esc 取消 */
 function reqDocCatNameInput(opts){
@@ -1161,9 +1176,9 @@ function reqDocTreeContextMenu(e){
   if(doc){ e.preventDefault(); openReqDocCtx(e.clientX, e.clientY, { type: "doc", id: doc.dataset.reqdoc || doc.dataset.rsDoc }); return; }
 }
 
-/* ---------- 阅读 / 列表 / 看板 / 最近动态：同一份数据的四种展示（阅读为默认首个 tab） ---------- */
+/* ---------- 阅读 / 列表 / 看板 / 最近动态 / 我的：同一份数据的五种展示（阅读为默认首个 tab） ---------- */
 
-var RD_MODES = ["read", "tree", "kanban", "feed"];
+var RD_MODES = ["read", "tree", "kanban", "feed", "mine"];
 var RD_STATUS = [
   { id: "draft", name: "草稿" },
   { id: "active", name: "进行中" },
@@ -1211,6 +1226,7 @@ function setReqDocMode(mode){
   showEl($("reqDocKanban"), reqDocMode === "kanban");
   showEl($("reqDocSplit"), reqDocMode === "read");
   showEl($("reqDocFeed"), reqDocMode === "feed");
+  showEl($("reqDocMine"), reqDocMode === "mine");
   renderReqDocMode();
 }
 function renderReqDocMode(){
@@ -1221,8 +1237,36 @@ function renderReqDocMode(){
   if(reqDocMode === "kanban") renderReqDocKanban();
   else if(reqDocMode === "read") renderReqDocSplit();
   else if(reqDocMode === "feed") renderReqDocFeed();
+  else if(reqDocMode === "mine") renderReqDocMine();
   else renderReqDocTree();
   syncReqDocPageHead();
+}
+/* ---------- 最近访问（本机记录，最多 20 篇；「我的」视图的数据源之一） ---------- */
+function readReqRecent(){
+  try{
+    var raw = localStorage.getItem("ds.reqRecent.v1");
+    var arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  }catch(e){ return []; }
+}
+function writeReqRecent(arr){
+  try{ localStorage.setItem("ds.reqRecent.v1", JSON.stringify(arr.slice(0, 20))); }catch(e){ /* 隐私模式忽略 */ }
+}
+function recordReqDocRecent(doc){
+  if(!doc || !doc.id) return;
+  var arr = readReqRecent().filter(function(r){ return r && r.id !== doc.id; });
+  arr.unshift({ id: doc.id, title: doc.title || "未命名文档", ts: Date.now() });
+  writeReqRecent(arr);
+  if(reqDocMode === "mine") renderReqDocMine();
+}
+/* 列表未加载时不裁（避免把还没拉到的文档误删）；加载后清掉已删除 / 已不可见的条目 */
+function pruneReqRecent(){
+  var arr = readReqRecent();
+  if(reqDocsLoaded){
+    arr = arr.filter(function(r){ return r && reqDocById(r.id); });
+    writeReqRecent(arr);
+  }
+  return arr;
 }
 /* 文档编辑页是否打开：与 isReqDocEditing 区分，后者只代表有未保存修改 */
 function isReqDocEditorOpen(){
@@ -1694,6 +1738,7 @@ function loadReqDocSplitDoc(id){
   API.get("/api/req-docs/" + encodeURIComponent(id)).then(function(doc){
     if(seq !== splitDocSeq || splitDocId !== id) return;
     renderReqDocReader(doc);
+    recordReqDocRecent(doc);
     /* 窄屏下树在正文上方：选中一篇后把正文带入视口，避免用户以为点击无反馈 */
     if(isMobile()){
       setTimeout(function(){
@@ -2578,6 +2623,7 @@ function renderReqDocReader(doc){
           '<button class="btn sm ghost ibtn" type="button" data-rrd-comments="' + esc(doc.id) + '" id="rrdCommentsBtn" data-tip="评论 · ' + rrdActTip + '" aria-label="评论">' + icon("comment", 15) + '<span class="rrd-cnt" id="rrdCommentsBadge" hidden></span></button>' +
           '<button class="btn sm ghost ibtn" type="button" data-rrd-perm="' + esc(doc.id) + '" data-tip="权限说明（只读）" aria-label="权限说明">' + icon("shield", 15) + '</button>' +
           '<button class="btn sm ghost ibtn" type="button" data-rrd-history="' + esc(doc.id) + '" data-can-restore="' + (canBody ? "1" : "0") + '" data-tip="历史版本" aria-label="历史版本">' + icon("clock", 15) + '</button>' +
+          '<button class="btn sm ghost ibtn' + (doc.favored ? " is-fav" : "") + '" type="button" data-rrd-fav="' + esc(doc.id) + '" aria-pressed="' + (doc.favored ? "true" : "false") + '" data-tip="' + (doc.favored ? "取消收藏" : "收藏这篇文档") + '" aria-label="' + (doc.favored ? "取消收藏" : "收藏这篇文档") + '">' + icon("star", 15) + '</button>' +
           '<span class="vdiv" aria-hidden="true"></span>' +
           '<button class="btn sm ghost ibtn" type="button" data-rrd-export="' + esc(doc.id) + '" data-tip="导出 Markdown / HTML" aria-label="导出 Markdown / HTML">' + icon("download", 15) + '</button>' +
           '<button class="btn sm ghost ibtn" type="button" data-rrd-export-word="' + esc(doc.id) + '" data-tip="导出 Word（.docx）" aria-label="导出 Word">' + icon("docW", 15) + '</button>' +
@@ -2591,6 +2637,7 @@ function renderReqDocReader(doc){
           '<span class="rrd-more">' +
             '<button class="btn sm ghost ibtn" type="button" data-rrd-more aria-haspopup="true" aria-expanded="false" data-tip="更多" aria-label="更多操作">' + icon("more", 15) + '</button>' +
             '<div class="menu rrd-more-menu" id="rrdMoreMenu" hidden>' +
+              (canBody ? '<button class="menu-item" type="button" data-rrd-act="duplicate">' + icon("copy", 14) + '复制文档</button>' : '') +
               '<button class="menu-item" type="button" data-rrd-act="copy-body">' + icon("copy", 14) + '复制正文</button>' +
               '<button class="menu-item" type="button" data-rrd-act="copy-link">' + icon("link", 14) + '复制链接</button>' +
               (doc.format === "sheet" ? '' :
@@ -4240,6 +4287,68 @@ function renderReqDocFeed(){
     box.innerHTML = UI.errorState(ex.message || "动态加载失败");
   });
 }
+/* ---------- 我的：最近访问（本机）+ 收藏（服务端，跨设备） ---------- */
+var mineSeq = 0;
+function renderReqDocMine(){
+  var box = $("reqDocMine");
+  if(!box) return;
+  var seq = ++mineSeq;
+  var recent = pruneReqRecent();
+  var html = '<div class="rdm-sec"><div class="rdm-head">最近访问</div>';
+  if(!recent.length){
+    html += '<div class="rdm-empty">还没有阅读记录；在「阅读」里打开任意文档后会出现在这里</div>';
+  }else{
+    recent.slice(0, 10).forEach(function(r){
+      var d = reqDocById(r.id);
+      html += '<button class="rdm-row" type="button" data-rdm-open="' + esc(r.id) + '">'
+        + '<span class="rdm-title">' + esc(r.title) + '</span>'
+        + '<span class="rdm-meta">' + esc(d ? reqDocProjectName(d.reqId) : "") + '</span>'
+        + '</button>';
+    });
+  }
+  html += '</div><div class="rdm-sec"><div class="rdm-head">我的收藏</div>'
+    + '<div id="rdmFavList"><div class="rdm-empty">加载中…</div></div></div>';
+  box.innerHTML = html;
+  API.get("/api/req-docs/favorites").then(function(res){
+    if(seq !== mineSeq) return;
+    var list = $("rdmFavList");
+    if(!list) return;
+    var items = res && res.items ? res.items : [];
+    if(!items.length){
+      list.innerHTML = '<div class="rdm-empty">还没有收藏；阅读文档时点正文右上角的星标即可收藏</div>';
+      return;
+    }
+    list.innerHTML = items.map(function(v){
+      return '<div class="rdm-row rdm-fav">'
+        + '<button class="rdm-open" type="button" data-rdm-open="' + esc(v.id) + '">'
+        + '<span class="rdm-title">' + esc(v.title || "未命名文档") + '</span>'
+        + '<span class="rdm-meta">' + esc(reqDocProjectName(v.reqId)) + '</span>'
+        + '</button>'
+        + '<button class="rdm-unfav" type="button" data-rdm-unfav="' + esc(v.id) + '" title="取消收藏" aria-label="取消收藏">' + icon("close", 12) + '</button>'
+        + '</div>';
+    }).join("");
+  }).catch(function(ex){
+    if(seq !== mineSeq) return;
+    var list = $("rdmFavList");
+    if(list) list.innerHTML = '<div class="rdm-empty">' + esc(ex.message || "收藏加载失败") + '</div>';
+  });
+}
+function openMineDoc(id){
+  if(isReqDocEditing() && editingDocId !== id){
+    toast("当前文档还有未保存的修改，请先保存或放弃后再打开其它文档", "warn");
+    return;
+  }
+  setReqDocMode("read");
+  rrdPendingHead = -1;
+  rrdSkipRestore = false;
+  loadReqDocSplitDoc(id);
+}
+function unfavMineDoc(id){
+  API.del("/api/req-docs/" + encodeURIComponent(id) + "/favorite").then(function(){
+    toast("已取消收藏", "fs");
+    renderReqDocMine();
+  }).catch(function(ex){ toast(ex.message || "取消收藏失败", "bad"); });
+}
 function reqDocParentCandidates(reqId, excludeId){
   var banned = excludeId ? reqDocDescendants(excludeId) : {};
   var scope = reqId || "";
@@ -5069,6 +5178,7 @@ function openReqDocEditor(id){
   API.get("/api/req-docs/" + encodeURIComponent(id)).then(function(doc){
     if(seq !== reqDocOpenSeq) return;   // 连续点开多份：丢弃过期的响应
     editingDocId = doc.id;
+    recordReqDocRecent(doc);
     /* 换文档后成员可见范围可能不同，先丢弃上一份的候选 */
     if(reqDocCommentMention) reqDocCommentMention.reset();
     state.reqDocId = doc.id;
@@ -8450,6 +8560,20 @@ function openReqDocAndJump(id){
     openReqDocEditor(id);
   });
 }
+/* 章节直达（全局搜索的「文档 > 章节」命中）：阅读模式打开并滚动到第 headIndex 个标题 */
+function openReqDocSection(id, headIndex){
+  if(isReqDocEditing() && editingDocId !== id){
+    toast("当前文档还有未保存的修改，请先保存或放弃后再打开其它文档", "warn");
+    return Promise.resolve(false);
+  }
+  return showView("requirements").then(function(){
+    if(activeView !== "requirements") return;
+    rrdPendingHead = typeof headIndex === "number" && headIndex >= 0 ? headIndex : -1;
+    rrdSkipRestore = false;
+    setReqDocMode("read");
+    loadReqDocSplitDoc(id);
+  });
+}
 /* 从工作项抽屉里看文档：同页跳转会连带收起抽屉、丢掉正在看的工作项，改在新标签页打开 */
 function openReqDocInNewTab(id){
   if(!id) return;
@@ -8811,8 +8935,27 @@ function populateReqDocSelect(keep){
         closeRrdMore();
         if(act === "copy-body") copyRrdBody();
         else if(act === "copy-link") copyRrdLink();
+        else if(act === "duplicate") reqDocDuplicate(splitDocId, false);
         else if(act === "find") openRrdFind();
         else if(act === "print") printRrdDoc();
+        return;
+      }
+      var rf = e.target.closest("[data-rrd-fav]");
+      if(rf){
+        var fid = rf.dataset.rrdFav;
+        var favOn = rf.getAttribute("aria-pressed") !== "true";
+        (favOn ? API.put("/api/req-docs/" + encodeURIComponent(fid) + "/favorite")
+               : API.del("/api/req-docs/" + encodeURIComponent(fid) + "/favorite"))
+          .then(function(){
+            var tip = favOn ? "取消收藏" : "收藏这篇文档";
+            rf.setAttribute("aria-pressed", favOn ? "true" : "false");
+            rf.classList.toggle("is-fav", favOn);
+            rf.setAttribute("data-tip", tip);
+            rf.setAttribute("aria-label", tip);
+            toast(favOn ? "已收藏，可在「我的」里找到" : "已取消收藏", "fs");
+            if(reqDocMode === "mine") renderReqDocMine();
+          })
+          .catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
         return;
       }
       var ab = e.target.closest("[data-rrd-ai]");
@@ -8987,6 +9130,16 @@ function populateReqDocSelect(keep){
       if(item) openReqDocEditor(item.dataset.rfDoc);
     });
   }
+  /* 我的：点行进阅读模式，点 × 取消收藏 */
+  var mineEl = $("reqDocMine");
+  if(mineEl){
+    mineEl.addEventListener("click", function(e){
+      var un = e.target.closest("[data-rdm-unfav]");
+      if(un){ e.stopPropagation(); unfavMineDoc(un.dataset.rdmUnfav); return; }
+      var op = e.target.closest("[data-rdm-open]");
+      if(op) openMineDoc(op.dataset.rdmOpen);
+    });
+  }
   if($("reqDocNew")) $("reqDocNew").addEventListener("click", function(){ openNewReqDocDialog(reqDocReqFilter || undefined); });
   if($("reqDocTplBtn")) $("reqDocTplBtn").addEventListener("click", openDocTplDialog);
   if($("reqDocTrashBtn")) $("reqDocTrashBtn").addEventListener("click", openReqDocTrash);
@@ -9148,6 +9301,10 @@ function populateReqDocSelect(keep){
     });
   }
   if($("reqDocCopy")) $("reqDocCopy").addEventListener("click", copyReqDoc);
+  if($("reqDocDuplicate")) $("reqDocDuplicate").addEventListener("click", function(){
+    if(!editingDocId) return;
+    reqDocDuplicate(editingDocId, true);
+  });
   if($("reqDocCodeBtn")) $("reqDocCodeBtn").addEventListener("click", openReqDocCodeMenu);
   /* 低频操作收进“更多”：点开后保持与顶部工具栏相同的位置计算与关闭规则 */
   if($("reqDocMore")){
@@ -9566,4 +9723,4 @@ function notifyReqDocChanged(docId, actor){
   openReqDocEditor(editingDocId);
 }
 
-export { aiBtnBusy, aiErrMsg, aiUsageText, ensureReqDocOptions, enterDocHistoryView, enterRequirementsView, isReqDocEditing, loadReqDocs, notifyReqDocChanged, openNewReqDocDialog, openReqDocAndJump, openReqDocInNewTab, populateReqDocSelect, refreshDocHistoryFromHash, refreshReqDocListIfOpen, refreshReqDocTasksIfOpen, reqDocDirty, reqDocList, reqDocNameById, reqDocStatusLabel, reqDocsError, reqDocsLoaded, setReqDocProjectFilter, tryCloseReqDocEditor };
+export { aiBtnBusy, aiErrMsg, aiUsageText, ensureReqDocOptions, enterDocHistoryView, enterRequirementsView, isReqDocEditing, loadReqDocs, notifyReqDocChanged, openNewReqDocDialog, openReqDocAndJump, openReqDocInNewTab, openReqDocSection, populateReqDocSelect, refreshDocHistoryFromHash, refreshReqDocListIfOpen, refreshReqDocTasksIfOpen, reqDocDirty, reqDocList, reqDocNameById, reqDocStatusLabel, reqDocsError, reqDocsLoaded, setReqDocProjectFilter, tryCloseReqDocEditor };

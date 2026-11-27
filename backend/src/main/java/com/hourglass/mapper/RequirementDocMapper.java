@@ -213,4 +213,44 @@ public interface RequirementDocMapper {
 
     /** 备份导出：一次取全空间的成员名单（docId / userId） */
     List<java.util.Map<String, Object>> selectVisibilityMembersByWorkspace(@Param("workspaceId") String workspaceId);
+
+    /* ---------------- 文档收藏 ---------------- */
+
+    int insertFavorite(@Param("workspaceId") String workspaceId, @Param("userId") String userId,
+                       @Param("docId") String docId);
+
+    int deleteFavorite(@Param("workspaceId") String workspaceId, @Param("userId") String userId,
+                       @Param("docId") String docId);
+
+    int countFavorite(@Param("workspaceId") String workspaceId, @Param("userId") String userId,
+                      @Param("docId") String docId);
+
+    /** 我的收藏列表：字段与 selectViewByWorkspace 一致，可见口径走 listWhere，按收藏时间倒序 */
+    List<ReqDocView> selectFavoriteViews(@Param("workspaceId") String workspaceId,
+                                         @Param("reqId") String reqId,
+                                         @Param("categoryId") String categoryId,
+                                         @Param("spaceOnly") boolean spaceOnly,
+                                         @Param("keyword") String keyword,
+                                         @Param("viewerId") String viewerId,
+                                         @Param("userId") String userId,
+                                         @Param("seeAllDrafts") boolean seeAllDrafts,
+                                         @Param("offset") int offset, @Param("limit") int limit);
+
+    int countFavoriteVisible(@Param("workspaceId") String workspaceId,
+                             @Param("reqId") String reqId,
+                             @Param("categoryId") String categoryId,
+                             @Param("spaceOnly") boolean spaceOnly,
+                             @Param("keyword") String keyword,
+                             @Param("viewerId") String viewerId,
+                             @Param("userId") String userId,
+                             @Param("seeAllDrafts") boolean seeAllDrafts);
+
+    /** 文档删除 / 移入回收站时解除全部收藏引用 */
+    int deleteFavoritesByDoc(@Param("workspaceId") String workspaceId, @Param("docId") String docId);
+
+    /** 项目删除时连带清理收藏 */
+    int deleteFavoritesByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
+
+    /** 空间删除时连带清理收藏 */
+    int deleteFavoritesByWorkspace(@Param("workspaceId") String workspaceId);
 }

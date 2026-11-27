@@ -940,6 +940,25 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
 .rf-doc{flex:0 1 auto;min-width:0;max-width:min(420px,46%);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:var(--primary-fg);background:var(--primary-soft);border-radius:var(--r-xs);padding:1px 8px;}
 .rf-time{flex:none;margin-left:auto;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;}
 
+/* ---- 我的：最近访问（本机）+ 收藏（跨设备） ---- */
+.reqdoc-mine{display:flex;flex-direction:column;gap:14px;max-width:760px;}
+.rdm-sec{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);padding:var(--space-1) 0;}
+.rdm-head{padding:6px 14px 4px;font-size:13px;font-weight:650;color:var(--text-3);}
+.rdm-row{display:flex;align-items:center;gap:10px;width:100%;padding:9px 14px;border:none;border-top:1px solid var(--border);background:transparent;cursor:pointer;font-family:inherit;text-align:left;}
+.rdm-row:first-of-type{border-top:none;}
+.rdm-row:hover{background:var(--surface-hover);}
+.rdm-title{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:var(--text);}
+.rdm-meta{flex:none;margin-left:auto;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.rdm-empty{padding:10px 14px 12px;font-size:12px;line-height:1.6;color:var(--text-3);}
+.rdm-fav{padding:0;}
+.rdm-fav .rdm-open{flex:1;display:flex;align-items:center;gap:10px;min-width:0;padding:9px 14px;border:none;background:transparent;cursor:pointer;font-family:inherit;text-align:left;}
+.rdm-fav .rdm-open:hover{background:var(--surface-hover);}
+.rdm-unfav{flex:none;margin:0 10px 0 0;padding:4px 6px;border:none;border-radius:var(--r-xs);background:transparent;color:var(--text-3);cursor:pointer;line-height:0;}
+.rdm-unfav:hover{background:var(--surface-hover);color:var(--danger-fg);}
+/* 阅读器星标：收藏后填充主色，未收藏保持线框 */
+.ibtn.is-fav{color:var(--primary-fg);}
+.ibtn.is-fav svg{fill:currentColor;}
+
 /* 需求模块的弹窗（自己一套，不复用 confirm-* 的居中布局） */
 .reqdoc-dlg{max-width:430px;padding:22px 22px 18px;text-align:left;}
 .reqdoc-dlg-title{margin:0;font-size:16px;font-weight:650;color:var(--text);}

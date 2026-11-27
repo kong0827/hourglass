@@ -469,6 +469,7 @@ public class TaskCascade {
         docHistoryMapper.deleteAllByWorkspace(workspaceId);
         reqDocShareMapper.deleteByWorkspace(workspaceId);
         requirementDocMapper.deleteVisibilityMembersByWorkspace(workspaceId);
+        requirementDocMapper.deleteFavoritesByWorkspace(workspaceId);
         requirementDocMapper.deleteAllByWorkspace(workspaceId);
         attachmentService.deleteAllWithFiles(workspaceId);
         deleteRepoBindings(workspaceId);
@@ -506,6 +507,7 @@ public class TaskCascade {
             reqDocShareMapper.deleteByWorkspace(workspaceId);
             /* 可见成员是文档的从属数据：文档整体替换时一并清掉，避免同 ID 重建混入旧名单 */
             requirementDocMapper.deleteVisibilityMembersByWorkspace(workspaceId);
+            requirementDocMapper.deleteFavoritesByWorkspace(workspaceId);
             requirementDocMapper.deleteAllByWorkspace(workspaceId);
         }
         if (clearBranches) {

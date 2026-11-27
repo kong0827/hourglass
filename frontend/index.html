@@ -1315,6 +1315,7 @@
                 <button class="rm-btn" type="button" role="tab" data-rdmode="tree" aria-selected="false">列表</button>
                 <button class="rm-btn" type="button" role="tab" data-rdmode="kanban" aria-selected="false">看板</button>
                 <button class="rm-btn" type="button" role="tab" data-rdmode="feed" aria-selected="false">动态</button>
+                <button class="rm-btn" type="button" role="tab" data-rdmode="mine" aria-selected="false">我的</button>
               </span>
               <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
                 <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
@@ -1348,6 +1349,8 @@
           </div>
           <!-- 最近动态：空间内全部文档的创建/更新/流转记录 -->
           <div class="reqdoc-feed" id="reqDocFeed" hidden></div>
+          <!-- 我的：最近访问（本机）+ 收藏（跨设备跟随账号） -->
+          <div class="reqdoc-mine" id="reqDocMine" hidden></div>
         </div>
 
         <!-- 编辑页：从列表点进来，顶部可返回 -->
@@ -1421,6 +1424,7 @@
                     <span data-icon="docW"></span>导出 Word（.docx）
                   </button>
                   <button class="menu-item" type="button" id="reqDocCopy"><span data-icon="copy"></span>复制正文</button>
+                  <button class="menu-item" type="button" id="reqDocDuplicate" title="复制出一篇草稿副本，不复制需求与工作项关联"><span data-icon="copy"></span>复制文档</button>
                   <button class="menu-item" type="button" id="reqDocPrint"><span data-icon="print"></span>打印 / 导出 PDF</button>
                   <div class="menu-sep"></div>
                   <button class="menu-item" type="button" id="reqDocUnpublish" title="收回后仅作者与空间管理员可见，已生成的分享链接同时失效；收回不影响继续编辑" hidden><span data-icon="ban"></span>收回发布</button>

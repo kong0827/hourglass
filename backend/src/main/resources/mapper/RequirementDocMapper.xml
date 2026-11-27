@@ -506,4 +506,66 @@
     FROM doc_visibility_member WHERE workspace_id = #{workspaceId}
     ORDER BY created_at, user_id
   </select>
+
+  <!-- 收藏：每人每篇一条，主键去重使重复收藏成为安全的幂等操作 -->
+  <insert id="insertFavorite">
+    INSERT IGNORE INTO doc_favorite (doc_id, user_id, workspace_id)
+    VALUES (#{docId}, #{userId}, #{workspaceId})
+  </insert>
+
+  <delete id="deleteFavorite">
+    DELETE FROM doc_favorite WHERE workspace_id = #{workspaceId} AND user_id = #{userId} AND doc_id = #{docId}
+  </delete>
+
+  <select id="countFavorite" resultType="int">
+    SELECT COUNT(*) FROM doc_favorite
+    WHERE workspace_id = #{workspaceId} AND user_id = #{userId} AND doc_id = #{docId}
+  </select>
+
+  <!-- 我的收藏：字段与 selectViewByWorkspace 一致；JOIN 收藏表后 listWhere 的可见口径仍然生效，
+       被收回 / 收窄到自己不可见的文档不会出现在收藏列表里 -->
+  <select id="selectFavoriteViews" resultType="com.hourglass.dto.ReqDocView">
+    SELECT d.id, d.req_id, d.parent_id, d.category_id, d.title, d.doc_type, d.format, d.sort_order,
+           d.status, d.owner, d.owner_user_id, d.published_at, d.visibility, d.created_at, d.updated_at,
+           r.name AS req_name,
+           d.content_brief AS content_brief,
+           (SELECT COUNT(*) FROM doc_visibility_member dvm WHERE dvm.doc_id = d.id) AS member_count,
+           COALESCE(tc.task_count, 0) AS task_count,
+           COALESCE(tc.done_count, 0) AS done_count
+    FROM requirement_doc d
+    JOIN doc_favorite f ON f.doc_id = d.id AND f.workspace_id = d.workspace_id AND f.user_id = #{userId}
+    LEFT JOIN requirement r ON r.id = d.req_id AND r.workspace_id = d.workspace_id
+    LEFT JOIN (
+      SELECT req_doc_id,
+             COUNT(*) AS task_count,
+             SUM(CASE WHEN board_column = 'done' THEN 1 ELSE 0 END) AS done_count
+      FROM task
+      WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL AND req_doc_id IS NOT NULL
+        AND board_column &lt;&gt; 'canceled'
+      GROUP BY req_doc_id
+    ) tc ON tc.req_doc_id = d.id
+    WHERE <include refid="listWhere"/>
+    ORDER BY f.created_at DESC, d.id
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countFavoriteVisible" resultType="int">
+    SELECT COUNT(*) FROM requirement_doc d
+    JOIN doc_favorite f ON f.doc_id = d.id AND f.workspace_id = d.workspace_id AND f.user_id = #{userId}
+    WHERE <include refid="listWhere"/>
+  </select>
+
+  <delete id="deleteFavoritesByDoc">
+    DELETE FROM doc_favorite WHERE workspace_id = #{workspaceId} AND doc_id = #{docId}
+  </delete>
+
+  <delete id="deleteFavoritesByReq">
+    DELETE FROM doc_favorite WHERE workspace_id = #{workspaceId}
+      AND doc_id IN (SELECT id FROM (SELECT id FROM requirement_doc
+                     WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}) t)
+  </delete>
+
+  <delete id="deleteFavoritesByWorkspace">
+    DELETE FROM doc_favorite WHERE workspace_id = #{workspaceId}
+  </delete>
 </mapper>

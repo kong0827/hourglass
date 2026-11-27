@@ -10,7 +10,7 @@
 mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sql
 ```
 
-基线包含当前全部 94 张表（含已部署交付闭环、跨版本计划关联、新成员默认不参与、成员公司/项目角色标注、成员职能标签选项、需求人工交付判定、版本终态、版本承诺基线、项目里程碑、交付说明、编号序列、用例—工作项追溯、用例目录层级 / 自定义分组（动态收录与指定成员可见）、文档分类树与空间级文档、子任务排序与团队共享 AI 配置、Git 仓库只读同步与分支别名、文档可见范围、工作项历史发布人工标记、需求池评论与需求提醒人、需求已完成主状态、项目集与项目拆分映射、需求评审人、测试计划执行人、发布准备与发布计划关注、交付说明分享访问明细、周五补记与未处理项承接、轻量自动化与定时报告订阅、工作项创建人）、索引与全文索引，执行后无需再跑根目录的增量脚本。**正常部署只用于新空库**：完整基线会重建表，不是幂等无损升级脚本，不得作为普通升级在已有数据的库上重跑。本轮交付闭环经用户单独明确授权，原 `hourglass` 46 表先受限备份并恢复验证，再 DROP / CREATE 为 52 表；原历史在备份中，不再原表在线保留，不回放 61/62、不迁移旧历史。认证 JDBC 与 `DB_NAME=hourglass`，`hourglass_20261110` 保留额外回退点；此授权不是默认部署删库许可，软件-only 回退不足，匹配 SQL 恢复另须单独授权。基线需要 `CREATE DATABASE` / `CREATE USER` / `GRANT` 权限，建议用 root 执行。应用账号固定为 `hourglass` @ `%`（允许外部连接），密码 `Dzqh@123456`；外部直连还需 MySQL `bind-address` 允许非本机连接并放行 3306。
+基线包含当前全部 95 张表（含已部署交付闭环、跨版本计划关联、新成员默认不参与、成员公司/项目角色标注、成员职能标签选项、需求人工交付判定、版本终态、版本承诺基线、项目里程碑、交付说明、编号序列、用例—工作项追溯、用例目录层级 / 自定义分组（动态收录与指定成员可见）、文档分类树与空间级文档、子任务排序与团队共享 AI 配置、Git 仓库只读同步与分支别名、文档可见范围、工作项历史发布人工标记、需求池评论与需求提醒人、需求已完成主状态、项目集与项目拆分映射、需求评审人、测试计划执行人、发布准备与发布计划关注、交付说明分享访问明细、周五补记与未处理项承接、轻量自动化与定时报告订阅、工作项创建人、文档收藏）、索引与全文索引，执行后无需再跑根目录的增量脚本。**正常部署只用于新空库**：完整基线会重建表，不是幂等无损升级脚本，不得作为普通升级在已有数据的库上重跑。本轮交付闭环经用户单独明确授权，原 `hourglass` 46 表先受限备份并恢复验证，再 DROP / CREATE 为 52 表；原历史在备份中，不再原表在线保留，不回放 61/62、不迁移旧历史。认证 JDBC 与 `DB_NAME=hourglass`，`hourglass_20261110` 保留额外回退点；此授权不是默认部署删库许可，软件-only 回退不足，匹配 SQL 恢复另须单独授权。基线需要 `CREATE DATABASE` / `CREATE USER` / `GRANT` 权限，建议用 root 执行。应用账号固定为 `hourglass` @ `%`（允许外部连接），密码 `Dzqh@123456`；外部直连还需 MySQL `bind-address` 允许非本机连接并放行 3306。
 
 ## 2. 已有库升级
 
@@ -78,7 +78,7 @@ mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sq
 
 `114_test_plan_executor.sql` 给 `test_plan` 增加可空列 `executor_user_id`（测试计划执行人）：空值不进入任何人的「待我执行」。只增可空列，不改执行记录，执行后表数量不变。
 
-`115_release_prep.sql` 新增发布准备的 5 张表：`version_release_plan_watch`（计划关注人）、`version_release_plan_push`（推送批次）、`version_release_plan_push_recipient`（收件人与回执）、`version_release_plan_task_check`（逐项确认 / 风险）、`version_release_plan_milestone`（T-7 / T-3 / T-1 / T-0 发送记录）。关注独立于 `task_watch` / `demand_watch`，只在「我的工作 → 我的关注」统一展示；逐项确认不外键到计划任务行，计划保存删除重建时不会跟着丢。只建表，不回填；115–121 与 123 依次新增发布准备 5 表、交付说明访问明细 1 表、周五补记 4 表、自动化与报告订阅 3 表、周五补记承接 1 表，完整基线为 94 张表。
+`115_release_prep.sql` 新增发布准备的 5 张表：`version_release_plan_watch`（计划关注人）、`version_release_plan_push`（推送批次）、`version_release_plan_push_recipient`（收件人与回执）、`version_release_plan_task_check`（逐项确认 / 风险）、`version_release_plan_milestone`（T-7 / T-3 / T-1 / T-0 发送记录）。关注独立于 `task_watch` / `demand_watch`，只在「我的工作 → 我的关注」统一展示；逐项确认不外键到计划任务行，计划保存删除重建时不会跟着丢。只建表，不回填；115–121 与 123 依次新增发布准备 5 表、交付说明访问明细 1 表、周五补记 4 表、自动化与报告订阅 3 表、周五补记承接 1 表，完整基线为 95 张表。
 
 `116_release_prep_note.sql` 给 `version_release_plan_push` 增加 `note`（发送时选填的补充说明，最多 200 字）。说明随批次持久化，追加在固定事实句之后进入站内 / 邮件 / 群消息，不替换计划名、发布时间、行动句与深链；说明不同、收件人集合不同都视为新批次。依赖 115 先执行；只增可空列，执行后表数量不变。
 
@@ -94,7 +94,7 @@ mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sq
 
 `122_app_notification_req_id.sql` 给 `app_notification` 增加可空列 `req_id` 与索引 `idx_user_ws_req`：非任务通知写入时固化所属项目，列表、未读数与类型计数统一按它过滤项目可见性，项目被设为「不可见」后需求/文档等历史通知同步隐藏（`project_access` 权限调整告知除外，始终保留）。无法唯一归属一个项目的通知（如跨项目发布计划）保持空值、继续可见；历史行按 `ref_kind` 关联需求/文档/计划/分支/版本回填，关联不到的不误伤。脚本可重复执行，执行后表数量不变。
 
-`123_catchup_carry.sql` 新增 `catchup_carry`：提交周五补记时把「未处理 / 跳过」的工作项快照到下周（`from_session_id` + `task_id` 唯一），下周草稿据此继续列出；撤销提交时按会话删除。只建表、不回填业务数据；执行后 94 张表。
+`123_catchup_carry.sql` 新增 `catchup_carry`：提交周五补记时把「未处理 / 跳过」的工作项快照到下周（`from_session_id` + `task_id` 唯一），下周草稿据此继续列出；撤销提交时按会话删除。只建表、不回填业务数据；执行后 95 张表。
 
 `124_task_creator.sql` 给 `task` 增加可空列 `created_by_user_id` 与索引 `idx_creator`，记录建单人（「我的工作 → 我发起的」据此跨空间跟踪）。建单写入当前账号，编辑、转派与列流转不改；历史数据按 `task_log` 中每个任务首条 `action='create'` 的 `actor_id` 回填，没有创建日志的留空不做推断。脚本幂等，执行后表数量不变。
 
@@ -107,6 +107,8 @@ mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sq
 `129_workspace_publication_access_scope.sql` 给 `workspace` 增加 `publication_access_scope`，把「谁能人工标记工作项发布状态」做成空间级多选配置：`owner`（空间主）、`admin`（管理员）、`project_owner`（项目负责人且该项目可写）、`project_write`（该项目可写成员），逗号分隔，默认 `owner,admin,project_owner`，与调整前的管理者口径一致。只增列并给默认值、不回填；人工标记仍只影响徽标与「发布态」筛选，不写发布记录、不进交付统计。脚本按 `information_schema` 判断列是否存在，可重复执行，表数量不变。
 
 `130_backfill_publication_list_column.sql` 给已有列表列偏好补入「发布态」列：工作项列表新增 `publication` 并进入默认列集，但默认值只对新用户生效；这里只对 `view_key='task-list'` 且尚未包含 `publication` 的行追加该列（优先插到 `updatedAt` 之前），不动结构、不动业务数据。已包含该列的行跳过，可重复执行；用户后续在「显示字段」里主动隐藏后不会再次补回。
+
+`131_doc_favorite.sql` 新增 `doc_favorite`（`workspace_id` + `user_id` + `doc_id` 唯一，按人记录文档收藏时间）：阅读页头星标收藏 / 取消收藏幂等写入，「我的」视图的收藏段与收藏可见口径跟文档列表一致（收回或收窄后立即消失）；文档彻底删除（回收站 purge）时级联清收藏，单删入回收站不影响。只建表、不回填，执行后 95 张表。
 
 `110_task_comment_content_length.sql` 只把 `task_comment.content` 从 `VARCHAR(500)` 放宽到 `VARCHAR(2000)`，让工作项评论能贴下错误日志与会议结论；不新增字段、不回填、不改权限与通知口径。后端截断上限与抽屉输入框 `maxlength` 同步为 2000。脚本按 `information_schema` 判断当前长度，已达标即跳过，可重复执行；执行后表数量不变。
 

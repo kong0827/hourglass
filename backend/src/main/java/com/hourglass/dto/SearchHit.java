@@ -22,5 +22,9 @@ public class SearchHit {
     private Integer caseNo;
     /** 搜索命中摘要：围绕关键词截取的正文片段，仅 type=doc 时有值 */
     private String snippet;
+    /** 章节命中：命中的标题文本，仅 type=doc 且命中正文标题时有值 */
+    private String section;
+    /** 章节在阅读大纲中的序号（从 0 起），配合 ?h= 深链直达该节 */
+    private Integer head;
     private LocalDateTime updatedAt;
 }

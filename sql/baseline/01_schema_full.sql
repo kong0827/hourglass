@@ -55,6 +55,22 @@ CREATE TABLE `ai_shared_setting` (
   UNIQUE KEY `uk_ai_shared_scope` (`scope`,`scope_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='团队 / 空间共享 AI 配置（密钥加密存储）';
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `ai_usage_daily`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ai_usage_daily` (
+  `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
+  `day` date NOT NULL COMMENT '统计日期（服务器本地时区）',
+  `intent` varchar(48) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '回答类型：answer / query:xxx / create_task / error 等',
+  `calls` int NOT NULL DEFAULT '0' COMMENT '调用次数',
+  `failures` int NOT NULL DEFAULT '0' COMMENT '失败次数',
+  `prompt_tokens` bigint NOT NULL DEFAULT '0' COMMENT '输入 token 合计',
+  `completion_tokens` bigint NOT NULL DEFAULT '0' COMMENT '输出 token 合计',
+  `total_ms` bigint NOT NULL DEFAULT '0' COMMENT '端到端耗时合计（毫秒）',
+  PRIMARY KEY (`workspace_id`,`day`,`intent`),
+  KEY `idx_ai_usage_day` (`day`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI 助手用量日聚合（不存问题原文）';
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `app_notification`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -799,6 +815,18 @@ CREATE TABLE `doc_visibility_member` (
   PRIMARY KEY (`doc_id`,`user_id`),
   KEY `idx_ws_user` (`workspace_id`,`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文档指定可见成员（visibility=members 时生效）';
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `doc_favorite`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `doc_favorite` (
+  `doc_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '文档ID（requirement_doc.id）',
+  `user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '收藏人账号ID（workspace_member.user_id）',
+  `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '收藏时间',
+  PRIMARY KEY (`doc_id`,`user_id`),
+  KEY `idx_ws_user` (`workspace_id`,`user_id`,`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文档收藏（每人每篇一条）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `doc_category`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
