@@ -277,6 +277,16 @@ function ensureEditor(){
       scheduleDraftSave();
       scheduleTocRebuild();
     };
+    /* 粘贴纯文本：把网页 / 微信粘贴进来的富文本换成转义后的纯文本；截图走剪贴板文件，不受影响 */
+    reqEditor.onPaste = function(e){
+      if(!reqDocPastePlainPref()) return;
+      var cd = e.clipboardData;
+      if(!cd) return;
+      if(cd.files && cd.files.length) return;
+      var text = cd.getData("text/plain");
+      if(!text) return;
+      return esc(text).replace(/\r\n?/g, "\n").replace(/\n/g, "<br>");
+    };
     rdaBindEditorSelection();
     return reqEditor;
   }).catch(function(e){
@@ -1612,6 +1622,26 @@ function setDocZoom(next){
 }
 function zoomDocBy(step){ setDocZoom(docZoomPref() + step); }
 function resetDocZoom(){ setDocZoom(1); }
+
+/* ---------- 粘贴纯文本：从网页 / 微信粘贴只留文字，截图粘贴不受影响 ---------- */
+var REQ_PASTE_PLAIN_CACHE = null;
+function reqDocPastePlainPref(){
+  if(REQ_PASTE_PLAIN_CACHE != null) return REQ_PASTE_PLAIN_CACHE;
+  var v = false;
+  try{ v = localStorage.getItem("ds.reqDocPastePlain") === "1"; }catch(e){ /* 隐私模式忽略 */ }
+  REQ_PASTE_PLAIN_CACHE = v;
+  return v;
+}
+function setReqDocPastePlain(on){
+  REQ_PASTE_PLAIN_CACHE = !!on;
+  try{ localStorage.setItem("ds.reqDocPastePlain", on ? "1" : "0"); }catch(e){ /* 隐私模式忽略 */ }
+  refreshReqDocPastePlainUI();
+}
+function refreshReqDocPastePlainUI(){
+  var b = $("reqDocPastePlain");
+  if(!b) return;
+  b.setAttribute("aria-pressed", reqDocPastePlainPref() ? "true" : "false");
+}
 /** 宽屏只在本轮已选中文档时生效：没有正文可看时保留左树，避免“进得去出不来” */
 function applyDocWideState(){
   var split = $("reqDocSplit");
@@ -2233,6 +2263,11 @@ function printRrdDoc(){
   var write = function(relHtml){
     var clone = body.cloneNode(true);
     clone.querySelectorAll(".code-tools,.code-btn,.code-lang,.rrd-anchor").forEach(function(n){ n.remove(); });
+    /* 划线评论的高亮只是屏幕上的定位线索，打印成黄色底纹反而干扰交付件 */
+    clone.querySelectorAll("mark.rrd-hl").forEach(function(m){
+      m.replaceWith(document.createTextNode(m.textContent));
+    });
+    clone.normalize();
     var win = window.open("", "_blank");
     if(!win){ toast("浏览器阻止了弹出窗口，请允许后重试", "warn"); return; }
     win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + esc(title) + '</title>'
@@ -2246,7 +2281,11 @@ function printRrdDoc(){
       + '.rr-print-rel ul{margin:0;padding-left:20px;}'
       + '.rr-print-rel .ri-meta{color:#666;font-size:12px;}'
       + '.rr-print-rel .ri-none{color:#666;font-size:13px;margin:0;}'
-      + '@media print{body{margin:0;max-width:none;}}</style></head><body>'
+      + '@media print{body{margin:0;max-width:none;}'
+      + 'h1,h2,h3,h4{break-after:avoid;}'
+      + 'pre,blockquote,tr{break-inside:avoid;}'
+      + 'a[href^="http"]::after{content:" (" attr(href) ")";font-size:12px;color:#666;}'
+      + '}</style></head><body>'
       + '<h1>' + esc(title) + '</h1>' + clone.innerHTML + relHtml + '</body></html>');
     win.document.close();
     setTimeout(function(){ win.print(); }, 300);
@@ -8644,6 +8683,14 @@ function populateReqDocSelect(keep){
     if(act === "out") zoomDocBy(-DOC_ZOOM_STEP);
     else if(act === "in") zoomDocBy(DOC_ZOOM_STEP);
     else resetDocZoom();
+  });
+  /* 粘贴纯文本开关（本机偏好，富文本编辑器粘贴时生效） */
+  refreshReqDocPastePlainUI();
+  document.addEventListener("click", function(e){
+    var b = e.target.closest("#reqDocPastePlain");
+    if(!b) return;
+    setReqDocPastePlain(!reqDocPastePlainPref());
+    toast(reqDocPastePlainPref() ? "已开启：粘贴只保留纯文本" : "已关闭粘贴纯文本", "fs");
   });
   /* Ctrl/⌘ + 滚轮：在正文上直接缩放；不算浏览器页面缩放 */
   function docWheelHandler(e){
