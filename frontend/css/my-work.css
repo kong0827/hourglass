@@ -188,6 +188,27 @@ body[data-view="mine"] #pageHead.mw-empty .ph-acts{display:none !important;}
 }
 .mw-unwatch:hover{color:var(--danger-fg);text-decoration:underline;}
 .mw-unwatch:focus-visible{outline:2px solid var(--primary);outline-offset:2px;border-radius:3px;}
+
+/* ---------- 分区内分组 ---------- */
+.mw-ggroup{border-top:1px solid var(--border);}
+.mw-ggroup:first-of-type{border-top:0;}
+.mw-ghead{
+  display:flex;align-items:center;gap:7px;width:100%;min-height:34px;
+  padding:7px 15px;border:0;text-align:left;cursor:pointer;
+  background:linear-gradient(90deg,var(--surface-sunken),var(--surface) 70%);
+  color:var(--text-2);font:inherit;font-size:11.5px;
+}
+.mw-ghead:hover{color:var(--text);}
+.mw-ghead:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
+.mw-gchev{display:inline-flex;flex:0 0 auto;color:var(--text-3);transition:transform var(--dur-fast) var(--ease-out);}
+.mw-ghead[aria-expanded="true"] .mw-gchev{transform:rotate(90deg);}
+.mw-gname{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.mw-gn{
+  flex:0 0 auto;font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-pill);
+  padding:0 6px;line-height:15px;
+}
+.mw-ggroup.is-folded .mw-gbody{display:none;}
 #mineToolbar[hidden],#mineBrief[hidden],#mineNote[hidden]{display:none!important;}
 .mw-thead .ta-r,
 .mw-row .ta-r{text-align:right;}
@@ -380,6 +401,7 @@ body[data-view="mine"] #pageHead.mw-empty .ph-acts{display:none !important;}
 [data-layout="mobile"] .mw-sact{margin-left:auto;}
 [data-layout="mobile"] .mw-sact .mw-link{min-height:44px;display:inline-flex;align-items:center;}
 [data-layout="mobile"] .mw-thead{display:none;}
+[data-layout="mobile"] .mw-ghead{min-height:44px;padding:8px 12px;font-size:12px;}
 [data-layout="mobile"] .mw-row{
   display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;
   padding:11px 12px;min-height:56px;

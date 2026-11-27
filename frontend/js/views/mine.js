@@ -40,6 +40,8 @@ initCaliberHelp();
 var PAGE = 100;
 var STORE_TAB = "ds.mineTab";
 var STORE_FOLD = "ds.mineSecFold.v1";
+var STORE_GROUP = "ds.mineGroup.v1";
+var STORE_GFOLD = "ds.mineGfold.v1";
 var HANDOFF_KEY = "ds.wsHandoff.v1";
 var PRI_RANK = { P0: 0, P1: 1, P2: 2, P3: 3 };
 var PRI_LABEL = { P0: "紧急", P1: "高", P2: "中", P3: "低" };
@@ -106,6 +108,18 @@ var WATCH_DEF = {
   head: ["事项", "状态", "所属项目", "版本", "更新时间"], grid: "mw-g-watch",
   go: "board", unit: "条"
 };
+/* 分组维度沿用工作项列表的统一词表；「待我处理」的分区本身已区分类型，故不提供「按类型」 */
+var GROUP_ITEMS = [
+  { key: "project", label: "按项目" },
+  { key: "type", label: "按类型" },
+  { key: "status", label: "按状态" },
+  { key: "priority", label: "按优先级" }
+];
+var TYPE_LABEL = { task: "工作项", bug: "缺陷", demand: "需求", plan: "测试计划", release: "发布计划" };
+var STATUS_RANK = {
+  "阻塞": 0, "待处理": 1, "进行中": 2, "待测试": 3, "测试中": 4, "评审中": 5,
+  "已排期": 6, "就绪": 7, "计划中": 8, "执行中": 9, "已完成": 10, "已关闭": 11, "已取消": 12, "已发布": 13, "草稿": 14
+};
 
 /* ---------------- 状态 ---------------- */
 
@@ -120,6 +134,33 @@ function loadFold() {
     var o = JSON.parse(safeGet(STORE_FOLD) || "{}");
     return o && typeof o === "object" ? o : {};
   } catch (e) { return {}; }
+}
+function isGroupKey(v) {
+  return v === "project" || v === "type" || v === "status" || v === "priority";
+}
+function loadGroup() {
+  var out = { pending: "none", created: "none", watched: "none" };
+  try {
+    var o = JSON.parse(safeGet(STORE_GROUP) || "{}");
+    if (o && typeof o === "object") {
+      TABS.forEach(function (t) {
+        if (isGroupKey(o[t.key])) out[t.key] = o[t.key];
+      });
+    }
+  } catch (e) { /* 受限环境回落不分组 */ }
+  return out;
+}
+function saveGroup() {
+  safeSet(STORE_GROUP, JSON.stringify(mw.group));
+}
+function loadGfold() {
+  try {
+    var o = JSON.parse(safeGet(STORE_GFOLD) || "{}");
+    return o && typeof o === "object" ? o : {};
+  } catch (e) { return {}; }
+}
+function saveGfold() {
+  safeSet(STORE_GFOLD, JSON.stringify(mw.gfold));
 }
 function enc(v) { return encodeURIComponent(v == null ? "" : v); }
 function page0() { return { items: [], offset: 0, hasMore: false, total: 0 }; }
@@ -149,7 +190,9 @@ var mw = {
   chip: { pending: "all", created: "all", watched: "all" },
   pri: "all",
   blocked: false,
-  sort: { pending: "due", created: "updated", watched: "updated" },
+  sort: { pending: "updated", created: "updated", watched: "updated" },
+  group: loadGroup(),
+  gfold: loadGfold(),
   expand: {},
   fold: loadFold(),
   src: freshSrc(),
@@ -665,6 +708,82 @@ function hasFilter() {
   return !!(mw.q || mw.pri !== "all" || mw.blocked || (mw.chip[currentTab()] && mw.chip[currentTab()] !== "all"));
 }
 
+/* ---------------- 分组 ---------------- */
+
+function groupDim(tab) {
+  var v = mw.group[tab] || "none";
+  if (tab === "pending" && v === "type") return "none";
+  return v;
+}
+function groupItemsFor(tab) {
+  return tab === "pending" ? GROUP_ITEMS.filter(function (g) { return g.key !== "type"; }) : GROUP_ITEMS;
+}
+function statusTextOf(r) {
+  if (r.kind === "task") return taskStatus(r).label;
+  return r.statusLabel || "—";
+}
+function groupMetaOf(r, dim) {
+  if (dim === "project") return { key: r.project || "\u0000none", label: r.project || "未归属项目" };
+  if (dim === "type") {
+    var t = r.kind === "task" ? (r.itemType === "bug" ? "bug" : "task") : r.kind;
+    return { key: t, label: TYPE_LABEL[t] || "其他" };
+  }
+  if (dim === "status") {
+    var l = statusTextOf(r);
+    return { key: l, label: l };
+  }
+  return r.pri
+    ? { key: r.pri, label: r.pri + " " + (PRI_LABEL[r.pri] || "") }
+    : { key: "\u0000none", label: "未设优先级" };
+}
+/* 组顺序：优先级按 P0–P3，状态按流转顺序，其余按组内最新更新时间；
+   无论哪种维度，组内行都沿用当前排序（默认最近更新倒序） */
+function groupRowsOf(rows, dim) {
+  var map = {}, list = [];
+  rows.forEach(function (r) {
+    var m = groupMetaOf(r, dim);
+    var g = map[m.key];
+    if (!g) {
+      g = map[m.key] = { key: m.key, label: m.label, items: [], newest: 0 };
+      list.push(g);
+    }
+    g.items.push(r);
+    g.newest = Math.max(g.newest, r.updatedTs || 0);
+  });
+  list.sort(function (a, b) {
+    if (dim === "priority") {
+      var x = PRI_RANK[a.key], y = PRI_RANK[b.key];
+      return (x === undefined ? 9 : x) - (y === undefined ? 9 : y);
+    }
+    if (dim === "status") {
+      var sx = STATUS_RANK[a.label], sy = STATUS_RANK[b.label];
+      sx = sx === undefined ? 50 : sx;
+      sy = sy === undefined ? 50 : sy;
+      if (sx !== sy) return sx - sy;
+    }
+    return b.newest - a.newest;
+  });
+  return list;
+}
+function groupBodyHTML(rows, rowFn, dim, sectionKey) {
+  if (dim === "none") return rows.map(rowFn).join("");
+  return groupRowsOf(rows, dim).map(function (g) {
+    /* 组名可能含任意字符（项目名），用 JSON 串保证折叠状态的键不歧义 */
+    var gid = JSON.stringify([sectionKey, dim, g.key]);
+    var folded = !!mw.gfold[gid];
+    return '<div class="mw-ggroup' + (folded ? " is-folded" : "") + '">' +
+      '<button class="mw-ghead" type="button" data-gfold="' + esc(gid) + '" aria-expanded="' + (folded ? "false" : "true") +
+      '" title="' + (folded ? "展开本组" : "收起本组") + '">' +
+      '<span class="mw-gchev">' + icon("chevronRight", 11) + '</span>' +
+      '<span class="mw-gname">' + esc(g.label) + '</span>' +
+      '<span class="mw-gn">' + g.items.length + '</span></button>' +
+      '<div class="mw-gbody">' + g.items.map(rowFn).join("") + '</div></div>';
+  }).join("");
+}
+function groupCountText(filtered, dim) {
+  return dim === "none" ? "" : " · " + groupRowsOf(filtered, dim).length + " 组";
+}
+
 /* ---------------- 单元格 ---------------- */
 
 function typeTag(r) {
@@ -856,18 +975,21 @@ function sectionHTML(key, def, rows, rowFn, view) {
     return emptySection(key, def);
   }
   if (!filtered.length) return "";
+  var dim = groupDim("pending");
   var expanded = !!mw.expand[key];
-  var shown = expanded ? filtered : filtered.slice(0, 4);
-  var countText = filtered.length + " " + (def.unit || "项") + (filtered.length !== rows.length ? " / 共 " + rows.length : "");
+  /* 分组后由分组头承担收拢，分区本身不再截断为 4 行 */
+  var shown = dim !== "none" ? filtered : (expanded ? filtered : filtered.slice(0, 4));
+  var countText = filtered.length + " " + (def.unit || "项") + groupCountText(filtered, dim) +
+    (filtered.length !== rows.length ? " / 共 " + rows.length : "");
   var act = "";
-  if (filtered.length > 4) {
+  if (dim === "none" && filtered.length > 4) {
     act = '<button class="mw-link" type="button" data-expand="' + key + '">' +
       (expanded ? "收起" : "查看全部 " + filtered.length) + ' ' + icon("chevronRight", 12) + '</button>';
   }
   var html = secOpen(key, def, countText, act) +
     '<div class="mw-thead ' + def.grid + '">' +
     def.head.map(function (h) { return '<span>' + esc(h) + '</span>'; }).join("") + '</div>';
-  html += shown.map(rowFn).join("");
+  html += groupBodyHTML(shown, rowFn, dim, key);
   if (key === "test" && mw.claimable > 0) html += claimHTML();
   return html + '</div></section>';
 }
@@ -913,35 +1035,37 @@ function pendingHTML() {
 }
 function createdHTML() {
   var def = CREATED_DEF;
+  var dim = groupDim("created");
   var filtered = sortRows(createdData().filter(rowPass));
   if (!filtered.length) return "";
   var expanded = !!mw.expand.created;
-  var shown = expanded ? filtered : filtered.slice(0, 4);
+  var shown = dim !== "none" ? filtered : (expanded ? filtered : filtered.slice(0, 4));
   var act = "";
-  if (filtered.length > 4) {
+  if (dim === "none" && filtered.length > 4) {
     act = '<button class="mw-link" type="button" data-expand="created">' +
       (expanded ? "收起" : "查看全部 " + filtered.length) + ' ' + icon("chevronRight", 12) + '</button>';
   }
-  return secOpen("created", def, filtered.length + " 个", act) +
+  return secOpen("created", def, filtered.length + " 个" + groupCountText(filtered, dim), act) +
     '<div class="mw-thead ' + def.grid + '">' +
     def.head.map(function (h) { return '<span>' + esc(h) + '</span>'; }).join("") + '</div>' +
-    shown.map(createdRow).join("") + '</div></section>';
+    groupBodyHTML(shown, createdRow, dim, "created") + '</div></section>';
 }
 function watchedHTML() {
   var def = WATCH_DEF;
+  var dim = groupDim("watched");
   var filtered = sortRows(watchedData().filter(rowPass));
   if (!filtered.length) return "";
   var expanded = !!mw.expand.watched;
-  var shown = expanded ? filtered : filtered.slice(0, 4);
+  var shown = dim !== "none" ? filtered : (expanded ? filtered : filtered.slice(0, 4));
   var act = "";
-  if (filtered.length > 4) {
+  if (dim === "none" && filtered.length > 4) {
     act = '<button class="mw-link" type="button" data-expand="watched">' +
       (expanded ? "收起" : "查看全部 " + filtered.length) + ' ' + icon("chevronRight", 12) + '</button>';
   }
-  return secOpen("watched", def, filtered.length + " 条", act) +
+  return secOpen("watched", def, filtered.length + " 条" + groupCountText(filtered, dim), act) +
     '<div class="mw-thead ' + def.grid + '">' +
     def.head.map(function (h) { return '<span>' + esc(h) + '</span>'; }).join("") + '</div>' +
-    shown.map(watchedRow).join("") + '</div></section>';
+    groupBodyHTML(shown, watchedRow, dim, "watched") + '</div></section>';
 }
 function moreLine(tab) {
   var loaded = 0, total = 0;
@@ -1124,9 +1248,9 @@ function sortOptions(tab) {
     ];
   }
   return [
+    { key: "updated", label: "最近更新" },
     { key: "due", label: "截止时间" },
-    { key: "priority", label: "优先级" },
-    { key: "updated", label: "最近更新" }
+    { key: "priority", label: "优先级" }
   ];
 }
 function renderToolbar() {
@@ -1165,9 +1289,15 @@ function renderToolbar() {
   }
   if (mineDisplayMenu) {
     var current = mw.sort[tab] || "updated";
-    mineDisplayMenu.innerHTML = '<h4>排序</h4>' + sortOptions(tab).map(function (o) {
-      return '<label class="mw-check"><input type="radio" name="mw-sort" value="' + o.key + '"' + (current === o.key ? " checked" : "") + '>' + o.label + '</label>';
-    }).join("") + '<div class="mw-popnote">每个页签独立排序；切换页签后保留。</div>';
+    var gcur = groupDim(tab);
+    var gitems = [{ key: "none", label: "不分组" }].concat(groupItemsFor(tab));
+    mineDisplayMenu.innerHTML = '<h4>分组</h4>' + gitems.map(function (g) {
+      return '<label class="mw-check"><input type="radio" name="mw-group" value="' + g.key + '"' + (gcur === g.key ? " checked" : "") + '>' + esc(g.label) + '</label>';
+    }).join("") +
+      '<hr><h4>排序</h4>' + sortOptions(tab).map(function (o) {
+        return '<label class="mw-check"><input type="radio" name="mw-sort" value="' + o.key + '"' + (current === o.key ? " checked" : "") + '>' + o.label + '</label>';
+      }).join("") +
+      '<div class="mw-popnote">分组按页签记住，排序切换页签后保留；分组头可点击折叠，页签计数不随分组变化。</div>';
   }
 }
 /* ---------------- 周五补记入口 ---------------- */
@@ -1377,7 +1507,8 @@ function noteText() {
   if (tab === "pending") bits.push("页签计数来自服务端；逾期、今天到期与阻塞按已载入明细统计，继续加载会更新结论。「待我执行」只列执行人是你、尚未完成的测试计划。工作项与测试计划可跨空间，评审需求限定当前空间。");
   else if (tab === "created") bits.push("页签计数来自服务端；需求按当前空间统计，工作项跨空间（含已完成与已取消）。类型 chips 与页签计数同源，搜索与优先级筛选只作用于已载入内容。");
   else bits.push("关注只接收提醒，不代表负责；列表只读，取消关注不会删除对象。工作项可跨空间，需求与发布计划限定当前空间。");
-  bits.push("每类先载入 " + PAGE + " 条，继续加载会追加；搜索与筛选只作用于已载入内容。");
+  bits.push("每类先载入 " + PAGE + " 条，继续加载会追加；搜索、筛选与分组只作用于已载入内容。");
+  bits.push("分组按页签记住、排序切换页签后保留；分组头可点击折叠，页签计数不随分组变化。");
   if (tab === "created" && mw.counts && num(mw.counts.matchedByNameOnly) > 0) {
     bits.push("另有 " + num(mw.counts.matchedByNameOnly) + " 个需求按显示名匹配到你的历史提交。");
   }
@@ -1932,6 +2063,14 @@ function initEvents() {
   }
   if (mineDisplayMenu) {
     mineDisplayMenu.addEventListener("change", function (e) {
+      var grp = e.target.closest('input[name="mw-group"]');
+      if (grp) {
+        mw.group[currentTab()] = grp.value;
+        mw.expand = {};
+        saveGroup();
+        render();
+        return;
+      }
       var el = e.target.closest('input[name="mw-sort"]');
       if (!el) return;
       mw.sort[currentTab()] = el.value;
@@ -1985,6 +2124,20 @@ function initEvents() {
     }
     var opener = e.target.closest("[data-open]");
     if (opener) { openRow(opener.dataset.open, opener.dataset.id, opener.dataset.ws, opener.dataset.req || "", opener.dataset.title || "", opener.dataset.version || ""); return; }
+    var gfold = e.target.closest("[data-gfold]");
+    if (gfold) {
+      var gid = gfold.dataset.gfold;
+      var keepG = gfold.matches(":focus-visible");
+      mw.gfold[gid] = !mw.gfold[gid];
+      saveGfold();
+      render();
+      var againG = null;
+      Array.prototype.forEach.call(mineBody.querySelectorAll("[data-gfold]"), function (el) {
+        if (el.dataset.gfold === gid) againG = el;
+      });
+      if (againG && keepG) againG.focus({ preventScroll: true });
+      return;
+    }
     var fold = e.target.closest("[data-fold]");
     if (fold) {
       var fk = fold.dataset.fold;
