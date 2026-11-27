@@ -8,6 +8,7 @@ import java.io.ByteArrayInputStream;
 import java.util.Base64;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class HtmlDocxServiceTest {
@@ -90,6 +91,21 @@ public class HtmlDocxServiceTest {
             assertTrue(headingRun.getFontSizeAsDouble() != null && headingRun.getFontSizeAsDouble() >= 28,
                     "二级标题应为 14 磅（28 半磅）");
             assertTrue(!bodyRun.isBold(), "正文不应被连带加粗");
+        }
+    }
+
+    /** 标题要带 HeadingN 样式和大纲级别，Word 导航窗格/自动目录才能识别层级。 */
+    @Test
+    public void exportHeadingsCarryOutlineLevels() throws Exception {
+        String html = "<h1>一级标题</h1><h2>二级标题</h2><p>正文</p>";
+
+        byte[] docx = new HtmlDocxService().toDocx(html);
+        try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(docx))) {
+            assertEquals("Heading1", doc.getParagraphs().get(0).getStyle());
+            assertEquals("Heading2", doc.getParagraphs().get(1).getStyle());
+            assertNotNull(doc.getStyles().getStyle("Heading1"), "样式表应定义 Heading1");
+            assertNotNull(doc.getStyles().getStyle("Heading2"), "样式表应定义 Heading2");
+            assertTrue(doc.getDocument().getBody().xmlText().contains("outlineLvl"), "标题应写入大纲级别");
         }
     }
 

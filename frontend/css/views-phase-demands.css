@@ -292,10 +292,29 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
 .release-save-bar{position:sticky;bottom:-1px;z-index:2;display:flex;flex-direction:column;gap:8px;margin-top:2px;padding:12px 0 2px;background:var(--surface);border-top:1px solid var(--border);}
 .release-save-acts{display:flex;justify-content:flex-end;}
 .release-section h3,.release-section h4,.release-section p{margin:0;}
+/* 区块标题行常驻状态与保存入口：长表单滚到中段也能直接保存 */
+.rel-section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
 .release-section .field{display:flex;flex-direction:column;gap:6px;}
 .release-section .field>.label-row>label{font-size:12px;font-weight:600;color:var(--text-2);}
-.release-plan-summary{font-size:12px;line-height:18px;color:var(--text-3);}
-.release-plan-summary.is-warn{color:var(--warning-fg);}
+/* ===== 计划带入 + 计划 vs 实际差异对照（原型 REL-2） ===== */
+.release-inherit{display:flex;flex-direction:column;gap:5px;border:1px solid var(--primary-border);border-radius:var(--r-sm);background:var(--primary-soft);padding:9px 12px;min-width:0;}
+.release-inherit-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.release-inherit-h b{font-size:12px;font-weight:650;color:var(--text);}
+.release-inherit-h .sp{flex:1;}
+.release-inherit-b{margin:0;font-size:12px;line-height:18px;color:var(--text-2);overflow-wrap:anywhere;}
+.release-diff{display:flex;flex-direction:column;gap:8px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface-sunken);padding:9px 12px;min-width:0;}
+.release-diff-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.release-diff-h b{font-size:12px;font-weight:650;color:var(--text);}
+.release-diff-h .hint{margin:0;font-size:11.5px;}
+.release-diff .tbl-wrap{margin-top:0;}
+.release-diff-tbl{min-width:620px;}
+.release-diff-tbl td{vertical-align:top;font-size:12px;}
+.release-diff-tbl td:first-child{white-space:nowrap;color:var(--text-2);font-weight:550;}
+.release-diff-tbl td.diff{color:var(--warning-fg);font-weight:600;white-space:nowrap;}
+.release-diff-tbl td:last-child{text-align:right;white-space:nowrap;}
+.release-diff-tbl td:last-child:empty{padding-right:0;}
+.release-diff-acts{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.release-diff-acts .hint{margin:0;font-size:11.5px;}
 .release-section textarea{min-height:72px;}
 .release-section details.release-advanced{border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px;background:var(--surface-sunken);min-width:0;}
 .release-section details.release-advanced>summary{cursor:pointer;font-size:13px;font-weight:550;color:var(--text-2);}
@@ -388,6 +407,16 @@ a.rel-plan-row:hover .rp-go svg{transform:translateX(2px);}
 .rel-need.is-miss .rel-need-t{color:var(--warning-fg);font-weight:600;}
 .rel-need-r{font-size:11px;line-height:16px;color:var(--text-3);margin-top:1px;}
 .rel-need-go{border:0;background:none;padding:0;font:inherit;font-size:11px;color:var(--primary-fg);cursor:pointer;text-decoration:underline;text-underline-offset:2px;}
+/* ===== 预览被拦时的事实异常清单：逐条说明 + 就地处理 ===== */
+.rel-anomaly{border:1px solid var(--warning-border);border-radius:var(--r-sm);background:var(--warning-soft);padding:10px 12px;margin-top:8px;}
+.rel-anomaly-h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}
+.rel-anomaly-h b{font-size:12px;font-weight:650;color:var(--warning-fg);}
+.rel-anomaly-h span{font-size:11px;color:var(--text-3);}
+.rel-anomaly-list{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px;}
+.rel-anomaly-list li{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;font-size:11.5px;line-height:18px;color:var(--text);}
+.rel-anomaly-list li>span{min-width:0;}
+.rel-anomaly-acts{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.rel-anomaly .hint{margin:8px 0 0;font-size:11px;}
 .rel-ready-note{margin:0 13px 11px;padding:8px 10px;border-radius:var(--r-sm);background:var(--info-soft);color:var(--info-fg);font-size:11px;line-height:16px;}
 .rel-ready-foot{display:flex;align-items:center;gap:8px;padding:10px 13px;border-top:1px solid var(--border);background:var(--surface);}
 .rel-ready-foot [data-ready-foot]{font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums;}
@@ -500,6 +529,13 @@ a.rel-plan-row:hover .rp-go svg{transform:translateX(2px);}
 .release-version-row.is-selected{background:var(--primary-soft);box-shadow:inset 2px 0 0 var(--primary);}
 .release-version-row.is-fixed{cursor:default;background:var(--surface-sunken);}
 .release-version-row.is-fixed.is-selected{background:var(--primary-soft);}
+.release-version-row.is-locked{cursor:default;background:var(--warning-soft);box-shadow:inset 2px 0 0 var(--warning);}
+.release-version-row.is-locked:hover{background:var(--warning-soft);}
+.release-version-row.is-locked small{color:var(--text-2);}
+/* 已关闭 / 取消但仍留在计划里的版本：可取消勾选移出，和「无权限」的置灰区分开 */
+.release-version-row.is-ended{background:var(--warning-soft);box-shadow:inset 2px 0 0 var(--warning);}
+.release-version-row.is-ended:hover{background:var(--warning-soft);}
+.release-version-row.is-ended small{color:var(--text-2);}
 .release-version-row:focus-within{outline:2px solid var(--primary);outline-offset:-2px;}
 .release-version-row input{flex:0 0 auto;width:16px;height:16px;margin-top:2px;accent-color:var(--primary);}
 .release-version-row span{display:flex;flex-direction:column;gap:2px;min-width:0;}

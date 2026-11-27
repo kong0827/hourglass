@@ -30,6 +30,9 @@ public interface RequirementDocMapper {
 
     RequirementDoc selectById(@Param("id") String id);
 
+    /** 读取已删除或正常的文档（回收站恢复 / 彻底删除用），不做 deleted_at 过滤 */
+    RequirementDoc selectByIdAny(@Param("id") String id);
+
     /**
      * 全局搜索：与列表共用 keywordWhere 谓词（≥2 字走全文索引，单字 LIKE 兜底，覆盖标题/摘要/正文）。
      * 草稿可见口径与列表一致：仅作者本人与空间 owner/admin 能命中，
@@ -98,6 +101,29 @@ public interface RequirementDocMapper {
                         @Param("categorySet") boolean categorySet);
 
     int delete(@Param("id") String id);
+
+    /** 移入回收站：软删除，保留正文、评论、历史与附件 */
+    int softDelete(@Param("workspaceId") String workspaceId, @Param("id") String id,
+                   @Param("userId") String userId);
+
+    /** 从回收站恢复 */
+    int restoreFromTrash(@Param("workspaceId") String workspaceId, @Param("id") String id);
+
+    /** 回收站列表：seeAll=false 时只看自己删除或自己负责的文档 */
+    List<RequirementDoc> selectTrash(@Param("workspaceId") String workspaceId,
+                                     @Param("viewerId") String viewerId,
+                                     @Param("userId") String userId,
+                                     @Param("seeAll") boolean seeAll,
+                                     @Param("offset") int offset, @Param("limit") int limit);
+
+    int countTrash(@Param("workspaceId") String workspaceId,
+                   @Param("viewerId") String viewerId,
+                   @Param("userId") String userId,
+                   @Param("seeAll") boolean seeAll);
+
+    /** 定时清理：取超过保留期的回收站文档（只含必要列） */
+    List<RequirementDoc> selectExpiredTrash(@Param("cutoff") java.time.LocalDateTime cutoff,
+                                            @Param("limit") int limit);
 
     /** 某项目下的需求数（删除项目前拦一下） */
     int countByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);

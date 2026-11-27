@@ -66,12 +66,29 @@
             <h1 id="docShareTitle">文档</h1>
             <p id="docShareMeta">只读分享</p>
           </div>
+          <div class="doc-share-tools">
+            <button class="btn sm ghost" type="button" id="docShareTocBtn" aria-pressed="false" hidden>目录</button>
+            <button class="btn sm ghost" type="button" id="docShareFindBtn" title="在文档内查找（Ctrl+F）" hidden>查找</button>
+          </div>
         </div>
-        <article class="share-doc markdown-body" id="docShareBody"></article>
+        <div class="share-find" id="docShareFindBar" hidden>
+          <input type="search" id="docShareFindInput" placeholder="在文档内查找" aria-label="在文档内查找" autocomplete="off" />
+          <span class="share-find-cnt" id="docShareFindCount" aria-live="polite"></span>
+          <button class="btn sm" type="button" data-share-find="prev" aria-label="上一处" title="上一处（Shift+Enter）">↑</button>
+          <button class="btn sm" type="button" data-share-find="next" aria-label="下一处" title="下一处（Enter）">↓</button>
+          <button class="btn sm ghost" type="button" data-share-find="close" aria-label="关闭查找" title="关闭（Esc）">×</button>
+        </div>
+        <div class="doc-share-layout">
+          <aside class="share-toc" id="docShareToc" aria-label="文档大纲" hidden>
+            <div class="share-toc-head">目录</div>
+            <nav class="share-toc-body" id="docShareTocBody"></nav>
+          </aside>
+          <article class="share-doc markdown-body" id="docShareBody"></article>
+        </div>
         <p class="share-foot" id="docShareFoot"></p>
       </div>
     </section>
-    <section class="view" id="view-delivery-share" aria-label="交付说明只读分享">
+    <section class="view" id="view-delivery-share" aria-label="交付报告只读分享">
       <div class="view-page dl-share-root" id="deliveryShareBody"></div>
     </section>
   </div>

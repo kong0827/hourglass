@@ -21,7 +21,7 @@ import { summarizeStages } from "../lib/stage-hours.js";
 import { stagePanelHTML, stageDrillRows, openStageDrill } from "../lib/stage-panel.js";
 import {
   colName, dayKey, demandNoText, fmtMinutesShort, fmtReleaseTime, itemNoText,
-  releaseEnvironmentName, releasePlanNoText, releaseSnapshotHTML, taskPublicationHTML, taskVersionIds, typeBadgeHTML,
+  releaseEnvironmentName, releaseOperationName, releasePlanNoText, releaseNoText, releaseSnapshotBodyHTML, taskPublicationHTML, taskVersionIds, typeBadgeHTML,
   VERSION_STATUS_META, PLAN_STATUS_META, versionStatusTagHTML, planStatusTone
 } from "../lib/format.js";
 import { gitEnabled, openBranchById } from "./branches.js";
@@ -506,6 +506,7 @@ function renderAll(){
   }
   var mark = focusedKey();
   host.innerHTML = headHTML() + '<div class="vd-body">' + bodyHTML() + '</div>';
+  UI.bindEmptyCmd(host, { "goto-demands": openDemandPool });
   syncTabCounts();
   syncDescToggle();
   restoreFocus(mark);
@@ -602,7 +603,7 @@ function kpiStripHTML(){
 function moreMenuHTML(canEdit, canPublish){
   var items = [];
   items.push('<button class="menu-item" type="button" role="menuitem" data-vd-tool="plan">' + icon("calendar", 14) + '计划与历史</button>');
-  items.push('<button class="menu-item" type="button" role="menuitem" data-vd-delivery>' + icon("note", 14) + '交付说明</button>');
+  items.push('<button class="menu-item" type="button" role="menuitem" data-vd-delivery>' + icon("note", 14) + '交付报告</button>');
   /* 分支不作为一级入口：接入 Git 后，在版本上下文里看该版本的分支 */
   if(gitOn) items.push('<button class="menu-item" type="button" role="menuitem" data-vd-branches>' + icon("branch", 14) + '本版本分支</button>');
   items.push('<button class="menu-item" type="button" role="menuitem" data-vd-tab="overview">' + icon("stats", 14) + '工时与构成</button>');
@@ -1467,7 +1468,7 @@ function deliveryPanel(){
   var acts = '<div class="vd-inline-acts">'
     + '<button class="btn sm" type="button" data-vd-tab="releases">看发布记录</button>'
     + '<button class="btn sm ghost" type="button" data-vd-tool="note">' + (st.version && st.version.status === "released" ? "发布说明" : "当前规划说明") + '</button>'
-    + '<button class="btn sm ghost" type="button" data-vd-delivery>交付说明</button></div>';
+    + '<button class="btn sm ghost" type="button" data-vd-delivery>交付报告</button></div>';
   return panel("实际交付事实", "", inner + acts);
 }
 function lifecyclePanel(){
@@ -1602,7 +1603,8 @@ function demandsHTML(){
   if(!slot.rows.length){
     return panel("已排需求", "", UI.emptyState({
       icon:"demand", title:"没有排到该版本的需求",
-      text:"在需求池里把需求的目标版本指向这里，就能在此汇总；已关闭的需求不计入。", compact:true
+      text:"在需求池里把需求的目标版本指向这里，就能在此汇总；已关闭的需求不计入。", compact:true,
+      actionLabel:"去需求池挑需求", actionCmd:"goto-demands"
     }));
   }
   var body = slot.rows.map(function(d){
@@ -1644,7 +1646,9 @@ function plansPanel(){
   var acts = '<div class="vd-inline-acts">'
     + '<button class="btn sm" type="button" data-vd-tool="plan">打开发布工作区</button>'
     + (st.version && st.version.canPublish === true ? '<button class="btn sm primary" type="button" data-vd-tool="actual">记录实际发布</button>' : "")
-    + '</div>';
+    + '</div>'
+    /* 入口常驻但写操作按权限隐藏：给一句话说明缺口与放开位置，避免只剩「怎么没有记录发布」的疑问 */
+    + (st.version && st.version.canPublish !== true ? '<p class="hint">当前身份只能查看计划与发布事实；维护计划、记录发布需空间主 / 管理员或项目负责人，空间主 / 管理员也可在「设置 → 工作流 → 发布权限」放开项目可写成员。</p>' : "");
   if(slot.error) return panel("发布计划", "", '<p class="vd-warn">' + icon("alert", 12) + ' ' + esc(slot.error) + '</p>' + acts);
   if(!slot.rows) return panel("发布计划", "", UI.skeletonRows(2) + acts);
   if(!slot.rows.length){
@@ -1673,6 +1677,79 @@ function recordMatches(r){
   if(f.operation && r.operation !== f.operation) return false;
   return true;
 }
+/* 一条发布记录一张卡：计划 / 实际事实 / 交付报告同屏，明细收在卡内，不在三个页面之间跳 */
+function recordPlan(r){
+  var p = r && r.planSnapshot;
+  if(typeof p === "string"){ try{ p = JSON.parse(p); }catch(ex){ return null; } }
+  return p && typeof p === "object" ? p : null;
+}
+function recordEligible(r){
+  return r.result === "success" && r.environment === "production" && r.operation !== "rollback";
+}
+function plannedDelayText(r, p){
+  if(!p || !p.plannedAt || !r.occurredAt) return "";
+  var a = new Date(r.occurredAt), b = new Date(p.plannedAt);
+  if(isNaN(a.getTime()) || isNaN(b.getTime())) return "";
+  var m = Math.round((a.getTime() - b.getTime()) / 60000);
+  if(!m) return "与计划时间一致" + (r.deviationReason ? " · 已填写原因" : "");
+  return (m > 0 ? "比计划晚 " + m + " 分钟" : "比计划早 " + (-m) + " 分钟") + (r.deviationReason ? " · 已填写原因" : "");
+}
+function releaseCardHTML(r){
+  var p = recordPlan(r), eligible = recordEligible(r);
+  /* 计划可跨多个版本：卡内只算当前版本的部分，否则「计划 12 项 / 实际 5 项」会让人以为漏发。
+     成功正式发布后版本内容已冻结，用当前范围过滤是稳定的 */
+  var planIds = (p && p.plannedTaskIds) || [];
+  var multiVersion = ((p && p.versions) || []).length > 1 && (!r.versionId || r.versionId === st.id);
+  var localPlanIds = multiVersion
+    ? planIds.filter(function(tid){ return st.tasks.some(function(t){ return t.id === tid; }); })
+    : planIds;
+  var otherVersionCount = planIds.length - localPlanIds.length;
+  var planBig = p
+    ? [localPlanIds.length + " 项", releaseEnvironmentName(p.environment || "production"),
+      p.plannedAt ? fmtReleaseTime(p.plannedAt).slice(5, 16) : "时间未定"].join(" · ")
+    : "未关联发布计划";
+  var planSub = p
+    ? "计划状态：" + planStatusName(p.status || "draft")
+      + ((p.versions || []).length > 1 ? " · 跨 " + (p.versions || []).length + " 个版本" : "")
+      + (otherVersionCount ? "<br>其中 " + otherVersionCount + " 项属其他版本，不在此次记录内" : "")
+      + "<br>目标：" + esc((p.targetKeys || []).join(" / ") || "未记录")
+    : "这条记录没有计划快照，只呈现实际事实";
+  var actualBig = eligible
+    ? num(r.publishedCount) + " 项已上线" + (num(r.excludedCount) ? " · " + num(r.excludedCount) + " 项未选入" : "")
+    : (r.result === "failed" ? "失败，未计入已上线" : r.operation === "rollback" ? "回滚记录" : "非生产 / 非成功事件");
+  var actualParts = [esc(plannedDelayText(r, p))];
+  if(r.failureReason) actualParts.push("失败原因：" + esc(r.failureReason));
+  if(r.deviationReason && !p) actualParts.push("未按计划原因：" + esc(r.deviationReason));
+  if(r.artifactRef) actualParts.push("制品 " + esc(r.artifactRef));
+  var actualSub = actualParts.filter(Boolean).join("<br>") || "快照内 " + num(r.publishedCount) + " 项工作项";
+  var reportBig = eligible ? "可生成对外交付报告" : "不生成对外报告";
+  var reportSub = eligible
+    ? "依据本次发布快照生成一页式交付报告<br>已导出的快照不随之后范围变化"
+    : "失败、回滚与非生产事件只留事实，不作为对外交付依据";
+  return '<div class="relcard">'
+    + '<div class="relcard-h"><b>' + esc(releaseNoText(r.releaseNo) || ("#" + r.id)) + '</b>'
+    + '<span class="tag ' + (eligible ? "tag-success" : "tag-neutral") + '">' + esc(r.result === "success" ? "成功" : r.result === "failed" ? "失败" : "未记录结果") + '</span>'
+    + '<span class="tag">' + esc(releaseEnvironmentName(r.environment)) + '</span>'
+    + '<span class="tag">' + esc(releaseOperationName(r.operation)) + '</span>'
+    + '<span class="muted">' + esc(fmtReleaseTime(r.occurredAt)) + " · 执行人 " + esc(r.executorName || "未记录") + '</span>'
+    + '<span class="sp"></span>'
+    + (p ? '<span class="tag">计划 ' + esc(releasePlanNoText(p.planNo) || ("#" + p.id)) + '</span>' : '<span class="tag">无计划快照</span>')
+    + '</div>'
+    + '<div class="relcard-b">'
+    + '<div class="relcard-col"><h4>计划</h4><div class="big">' + esc(planBig) + '</div><div class="sub">' + planSub + '</div></div>'
+    + '<div class="relcard-col"><h4>实际事实</h4><div class="big">' + esc(actualBig) + '</div><div class="sub">' + actualSub + '</div></div>'
+    + '<div class="relcard-col"><h4>交付报告</h4><div class="big">' + reportBig + '</div><div class="sub">' + reportSub + '</div></div>'
+    + '</div>'
+    + '<div class="relcard-f"><span class="hint">'
+    + (eligible ? "报告内容来自本次发布快照，后续范围变化不会改写已导出的版本。" : "失败与回滚只留事实，不作为对外交付依据。")
+    + '</span>'
+    + (eligible ? '<button class="btn sm" type="button" data-release-delivery="' + esc(r.id) + '" data-release-delivery-version="' + esc(r.versionId || "") + '">查看交付报告</button>' : "")
+    + '<button class="btn sm ghost" type="button" data-release-export="' + esc(r.id) + '">导出快照 CSV</button>'
+    + '</div>'
+    + '<details class="release-record relcard-more"><summary>展开发布快照明细（' + (r.items || []).length + ' 项工作项快照）</summary>'
+    + releaseSnapshotBodyHTML(r, null, { hideActions: true }) + '</details>'
+    + '</div>';
+}
 function recordsPanel(){
   var slot = extra.records;
   if(slot.error) return panel("实际发布记录", "", '<p class="vd-warn">' + icon("alert", 12) + ' ' + esc(slot.error) + '</p>');
@@ -1693,7 +1770,7 @@ function recordsPanel(){
     + '</div>';
   var rows = rowsAll.filter(recordMatches);
   var list = rows.length
-    ? rows.map(function(r){ return releaseSnapshotHTML(r); }).join("")
+    ? rows.map(releaseCardHTML).join("")
     : '<p class="hint">没有匹配的发布记录，试试清空筛选。</p>';
   return panel("实际发布记录", '<span class="meta-right">' + rows.length + " / " + rowsAll.length + ' 条 · 生产成功且非回滚才算已发布</span>',
     tools + '<div class="vd-records">' + list + '</div>');
@@ -1792,11 +1869,19 @@ function runTool(tool){
 function openDelivery(){
   var id = st.id;
   loadView("delivery").then(function(m){ m.openDeliveryNote(id, ""); })
-    .catch(function(ex){ toast(ex.message || "打开交付说明失败", "bad"); });
+    .catch(function(ex){ toast(ex.message || "打开交付报告失败", "bad"); });
 }
 function openDemand(id){
   loadView("demands").then(function(m){ m.openDemandDetailById(id); })
     .catch(function(ex){ toast(ex.message || "打开需求详情失败", "bad"); });
+}
+/* 需求页签空态：直接带到需求池并聚焦本项目，省掉「先找菜单再选项目」 */
+function openDemandPool(){
+  var reqId = st.reqId;
+  loadView("demands").then(function(m){
+    if(reqId && m.openDemandsForReq) m.openDemandsForReq(reqId);
+    showView("demands");
+  }).catch(function(ex){ toast(ex.message || "打开需求池失败", "bad"); });
 }
 /* 需求页签补录：复用排期带入的同一弹窗与校验，成功后刷新本页工作项与计数 */
 function backfillDemandTasks(id){
@@ -1959,7 +2044,7 @@ function wire(){
     if(dlv){
       var vid = dlv.getAttribute("data-release-delivery-version") || st.id;
       loadView("delivery").then(function(m){ m.openDeliveryNote(vid, dlv.getAttribute("data-release-delivery")); })
-        .catch(function(){ toast("打开交付说明失败", "bad"); });
+        .catch(function(){ toast("打开交付报告失败", "bad"); });
       return;
     }
     var task = e.target.closest("[data-open-task]");

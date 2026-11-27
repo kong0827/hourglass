@@ -100,6 +100,10 @@ mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sq
 
 `126_release_artifact_digest_optional.sql` 把 `version_release.artifact_digest` 从 `NOT NULL` 放宽为可空：没有 CI / 制品库的团队可以留空表示「未记录校验值」，不再被 64 位哈希卡住。字段长度、历史值、发布判重与回滚的产物比较都不变；填写时后端仍强制 64 位十六进制，commit id 仍不能冒充制品哈希。脚本按 `information_schema` 判断可空性，已放开的库跳过，执行后表数量不变。
 
+`127_workspace_release_access_scope.sql` 给 `workspace` 增加 `release_access_scope`，把「谁能维护发布计划与发布记录」做成空间级多选配置：`owner`（空间主）、`admin`（管理员）、`project_owner`（项目负责人且该项目可写）、`project_write`（该项目可写成员），逗号分隔，默认 `owner,admin,project_owner`，与调整前的管理者口径一致。只增列并给默认值、不回填；查看者始终无权；版本新建 / 编辑 / 内容调整仍按项目写权限，不读这一列。脚本按 `information_schema` 判断列是否存在，可重复执行，表数量不变。
+
+`128_doc_edit_trash_share.sql` 给 `requirement_doc` 增加 `deleted_at` / `deleted_by` 与 `idx_ws_deleted`，让「删除文档」改为移入回收站（保留 30 天，可恢复 / 彻底删除）；正常列表、搜索与需求统计只查 `deleted_at IS NULL`。同时给 `req_doc_share` 增加 `allow_copy`（默认 1），分享链接可选择是否允许查看者复制与打印；有效期仍沿用 `expires_at`，不新增列。脚本按 `information_schema` 判断列 / 索引是否存在，可重复执行，表数量不变。
+
 `110_task_comment_content_length.sql` 只把 `task_comment.content` 从 `VARCHAR(500)` 放宽到 `VARCHAR(2000)`，让工作项评论能贴下错误日志与会议结论；不新增字段、不回填、不改权限与通知口径。后端截断上限与抽屉输入框 `maxlength` 同步为 2000。脚本按 `information_schema` 判断当前长度，已达标即跳过，可重复执行；执行后表数量不变。
 
 不要执行 `sql/legacy/` 与 `sql/seeds/` 下的文件；前者只保留旧版本结构用于追溯，后者是旧结构的演示种子。

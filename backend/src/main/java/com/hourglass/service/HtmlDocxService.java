@@ -6,6 +6,8 @@ import org.apache.poi.xwpf.usermodel.UnderlinePatterns;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFRun;
+import org.apache.poi.xwpf.usermodel.XWPFStyle;
+import org.apache.poi.xwpf.usermodel.XWPFStyles;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.apache.poi.xwpf.usermodel.XWPFTableCell;
 import org.apache.poi.xwpf.usermodel.XWPFTableRow;
@@ -16,11 +18,14 @@ import org.jsoup.nodes.TextNode;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTBorder;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPBdr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPrGeneral;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTShd;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTStyle;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblBorders;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STBorder;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STShd;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STStyleType;
 import org.springframework.stereotype.Service;
 
 import javax.imageio.ImageIO;
@@ -52,6 +57,7 @@ public class HtmlDocxService {
         org.jsoup.nodes.Document doc = Jsoup.parseBodyFragment(html == null ? "" : html);
         doc.outputSettings().prettyPrint(false);
         try (XWPFDocument out = new XWPFDocument(); ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
+            headingStyles(out.createStyles());
             Ctx ctx = new Ctx();
             Sink sink = new Sink(out, null);
             for (Node n : doc.body().childNodes()) {
@@ -220,10 +226,32 @@ public class HtmlDocxService {
         p.setSpacingBefore(200);
         p.setSpacingAfter(100);
         applyAlign(p, el);
+        /* 写入内置标题样式 + 大纲级别：Word 导航窗格与「引用-目录」都按它取层级 */
+        p.setStyle("Heading" + level);
+        CTPPr ppr = p.getCTP().isSetPPr() ? p.getCTP().getPPr() : p.getCTP().addNewPPr();
+        if (ppr.isSetOutlineLvl()) {
+            ppr.getOutlineLvl().setVal(BigInteger.valueOf(level - 1));
+        } else {
+            ppr.addNewOutlineLvl().setVal(BigInteger.valueOf(level - 1));
+        }
         Ctx c = ctx.copy();
         c.bold = true;
         int halfPoints = level == 1 ? 32 : level == 2 ? 28 : level == 3 ? 24 : level == 4 ? 22 : 20;
         inline(el, p, c, halfPoints);
+    }
+
+    /** 导出文档需要自己的 styles.xml：定义 Heading1-6，Word 才能把它们识别成大纲标题 */
+    private void headingStyles(XWPFStyles styles) {
+        for (int level = 1; level <= 6; level++) {
+            CTStyle style = CTStyle.Factory.newInstance();
+            style.setStyleId("Heading" + level);
+            style.setType(STStyleType.PARAGRAPH);
+            style.addNewName().setVal("heading " + level);
+            style.addNewQFormat();
+            CTPPrGeneral ppr = style.addNewPPr();
+            ppr.addNewOutlineLvl().setVal(BigInteger.valueOf(level - 1));
+            styles.addStyle(new XWPFStyle(style));
+        }
     }
 
     /** Univer 导出的标题是 p.UniverHeading + aria-level，没有 hN 标签 */

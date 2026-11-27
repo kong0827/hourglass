@@ -4,7 +4,7 @@
 
   <sql id="cols">
     id, workspace_id, req_id, parent_id, category_id, title, doc_type, content, sheet_content, format, content_brief, status, published_at,
-    visibility, sort_order, owner, owner_user_id, created_at, updated_at
+    visibility, sort_order, owner, owner_user_id, created_at, updated_at, deleted_at, deleted_by
   </sql>
 
   <!-- 文档级可见范围：仅约束已发布文档；草稿仍由 !seeAllDrafts 那条规则单独判定。
@@ -45,6 +45,7 @@
     FROM requirement_doc d
     LEFT JOIN requirement r ON r.id = d.req_id AND r.workspace_id = d.workspace_id
     WHERE d.workspace_id = #{workspaceId}
+      AND d.deleted_at IS NULL
       <include refid="keywordWhere"/>
       <if test="!seeAllDrafts">
         <!-- 草稿（published_at 为空）只对作者本人可见；口径同 RequirementDocService.canSeeDraft -->
@@ -74,6 +75,7 @@
     FROM requirement_doc d
     LEFT JOIN requirement r ON r.id = d.req_id AND r.workspace_id = d.workspace_id
     WHERE d.workspace_id = #{workspaceId}
+      AND d.deleted_at IS NULL
       <if test="keyword != null and keyword != ''">
         <include refid="keywordWhere"/>
       </if>
@@ -102,6 +104,7 @@
 
   <sql id="listWhere">
     d.workspace_id = #{workspaceId}
+    AND d.deleted_at IS NULL
     <if test="reqId != null and reqId != ''">
       AND d.req_id = #{reqId}
     </if>
@@ -166,12 +169,17 @@
   </select>
 
   <select id="selectById" resultType="RequirementDoc">
+    SELECT <include refid="cols"/> FROM requirement_doc WHERE id = #{id} AND deleted_at IS NULL
+  </select>
+
+  <!-- 回收站恢复 / 彻底删除要读取已删除行，不做 deleted_at 过滤 -->
+  <select id="selectByIdAny" resultType="RequirementDoc">
     SELECT <include refid="cols"/> FROM requirement_doc WHERE id = #{id}
   </select>
 
   <select id="selectAllByWorkspace" resultType="RequirementDoc">
     SELECT <include refid="cols"/> FROM requirement_doc
-    WHERE workspace_id = #{workspaceId}
+    WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL
     ORDER BY updated_at DESC
   </select>
 
@@ -245,18 +253,72 @@
     WHERE id = #{id} AND workspace_id = #{workspaceId}
   </update>
 
+  <update id="softDelete">
+    UPDATE requirement_doc
+    SET deleted_at = NOW(), deleted_by = #{userId}, updated_at = updated_at
+    WHERE id = #{id} AND workspace_id = #{workspaceId} AND deleted_at IS NULL
+  </update>
+
+  <update id="restoreFromTrash">
+    UPDATE requirement_doc
+    SET deleted_at = NULL, deleted_by = NULL, updated_at = updated_at
+    WHERE id = #{id} AND workspace_id = #{workspaceId} AND deleted_at IS NOT NULL
+  </update>
+
+  <!-- 彻底删除：只由回收站清理与项目/空间级联清理调用 -->
   <delete id="delete">
     DELETE FROM requirement_doc WHERE id = #{id}
   </delete>
 
+  <select id="selectTrash" resultType="RequirementDoc">
+    SELECT d.id, d.workspace_id, d.req_id, d.parent_id, d.category_id, d.title, d.doc_type, d.format,
+           d.content_brief, d.status, d.published_at, d.visibility, d.sort_order, d.owner, d.owner_user_id,
+           d.created_at, d.updated_at, d.deleted_at, d.deleted_by
+    FROM requirement_doc d
+    WHERE d.workspace_id = #{workspaceId} AND d.deleted_at IS NOT NULL
+    <if test="viewerId != null">
+      AND NOT EXISTS (SELECT 1 FROM project_member pm
+                      WHERE pm.workspace_id = d.workspace_id AND pm.project_id = d.req_id
+                        AND pm.user_id = #{viewerId} AND pm.access = 'none')
+    </if>
+    <if test="!seeAll">
+      AND (d.deleted_by = #{userId} OR d.owner_user_id = #{userId})
+    </if>
+    ORDER BY d.deleted_at DESC, d.id
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countTrash" resultType="int">
+    SELECT COUNT(*) FROM requirement_doc d
+    WHERE d.workspace_id = #{workspaceId} AND d.deleted_at IS NOT NULL
+    <if test="viewerId != null">
+      AND NOT EXISTS (SELECT 1 FROM project_member pm
+                      WHERE pm.workspace_id = d.workspace_id AND pm.project_id = d.req_id
+                        AND pm.user_id = #{viewerId} AND pm.access = 'none')
+    </if>
+    <if test="!seeAll">
+      AND (d.deleted_by = #{userId} OR d.owner_user_id = #{userId})
+    </if>
+  </select>
+
+  <!-- 定时清理：只取必要列，避免把 MEDIUMTEXT 正文读进内存 -->
+  <select id="selectExpiredTrash" resultType="RequirementDoc">
+    SELECT id, workspace_id, req_id, parent_id, title, format, deleted_at
+    FROM requirement_doc
+    WHERE deleted_at IS NOT NULL AND deleted_at &lt; #{cutoff}
+    ORDER BY deleted_at
+    LIMIT #{limit}
+  </select>
+
   <select id="countByReq" resultType="int">
-    SELECT COUNT(*) FROM requirement_doc WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+    SELECT COUNT(*) FROM requirement_doc
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId} AND deleted_at IS NULL
   </select>
 
   <select id="countGroupByReq" resultType="java.util.HashMap">
     SELECT req_id AS reqId, COUNT(*) AS cnt
     FROM requirement_doc d
-    WHERE d.workspace_id = #{workspaceId}
+    WHERE d.workspace_id = #{workspaceId} AND d.deleted_at IS NULL
     <if test="!seeAllDrafts">
       AND (d.published_at IS NOT NULL OR d.owner_user_id = #{userId})
     </if>
@@ -289,6 +351,7 @@
 
   <sql id="demandDocWhere">
     l.workspace_id = #{workspaceId} AND l.demand_id = #{demandId}
+    AND d.deleted_at IS NULL
     <if test="viewerId != null">
       AND NOT EXISTS (SELECT 1 FROM project_member pm
                       WHERE pm.workspace_id = d.workspace_id AND pm.project_id = d.req_id

@@ -354,11 +354,11 @@ class VersionReleaseServiceTest {
     @Test void developerExecutorIsAcceptedWithoutProjectManagementPermission() {
         ReleaseConfirmRequest r = request(plan("production"), "developer-executor");
         when(members.selectDeliveryAccessForUpdate("W", "E", null)).thenReturn(Collections.singletonMap("role", "developer"));
-        doThrow(new AppException(403, "executor is not a manager")).when(permissions).assertManageProjectForUpdate("E", "W", "P");
+        doThrow(new AppException(403, "executor is not a manager")).when(permissions).assertManageReleaseForUpdate("E", "W", "P");
         clearInvocations(permissions);
         assertEquals("E", confirm(r).getExecutorUserId());
-        verify(permissions, times(2)).assertManageProjectForUpdate("U", "W", "P");
-        verify(permissions, never()).assertManageProjectForUpdate("E", "W", "P");
+        verify(permissions, times(2)).assertManageReleaseForUpdate("U", "W", "P");
+        verify(permissions, never()).assertManageReleaseForUpdate("E", "W", "P");
     }
     @ParameterizedTest @ValueSource(strings = {"departed", "roleless"})
     void executorCurrentMembershipIsRequiredInPreviewAndRecheckedOnConfirm(String state) {
@@ -498,7 +498,7 @@ class VersionReleaseServiceTest {
         org.mockito.InOrder order = inOrder(members);
         order.verify(members).selectDeliveryAccessForUpdate("W", "E", null);
         order.verify(members).selectDeliveryAccessForUpdate("W", "U", null);
-        verify(permissions, never()).assertManageProjectForUpdate("E", "W", "P");
+        verify(permissions, never()).assertManageReleaseForUpdate("E", "W", "P");
     }
 
     @Test void auditInsertFailureDoesNotScheduleAfterCommit() {
@@ -570,7 +570,7 @@ class VersionReleaseServiceTest {
         verify(mapper).insertPlanVersion("W", saved.getId(), "V", "P");
         verify(mapper).insertPlanVersion("W", saved.getId(), "V2", "P2");
         verify(locks).lockProjects("W", "P", "P2");
-        verify(permissions).assertManageProject("U", "W", "P2");
+        verify(permissions).assertManageRelease("U", "W", "P2");
     }
 
     @Test void planCompletesOnlyWhenEveryVersionHasProductionSuccess() {

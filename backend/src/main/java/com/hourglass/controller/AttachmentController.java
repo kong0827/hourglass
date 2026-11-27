@@ -56,6 +56,8 @@ public class AttachmentController {
         EXT_MIME.put("pdf", "application/pdf");
         EXT_MIME.put("txt", "text/plain");
         EXT_MIME.put("md", "text/plain");
+        EXT_MIME.put("html", "text/html");
+        EXT_MIME.put("htm", "text/html");
         EXT_MIME.put("zip", "application/zip");
         EXT_MIME.put("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         EXT_MIME.put("doc", "application/msword");
@@ -215,11 +217,20 @@ public class AttachmentController {
         } catch (Exception e) {
             encoded = "attachment";
         }
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename*=UTF-8''" + encoded)
+        String ext = extOfStored(a.getStoredName());
+        boolean html = "html".equals(ext) || "htm".equals(ext);
+        ResponseEntity.BodyBuilder builder = ResponseEntity.ok()
+                /* HTML 是用户上传的可执行文档：直接打开时改为下载，避免与本应用同源渲染 */
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        (html ? "attachment" : "inline") + "; filename*=UTF-8''" + encoded)
                 .header(HttpHeaders.CACHE_CONTROL, "private, max-age=86400")
-                .contentType(mediaTypeOf(a.getStoredName()))
-                .body(new FileSystemResource(file));
+                .header("X-Content-Type-Options", "nosniff")
+                .contentType(mediaTypeOf(a.getStoredName()));
+        if (html) {
+            /* 兜底：即使被内嵌或强制 inline 打开，也禁止脚本、表单与同源访问 */
+            builder.header("Content-Security-Policy", "sandbox");
+        }
+        return builder.body(new FileSystemResource(file));
     }
 
     /** 附件在线预览：doc/docx 服务端转 HTML（md/txt/xls/xlsx 由前端渲染） */

@@ -65,6 +65,7 @@ var SHELL = [
   "js/core/fullscreen.js",
   "js/core/group-dims.js",
   "js/core/icons.js",
+  "js/core/html-import.js",
   "js/core/img-fit.js",
   "js/core/import-wizard.js",
   "js/core/layout.js",

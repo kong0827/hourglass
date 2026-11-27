@@ -425,8 +425,8 @@ function canTestProject(reqId){
   return projectAccess(reqId) === "write";
 }
 /**
- * 文档改删（A 创建人保护）：项目/空间可写 + （负责人本人 或 空间主/管理员 或 无负责人回退）。
- * 与后端 assertDocMutate 同口径。排序拖动 / 新建子文档仍用 canEditReq（组织/新增，不改父文档）。
+ * 文档改删（结构操作）：项目/空间可写 + （负责人本人 或 空间主/管理员 或 无负责人回退）。
+ * 与后端 assertDocMutate 同口径；正文/标题/状态/恢复历史改用 canEditDocBody。
  */
 function canEditDoc(d){
   if(!d) return false;
@@ -438,5 +438,10 @@ function canEditDoc(d){
   var me = rt.currentUser && rt.currentUser.id;
   return !!(me && String(owner) === String(me));
 }
+/** 文档正文编辑：可见范围内的项目/空间可写者即可，与后端 assertDocEdit 同口径 */
+function canEditDocBody(d){
+  if(!d) return false;
+  return !roleReadOnly() && canEditReq(d.reqId);
+}
 
-export { calState, canCreateNow, canEditDoc, canEditReq, canEditTask, canManageProject, canTestProject, catColor, catNameById, catTag, catTagByName, colRuleOf, currentRole, dueDateMD, dueDateTip, dueFlag, dueMetaClass, dueState, dueText, filterOn, progressOf, projectAccess, projectGroupLabel, projectGroups, projectOptionsHTML, projectRefsEnriched, reqNameById, reqSetId, roleReadOnly, safeColor, selectedFilterCount, setNameById, setSortOf, state, statusBucket, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount };
+export { calState, canCreateNow, canEditDoc, canEditDocBody, canEditReq, canEditTask, canManageProject, canTestProject, catColor, catNameById, catTag, catTagByName, colRuleOf, currentRole, dueDateMD, dueDateTip, dueFlag, dueMetaClass, dueState, dueText, filterOn, progressOf, projectAccess, projectGroupLabel, projectGroups, projectOptionsHTML, projectRefsEnriched, reqNameById, reqSetId, roleReadOnly, safeColor, selectedFilterCount, setNameById, setSortOf, state, statusBucket, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount };

@@ -285,7 +285,206 @@ import { openSheetView } from "./core/sheet-editor.js";
         });
       });
   }
-  function renderDoc(d) {
+  /* 分享页大纲与查找：只读正文，不引入主程序的组件；表格分享不启用 */
+  var docTocItems = [], docFindHits = [], docFindIdx = -1, docFindQuery = "";
+  var docAllowCopy = true;
+  function docHeadingEls(root){
+    if(!root) return [];
+    var nodes = root.querySelectorAll("h1,h2,h3,h4,h5,h6,p.UniverHeading[aria-level]");
+    var out = [];
+    for(var i = 0; i < nodes.length; i++){
+      var el = nodes[i];
+      var text = (el.textContent || "").replace(/\s+/g, " ").trim();
+      if(!text) continue;
+      var tag = el.tagName.toLowerCase();
+      var level = tag.charAt(0) === "h" ? parseInt(tag.charAt(1), 10) : parseInt(el.getAttribute("aria-level"), 10);
+      if(!(level >= 1 && level <= 6)) level = 1;
+      var id = "share-h" + (out.length + 1);
+      el.id = id;
+      out.push({ id: id, level: level, text: text });
+    }
+    return out;
+  }
+  function syncShareTocBtn(){
+    var btn = $("docShareTocBtn"), toc = $("docShareToc");
+    if(!btn || !toc) return;
+    btn.setAttribute("aria-pressed", toc.hidden ? "false" : "true");
+    btn.textContent = toc.hidden ? "目录" : "收起目录";
+  }
+  function buildShareToc(body){
+    var toc = $("docShareToc"), list = $("docShareTocBody"), btn = $("docShareTocBtn");
+    docTocItems = docHeadingEls(body);
+    if(!docTocItems.length){
+      if(toc) toc.hidden = true;
+      if(btn) btn.hidden = true;
+      return;
+    }
+    if(btn) btn.hidden = false;
+    if(list){
+      list.innerHTML = docTocItems.map(function(t){
+        return '<button type="button" data-share-toc="' + esc(t.id) + '" style="padding-left:' + (6 + (t.level - 1) * 12) + 'px" title="' + esc(t.text) + '">' + esc(t.text) + '</button>';
+      }).join("");
+    }
+    if(toc) toc.hidden = window.innerWidth < 1080;
+    syncShareTocBtn();
+  }
+  function clearShareFindMarks(){
+    var body = $("docShareBody");
+    docFindHits = [];
+    if(!body) return;
+    var marks = body.querySelectorAll("mark.share-hit");
+    for(var i = 0; i < marks.length; i++){
+      var m = marks[i];
+      if(m.parentNode) m.parentNode.replaceChild(document.createTextNode(m.textContent), m);
+    }
+    if(marks.length) body.normalize();
+  }
+  function updateShareFindCount(){
+    var cnt = $("docShareFindCount");
+    if(!cnt) return;
+    cnt.textContent = !docFindQuery ? ""
+      : (docFindHits.length ? ((docFindIdx + 1) + " / " + docFindHits.length) : "无匹配");
+    var prev = document.querySelector('[data-share-find="prev"]');
+    var next = document.querySelector('[data-share-find="next"]');
+    if(prev) prev.disabled = !docFindHits.length;
+    if(next) next.disabled = !docFindHits.length;
+  }
+  function focusShareFindHit(){
+    docFindHits.forEach(function(m, i){ m.classList.toggle("on", i === docFindIdx); });
+    var hit = docFindHits[docFindIdx];
+    if(hit && hit.scrollIntoView) hit.scrollIntoView({ block: "center", behavior: "smooth" });
+    updateShareFindCount();
+  }
+  function runShareFind(query){
+    var body = $("docShareBody");
+    clearShareFindMarks();
+    docFindQuery = String(query || "").trim();
+    if(!body || !docFindQuery){ docFindIdx = -1; updateShareFindCount(); return; }
+    var walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, {
+      acceptNode: function(n){
+        if(!n.nodeValue || !n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+        if(n.parentNode && n.parentNode.nodeType === 1 && n.parentNode.closest("script,style,textarea,mark.share-hit")) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    var nodes = [], n;
+    while((n = walker.nextNode())) nodes.push(n);
+    var q = docFindQuery.toLowerCase();
+    nodes.forEach(function(node){
+      var text = node.nodeValue, idx = text.toLowerCase().indexOf(q);
+      if(idx < 0) return;
+      var frag = document.createDocumentFragment(), last = 0;
+      while(idx >= 0){
+        if(idx > last) frag.appendChild(document.createTextNode(text.slice(last, idx)));
+        var mark = document.createElement("mark");
+        mark.className = "share-hit";
+        mark.textContent = text.slice(idx, idx + q.length);
+        frag.appendChild(mark);
+        docFindHits.push(mark);
+        last = idx + q.length;
+        idx = text.toLowerCase().indexOf(q, last);
+      }
+      if(last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+      node.parentNode.replaceChild(frag, node);
+    });
+    docFindIdx = docFindHits.length ? 0 : -1;
+    focusShareFindHit();
+  }
+  function stepShareFind(delta){
+    if(!docFindHits.length) return;
+    docFindIdx = (docFindIdx + delta + docFindHits.length) % docFindHits.length;
+    focusShareFindHit();
+  }
+  function openShareFind(){
+    var bar = $("docShareFindBar");
+    if(!bar) return;
+    bar.hidden = false;
+    var input = $("docShareFindInput");
+    var sel = "", body = $("docShareBody");
+    try{
+      var s = window.getSelection();
+      if(s && s.rangeCount && body && body.contains(s.anchorNode)) sel = String(s).trim();
+    }catch(e){ sel = ""; }
+    if(sel && sel.length <= 60 && input){
+      input.value = sel;
+      runShareFind(sel);
+    }
+    if(input){ input.focus(); input.select(); }
+  }
+  function closeShareFind(){
+    var bar = $("docShareFindBar");
+    if(bar) bar.hidden = true;
+    clearShareFindMarks();
+    docFindQuery = "";
+    docFindIdx = -1;
+    updateShareFindCount();
+  }
+  /* 代码块装饰：语言标签常驻；复制按钮只在分享者允许复制时出现 */
+  var SHARE_CODE_LANG_LABEL = {
+    sql: "SQL", java: "Java", properties: "Properties", js: "JavaScript", ts: "TypeScript",
+    python: "Python", json: "JSON", xml: "XML", yaml: "YAML", shell: "Shell",
+    html: "HTML", css: "CSS", go: "Go", cpp: "C++"
+  };
+  function decorateShareCodeBlocks(body){
+    if(!body) return;
+    var pres = body.querySelectorAll("pre");
+    for(var i = 0; i < pres.length; i++){
+      var pre = pres[i];
+      if(pre.parentElement && pre.parentElement.classList.contains("share-code")) continue;
+      var wrap = document.createElement("div");
+      wrap.className = "share-code";
+      pre.parentNode.insertBefore(wrap, pre);
+      wrap.appendChild(pre);
+      var code = pre.querySelector("code");
+      var m = String(pre.className || "").match(/(?:^|\s)language-([A-Za-z0-9_+#.-]+)/)
+        || (code && String(code.className || "").match(/(?:^|\s)language-([A-Za-z0-9_+#.-]+)/));
+      if(m){
+        var lang = m[1].toLowerCase();
+        wrap.setAttribute("data-lang", lang);
+        var tag = document.createElement("span");
+        tag.className = "share-code-lang";
+        tag.textContent = SHARE_CODE_LANG_LABEL[lang] || lang;
+        wrap.appendChild(tag);
+      }
+      if(!docAllowCopy) continue;
+      var tools = document.createElement("div");
+      tools.className = "share-code-tools";
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "share-code-btn";
+      btn.setAttribute("data-share-code-copy", "1");
+      btn.setAttribute("aria-label", "复制代码");
+      btn.textContent = "复制";
+      tools.appendChild(btn);
+      wrap.appendChild(tools);
+    }
+  }
+  function copyShareCode(btn){
+    if(!docAllowCopy) return;
+    var wrap = btn.closest(".share-code");
+    var pre = wrap && wrap.querySelector("pre");
+    if(!pre) return;
+    var text = pre.textContent || "";
+    var done = function(ok){
+      btn.classList.toggle("is-copied", !!ok);
+      btn.textContent = ok ? "已复制" : "复制失败";
+      setTimeout(function(){ btn.classList.remove("is-copied"); btn.textContent = "复制"; }, 1600);
+    };
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){ done(true); }).catch(function(){ done(false); });
+      return;
+    }
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.cssText = "position:fixed;left:-9999px;top:0;";
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try{ ok = document.execCommand("copy"); }catch(e){ ok = false; }
+    document.body.removeChild(ta);
+    done(ok);
+  }
+  function renderDoc(d){
     $("view-gantt").classList.remove("on");
     $("view-doc").classList.add("on");
     $("docShareTitle").textContent = d.title || "文档";
@@ -295,8 +494,28 @@ import { openSheetView } from "./core/sheet-editor.js";
     if (d.owner) meta.push(d.owner);
     meta.push(d.updatedAt ? ("更新于 " + String(d.updatedAt).replace("T", " ").substring(0, 16)) : "更新时间未知");
     $("docShareMeta").textContent = meta.join(" · ");
+    var noCopy = d.allowCopy === false;
+    docAllowCopy = !noCopy;
     $("docShareFoot").textContent = "生成时间 " + (d.generatedAt ? String(d.generatedAt).replace("T", " ").substring(0, 16) : "—") +
-      " · 只读链接，仅含文档正文";
+      " · 只读链接，仅含文档正文" + (noCopy ? " · 分享者已关闭复制与打印" : "");
+    document.body.classList.toggle("share-no-copy", noCopy);
+    var isSheet = d.format === "sheet";
+    var findBtn = $("docShareFindBtn"), tocBtn = $("docShareTocBtn"), toc = $("docShareToc");
+    if(findBtn) findBtn.hidden = isSheet;
+    if(isSheet){
+      if(tocBtn) tocBtn.hidden = true;
+      if(toc) toc.hidden = true;
+      closeShareFind();
+    }
+    if (noCopy) {
+      var printBlock = document.createElement("div");
+      printBlock.className = "share-print-block";
+      printBlock.textContent = "分享者已关闭复制与打印，本页不提供打印内容。";
+      document.body.appendChild(printBlock);
+      document.addEventListener("copy", function (e) { e.preventDefault(); });
+      document.addEventListener("cut", function (e) { e.preventDefault(); });
+      document.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+    }
     var body = $("docShareBody");
     body.innerHTML = '<div class="share-empty">加载正文…</div>';
     if (d.format === "sheet") {
@@ -332,12 +551,15 @@ import { openSheetView } from "./core/sheet-editor.js";
         links[i].setAttribute("target", "_blank");
         links[i].setAttribute("rel", "noopener noreferrer");
       }
+      decorateShareCodeBlocks(body);
+      buildShareToc(body);
+      if(docFindQuery) runShareFind(docFindQuery);
     }).catch(function (ex) {
       body.innerHTML = '<div class="share-error">' + esc(ex.message || "正文渲染失败") + '</div>';
     });
   }
 
-  /* 交付说明分享：kind=delivery。只渲染冻结快照，没有任何写入口；
+  /* 交付报告分享：kind=delivery。只渲染冻结快照，没有任何写入口；
      数字仍可点开看口径与来源记录，但不给跳原始记录的入口——接收人没有账号。 */
   var dlNote = null, dlShare = null, dlLayer = null, dlToken = "", dlUnlockPwd = "";
   function bootDelivery(token) {
@@ -370,7 +592,7 @@ import { openSheetView } from "./core/sheet-editor.js";
     $("deliveryShareBody").innerHTML =
       '<div class="dl-share-gate"><div class="dl-share-gate-card">'
       + '<span class="dl-mark">' + DD.mark + "</span>"
-      + '<h1>这份交付说明受密码保护</h1>'
+      + '<h1>这份交付报告受密码保护</h1>'
       + '<p>' + esc([shell.workspaceName, shell.docNo, shell.title].filter(Boolean).join(" · ")) + "</p>"
       + '<form id="dlGateForm"><input class="input" type="password" id="dlGatePwd" maxlength="32" autocomplete="current-password"'
       + ' placeholder="请输入访问密码" aria-label="访问密码">'
@@ -442,7 +664,7 @@ import { openSheetView } from "./core/sheet-editor.js";
     });
     $("view-gantt").classList.remove("on");
     $("view-delivery-share").classList.add("on");
-    var title = (dlNote.projectName || "交付说明") + " · " + (dlNote.versionName || "");
+    var title = (dlNote.projectName || "交付报告") + " · " + (dlNote.versionName || "");
     document.title = title + " · 只读分享";
     var sub = [d.workspaceName, DD.toneName(dlNote.options && dlNote.options.tone), d.docNo,
       "生成于 " + DD.timeText(d.createdAt), "有效至 " + DD.timeText(d.expiresAt)].filter(Boolean).join(" · ");
@@ -537,5 +759,57 @@ import { openSheetView } from "./core/sheet-editor.js";
     scroll.scrollLeft = Math.max(0, dayDiff(today(), state.range.start) * state.dayW - 160);
   });
   $("shareErrorRetry").addEventListener("click", function () { location.reload(); });
+
+  /* 文档分享：目录开合、目录跳转、查找条与 Ctrl+F */
+  var docTocBtn = $("docShareTocBtn");
+  if(docTocBtn) docTocBtn.addEventListener("click", function () {
+    var toc = $("docShareToc");
+    if(!toc) return;
+    toc.hidden = !toc.hidden;
+    syncShareTocBtn();
+  });
+  var docFindBtn = $("docShareFindBtn");
+  if(docFindBtn) docFindBtn.addEventListener("click", openShareFind);
+  var docFindInput = $("docShareFindInput");
+  if(docFindInput){
+    docFindInput.addEventListener("input", function () { runShareFind(this.value); });
+    docFindInput.addEventListener("keydown", function (e) {
+      if(e.key === "Enter"){ e.preventDefault(); stepShareFind(e.shiftKey ? -1 : 1); }
+      else if(e.key === "Escape"){ e.preventDefault(); closeShareFind(); }
+    });
+  }
+  var docView = $("view-doc");
+  if(docView) docView.addEventListener("click", function (e) {
+    var cc = e.target.closest("[data-share-code-copy]");
+    if(cc){ copyShareCode(cc); return; }
+    var t = e.target.closest("[data-share-toc]");
+    if(t){
+      e.preventDefault();
+      var el = document.getElementById(t.dataset.shareToc);
+      if(el) el.scrollIntoView({ block: "start", behavior: "smooth" });
+      return;
+    }
+    var f = e.target.closest("[data-share-find]");
+    if(!f) return;
+    var act = f.dataset.shareFind;
+    if(act === "prev") stepShareFind(-1);
+    else if(act === "next") stepShareFind(1);
+    else closeShareFind();
+  });
+  document.addEventListener("keydown", function (e) {
+    if(e.key === "Escape" && $("docShareFindBar") && !$("docShareFindBar").hidden) closeShareFind();
+  });
+  document.addEventListener("keydown", function (e) {
+    if(!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+    if(String(e.key).toLowerCase() !== "f") return;
+    var view = $("view-doc");
+    if(!view || !view.classList.contains("on")) return;
+    var t = e.target;
+    if(t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+    var findBtn = $("docShareFindBtn");
+    if(!findBtn || findBtn.hidden) return;
+    e.preventDefault();
+    openShareFind();
+  });
 
   boot();

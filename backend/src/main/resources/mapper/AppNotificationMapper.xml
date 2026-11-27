@@ -163,6 +163,12 @@
       AND type = 'task_comment' AND body LIKE '%表格中 @ 了你%'
   </select>
 
+  <select id="countRecentDocNotify" resultType="int">
+    SELECT COUNT(*) FROM app_notification
+    WHERE user_id = #{userId} AND ref_kind = #{refKind} AND ref_id = #{refId}
+      AND type = #{type} AND created_at &gt;= #{since}
+  </select>
+
   <delete id="deleteByTaskIds">
     DELETE FROM app_notification WHERE workspace_id = #{workspaceId} AND ref_task_id IN
     <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>

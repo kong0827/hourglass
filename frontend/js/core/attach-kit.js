@@ -7,7 +7,7 @@ import { icon } from "./icons.js";
 import { esc, toast } from "./ui.js";
 
 /* 与后端 AttachmentService.ALLOWED_EXT 保持一致 */
-var ALLOWED_EXT = ["jpg", "jpeg", "png", "gif", "webp", "pdf", "txt", "md", "zip",
+var ALLOWED_EXT = ["jpg", "jpeg", "png", "gif", "webp", "pdf", "txt", "md", "html", "htm", "zip",
   "xlsx", "doc", "docx", "xls", "ppt", "pptx"];
 var ACCEPT = ALLOWED_EXT.map(function(e){ return "." + e; }).join(",");
 var MAX_SIZE = 10 * 1024 * 1024;

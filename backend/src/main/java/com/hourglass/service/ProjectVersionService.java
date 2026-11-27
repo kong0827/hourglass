@@ -83,6 +83,12 @@ public class ProjectVersionService {
     public ProjectVersion detail(String workspaceId, String id, String userId) {
         ProjectVersion version = get(workspaceId, id);
         projectAccess.assertView(workspaceId, userId, version.getReqId());
+        if (userId != null) {
+            boolean manage = permissions.canManageRelease(userId, workspaceId, version.getReqId())
+                    && !isEnded(version.getStatus());
+            version.setCanManageReleasePlan(manage);
+            version.setCanPublish(manage);
+        }
         return version;
     }
 
@@ -109,6 +115,7 @@ public class ProjectVersionService {
             }
         }
         Set<String> locked = new java.util.HashSet<String>(taskMapper.selectFormalSuccessVersionIdsByReq(workspaceId, reqId));
+        Boolean canRelease = userId == null ? null : permissions.canManageRelease(userId, workspaceId, reqId);
         for (ProjectVersion version : versions) {
             version.setContentLocked("released".equals(version.getStatus()) || locked.contains(version.getId()));
             List<Task> tasks = tasksByVersion.get(version.getId());
@@ -129,8 +136,8 @@ public class ProjectVersionService {
             }
             version.setDoneCount(done);
             version.setProgressPct(tasks.isEmpty() ? 0 : (int) Math.round((double) progressSum / tasks.size()));
-            if (userId != null) {
-                boolean manage = permissions.canManageProject(userId, workspaceId, reqId) && !isEnded(version.getStatus());
+            if (canRelease != null) {
+                boolean manage = canRelease && !isEnded(version.getStatus());
                 version.setCanManageReleasePlan(manage);
                 version.setCanPublish(manage);
             }
@@ -411,7 +418,7 @@ public class ProjectVersionService {
             throw new AppException(422, "版本已有发布计划或审计历史，请归档而不是删除");
         }
         if (!deliveryNotes.selectSnapshotIdsByVersion(workspaceId, versionId).isEmpty()) {
-            throw new AppException(422, "版本已有交付说明快照（可能已对外分享），请归档而不是删除");
+            throw new AppException(422, "版本已有交付报告快照（可能已对外分享），请归档而不是删除");
         }
     }
 
@@ -504,7 +511,8 @@ public class ProjectVersionService {
         }
         String reason = Texts.trimToNull(reasonRaw);
         if (reason == null) throw AppException.badRequest("请填写任务版本调整原因");
-        permissions.assertManageProjectForUpdate(userId, version.getWorkspaceId(), version.getReqId());
+        /* 版本内容调整与新建版本同口径：项目写成员即可，锁后复核一次 */
+        projectAccess.assertWriteForUpdate(version.getWorkspaceId(), userId, version.getReqId());
         for (Task previous : changed) {
             Task task = scopeLock.lockTask(version.getWorkspaceId(), previous.getId());
             if (task.getDeletedAt() != null || !version.getReqId().equals(task.getReqId())) {

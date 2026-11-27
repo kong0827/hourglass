@@ -29,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -36,13 +37,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 创建人保护（A 轻量档）回归：把草稿已有的「负责人 + 空间 owner/admin」口径扩展到已发布文档的
- * update / changeStatus / rename / delete / restore（恢复历史，覆盖正文）/ publish（发布撤回）。
- * 排序、新建子文档、分享链接不走此门控（组织/新增/分发，不改父文档内容或可见状态）。
- *
- * <p>门控是私有方法 {@code assertDocMutate}，这里通过六个公开入口验证：
- * 非负责人成员（有项目写权限）一律 403；负责人本人 / 空间管理员 / 空负责人（回退项目可写）/
- * 系统级联（userId=null）放行；项目可写门控仍先于创建人校验。
+ * 文档权限：项目可见成员可改正文 / 标题 / 状态 / 恢复历史；
+ * 删除 / 发布撤回 / 可见范围等治理项仍限负责人或空间 owner/admin（创建人保护）。
+ * 排序、新建子文档、分享链接不走创建人门控（组织/新增/分发，不改父文档内容或可见状态）。
  */
 class RequirementDocCreatorProtectionTest {
 
@@ -53,7 +50,7 @@ class RequirementDocCreatorProtectionTest {
     private static final String DOC_ID = "D1";
     private static final String REQ_ID = "R1";
     private static final String HISTORY_ID = "H1";
-    private static final String GATE_MSG = "仅文档负责人或空间管理员可编辑 / 删除";
+    private static final String GATE_MSG = "仅文档负责人或空间管理员可删除 / 调整可见范围 / 发布";
 
     private final RequirementDocMapper docs = mock(RequirementDocMapper.class);
     private final RequirementDocHistoryMapper histories = mock(RequirementDocHistoryMapper.class);
@@ -81,20 +78,42 @@ class RequirementDocCreatorProtectionTest {
         when(docs.update(any(RequirementDoc.class), any())).thenReturn(1);
         /* restore 放行后须能取到归属一致的历史版本，否则会落到 404 而非验证门控 */
         when(histories.selectById(HISTORY_ID)).thenReturn(history());
+        when(docs.softDelete(anyString(), anyString(), any())).thenReturn(1);
     }
 
-    /* ---------------- 非负责人成员：六个改删/发布/恢复入口一律 403 ---------------- */
+    /* ---------------- 非负责人成员：可改正文，不可删除 / 发布 ---------------- */
 
     @ParameterizedTest
-    @ValueSource(strings = {"update", "changeStatus", "rename", "delete", "restore", "publish"})
-    void nonOwnerMemberIsDeniedOnEveryContentMutation(String op) {
+    @ValueSource(strings = {"update", "changeStatus", "rename", "restore"})
+    void projectWriterCanEditContent(String op) {
+        stubVisible(doc(OWNER, true), OTHER, "member");
+
+        assertDoesNotThrow(() -> mutate(op, OTHER));
+
+        verifyContentWrite(op);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"delete", "publish"})
+    void nonOwnerMemberIsDeniedOnStructuralOps(String op) {
         stubVisible(doc(OWNER, true), OTHER, "member");
 
         AppException ex = assertThrows(AppException.class, () -> mutate(op, OTHER));
 
         assertEquals(403, ex.getCode());
         assertEquals(GATE_MSG, ex.getMessage());
-        verifyNoContentWrite();
+        verifyNoStructuralWrite();
+    }
+
+    @Test
+    void projectWriterCannotChangeVisibilityOrOwnerBySave() {
+        stubVisible(doc(OWNER, true), OTHER, "member");
+        ReqDocSaveRequest req = saveReq();
+        req.setVisibility("personal");
+
+        AppException ex = assertThrows(AppException.class, () -> service.update(OTHER, WS, DOC_ID, req));
+        assertEquals(403, ex.getCode());
+        verify(docs, never()).update(any(RequirementDoc.class), any());
     }
 
     /* ---------------- 负责人本人：六个入口放行 ---------------- */
@@ -143,7 +162,7 @@ class RequirementDocCreatorProtectionTest {
         /* 项目删除等系统级联走两参重载，userId=null */
         assertDoesNotThrow(() -> service.delete(WS, DOC_ID));
 
-        verify(docs).delete(DOC_ID);
+        verify(docs).softDelete(WS, DOC_ID, null);
         verify(access, never()).canManage(anyString(), anyString());
     }
 
@@ -312,7 +331,7 @@ class RequirementDocCreatorProtectionTest {
                 verify(docs).updateTitle(WS, DOC_ID, "新名");
                 break;
             case "delete":
-                verify(docs).delete(DOC_ID);
+                verify(docs).softDelete(eq(WS), eq(DOC_ID), any());
                 break;
             case "restore":
                 /* 恢复历史经 docMapper.update 覆盖正文 */
@@ -331,8 +350,13 @@ class RequirementDocCreatorProtectionTest {
         verify(docs, never()).update(any(RequirementDoc.class), any());
         verify(docs, never()).updateStatus(anyString(), anyString(), anyString());
         verify(docs, never()).updateTitle(anyString(), anyString(), anyString());
-        verify(docs, never()).delete(anyString());
+        verify(docs, never()).softDelete(anyString(), anyString(), any());
         verify(docs, never()).updatePublished(anyString(), any());
         verify(histories, never()).insert(any());
+    }
+
+    private void verifyNoStructuralWrite() {
+        verify(docs, never()).softDelete(anyString(), anyString(), any());
+        verify(docs, never()).updatePublished(anyString(), any());
     }
 }

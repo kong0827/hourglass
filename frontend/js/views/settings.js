@@ -189,6 +189,13 @@ function openRoleGuide(){
     roleGuideRow(["新建 / 编辑 / 改状态分支", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "项目可写", ROLE_GUIDE_NO]),
     roleGuideRow(["删除分支", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "项目可写", ROLE_GUIDE_NO]),
     roleGuideRow(["甘特分享 / 清除基线", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideGroup("版本与发布"),
+    roleGuideRow(["新建 / 编辑版本、调整版本内工作项", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "项目可写", ROLE_GUIDE_NO]),
+    roleGuideRow(["维护发布计划、预览与记录实际发布", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可在「设置 → 工作流 → 发布权限」放开，默认否", ROLE_GUIDE_NO]),
+    roleGuideRow(["修改发布维护权限（工作流 → 发布权限）", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideRow(["调整发布检查策略（严格 / 标准 / 宽松）", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "项目负责人", ROLE_GUIDE_NO]),
+    roleGuideRow(["发送发布准备提醒", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "计划内各项目负责人", ROLE_GUIDE_NO]),
+    roleGuideRow(["人工补录历史「已发布」标记", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "项目负责人", ROLE_GUIDE_NO]),
     roleGuideGroup("成员与空间"),
     roleGuideRow(["生成邀请链接", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["调整成员角色", "可调整其他空间主（至少保留一位）", "仅成员 / 查看者", ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
@@ -202,7 +209,7 @@ function openRoleGuide(){
 
   var menuRows = [
     roleGuideRow(["我的工作、消息中心、周回顾", "可见", "可见", "可见", "可见"]),
-    roleGuideRow(["需求池、项目（含全局健康度）、版本、交付说明、文档", "可见", "可见", "可见（按可见项目过滤）", "可见"]),
+    roleGuideRow(["需求池、项目（含全局健康度）、版本、交付报告、文档", "可见", "可见", "可见（按可见项目过滤）", "可见"]),
     roleGuideRow(["工作项（看板/列表/日历/甘特）、测试、分支", "可见", "可见", "可见（不可见项目的工作项不出现）", "可见"]),
     roleGuideRow(["报表（趋势与分布/完成记录/流程体检/交付图表/投入结构）", "可见", "可见", "可见（按可见项目过滤）", "可见"]),
     roleGuideRow(["成员负载、逾期与阻塞", "可见", "可见", "可见（按可见项目过滤）", "可见"]),
@@ -496,7 +503,7 @@ var settingsTab = "space";
 var platformTab = "account";
 var wfTab = "columns";
 function setWorkflowTab(tab){
-  if(["columns", "transitions", "priorities", "categories"].indexOf(tab) < 0) tab = "columns";
+  if(["columns", "transitions", "priorities", "categories", "release"].indexOf(tab) < 0) tab = "columns";
   wfTab = tab;
   document.querySelectorAll("#view-settings [data-wf-pane]").forEach(function(p){
     p.hidden = p.dataset.wfPane !== tab;
@@ -504,6 +511,7 @@ function setWorkflowTab(tab){
   document.querySelectorAll("#set-workflow [data-wf-tab]").forEach(function(b){
     b.setAttribute("aria-pressed", b.dataset.wfTab === tab ? "true" : "false");
   });
+  if(tab === "release") loadReleaseAccessCfg();
 }
 function initWorkflowTabs(){
   var bar = $("set-workflow");
@@ -1928,6 +1936,71 @@ $("btnPriorityReset").addEventListener("click", function(){
     toast(ex.message || "恢复默认失败", "bad");
   });
 });
+/* 发布维护权限：配置哪些身份可以维护发布计划、预览与记录实际发布 */
+var releaseAccessScope = null;
+var releaseAccessBusy = false;
+function releaseAccessUrl(){
+  var wsId = rt.currentWs && rt.currentWs.id;
+  return wsId ? "/api/workspaces/" + encodeURIComponent(wsId) + "/release-access" : null;
+}
+function canManageReleaseAccess(){
+  var role = rt.currentWs && rt.currentWs.myRole;
+  return role === "owner" || role === "admin";
+}
+function renderReleaseAccessCfg(){
+  var box = $("releaseAccessList");
+  if(!box) return;
+  var canManage = canManageReleaseAccess();
+  var scope = releaseAccessScope || { selected: [], options: [] };
+  var selected = scope.selected || [];
+  var options = scope.options || [];
+  box.innerHTML = options.map(function(opt){
+    var checked = selected.indexOf(opt.value) >= 0;
+    return '<label class="cfg-row release-scope-row' + (canManage ? "" : " is-locked") + '" data-release-scope="' + esc(opt.value) + '">' +
+      '<input type="checkbox"' + (checked ? " checked" : "") + (canManage && !releaseAccessBusy ? "" : " disabled") + ' data-release-scope-check />' +
+      '<span class="release-scope-main"><b>' + esc(opt.label) + '</b><span>' + esc(opt.description || "") + '</span></span>' +
+    '</label>';
+  }).join("");
+  if($("btnReleaseAccessSave")) $("btnReleaseAccessSave").disabled = !canManage || releaseAccessBusy;
+  if($("releaseAccessHint")) $("releaseAccessHint").textContent = canManage
+    ? "保存后对之后的发布操作生效；已打开的页面重新进入时刷新"
+    : "仅空间主、管理员可修改，这里以只读展示当前配置";
+}
+function loadReleaseAccessCfg(){
+  var box = $("releaseAccessList");
+  var url = releaseAccessUrl();
+  if(!box || !url) return;
+  box.innerHTML = UI.skeletonRows(2);
+  API.get(url).then(function(data){
+    releaseAccessScope = data || { selected: [], options: [] };
+    renderReleaseAccessCfg();
+  }).catch(function(ex){
+    box.innerHTML = '<div class="foot-note">加载失败：' + esc(ex.message || "网络异常") + '</div>';
+    if($("btnReleaseAccessSave")) $("btnReleaseAccessSave").disabled = true;
+  });
+}
+function saveReleaseAccessCfg(){
+  var url = releaseAccessUrl();
+  if(!url || releaseAccessBusy || !canManageReleaseAccess()) return;
+  var checked = Array.prototype.slice.call($("releaseAccessList").querySelectorAll("[data-release-scope-check]"))
+    .filter(function(input){ return input.checked; })
+    .map(function(input){ return input.closest("[data-release-scope]").dataset.releaseScope; });
+  if(!checked.length){ toast("至少保留一项可维护发布权限的身份", "warn"); return; }
+  releaseAccessBusy = true;
+  renderReleaseAccessCfg();
+  API.put(url, { selected: checked }).then(function(data){
+    releaseAccessBusy = false;
+    releaseAccessScope = data || releaseAccessScope;
+    renderReleaseAccessCfg();
+    toast("发布维护权限已保存", "fs");
+  }).catch(function(ex){
+    releaseAccessBusy = false;
+    renderReleaseAccessCfg();
+    toast(ex.message || "保存失败", "bad");
+  });
+}
+if($("btnReleaseAccessSave")) $("btnReleaseAccessSave").addEventListener("click", saveReleaseAccessCfg);
+
 var CHANNEL_LABEL = { webhook:"企业微信 / 钉钉 webhook", serverchan:"Server 酱", pushplus:"PushPlus" };
 function loadNotifyStatus(){
   if(!notifyStatusText) return;

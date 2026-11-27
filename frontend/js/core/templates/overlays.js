@@ -265,12 +265,24 @@ export var OVERLAYS_HTML = `<!-- ==================== 弹窗层 ================
             </div>
           </div>
         </div>
-<!-- 文档分享：只读链接（30 天有效，需先发布） -->
+<!-- 文档分享：只读链接（可选 7/30/90 天与复制权限，需先发布） -->
         <div class="modal-layer" id="dlgReqDocShare" role="dialog" aria-modal="true" aria-labelledby="dlgReqDocShareTitle">
           <div class="sheet">
             <h3 class="reqdoc-dlg-title" id="dlgReqDocShareTitle">分享文档</h3>
-            <p class="reqdoc-dlg-msg">拿到链接的人无需登录即可查看文档正文（不含评论与历史）；链接 30 天有效，可随时停止分享。文档需先发布。</p>
+            <p class="reqdoc-dlg-msg">拿到链接的人无需登录即可查看文档正文（不含评论与历史），可随时停止分享。重新生成会替换旧链接，期限与复制权限以本次选择为准。</p>
             <div class="reqdoc-dlg-form">
+              <label class="reqdoc-dlg-field">
+                <span>有效期</span>
+                <select id="reqDocShareDays">
+                  <option value="7">7 天</option>
+                  <option value="30" selected>30 天</option>
+                  <option value="90">90 天</option>
+                </select>
+              </label>
+              <label class="reqdoc-dlg-check">
+                <input type="checkbox" id="reqDocShareAllowCopy" checked />
+                <span>允许查看者复制与打印</span>
+              </label>
               <label class="reqdoc-dlg-field">
                 <span>只读链接</span>
                 <input id="reqDocShareUrl" type="text" readonly placeholder="点击下方「生成链接」" />
@@ -280,6 +292,29 @@ export var OVERLAYS_HTML = `<!-- ==================== 弹窗层 ================
               <button class="btn danger" type="button" id="reqDocShareRevoke">停止分享</button>
               <button class="btn" type="button" id="reqDocShareClose">关闭</button>
               <button class="btn primary" type="button" id="reqDocShareCopy">复制链接</button>
+            </div>
+          </div>
+        </div>
+<!-- 文档通知成员：发布后或更新后按范围提醒，只发通知不改正文 -->
+        <div class="modal-layer" id="dlgReqDocNotify" role="dialog" aria-modal="true" aria-labelledby="dlgReqDocNotifyTitle">
+          <div class="sheet">
+            <h3 class="reqdoc-dlg-title" id="dlgReqDocNotifyTitle">通知成员</h3>
+            <p class="reqdoc-dlg-msg" id="reqDocNotifyMsg">选择要提醒的成员。通知只发站内消息；对方开启邮件后才会收到邮件。</p>
+            <div class="reqdoc-dlg-form">
+              <div id="reqDocNotifyScopes" class="cs-vis" role="radiogroup" aria-label="通知范围"></div>
+              <div class="reqdoc-dlg-field" id="reqDocNotifyWhoField" hidden>
+                <span>通知成员</span>
+                <div id="reqDocNotifyWho" class="cs-who"></div>
+              </div>
+              <label class="reqdoc-dlg-field">
+                <span>附言（选填）</span>
+                <input id="reqDocNotifyNote" type="text" maxlength="100" placeholder="例如：接口字段有调整，请前端确认" />
+              </label>
+              <p class="reqdoc-dlg-hint" id="reqDocNotifyHint">同一成员 30 分钟内只会收到一次该文档的通知。</p>
+            </div>
+            <div class="reqdoc-dlg-foot">
+              <button class="btn" type="button" id="reqDocNotifyCancel">取消</button>
+              <button class="btn primary" type="button" id="reqDocNotifySend">发送通知</button>
             </div>
           </div>
         </div>

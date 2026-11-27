@@ -690,7 +690,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
               <div class="attach-list" id="attachList"></div>
               <div class="row row-gap" style="margin-top:8px">
                 <button class="btn sm" type="button" id="btnAttach">上传文件（可多选 / 拖入）</button>
-                <span class="foot-note">jpg/png/gif/webp/pdf/txt/md/zip/xlsx/xls/doc/docx/ppt/pptx · 单个 ≤10MB</span>
+                <span class="foot-note">jpg/png/gif/webp/pdf/txt/md/html/zip/xlsx/xls/doc/docx/ppt/pptx · 单个 ≤10MB</span>
                 <input type="file" id="iAttachFile" hidden multiple />
               </div>
             </div>
@@ -845,7 +845,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
                     </button>
                     <span class="comment-attach-tip" id="commentAttachTip"></span>
                     <input type="file" id="iCommentFiles" multiple hidden
-                           accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx">
+                           accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.html,.htm,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx">
                     <span class="spacer"></span>
                     <button class="btn primary" type="button" id="btnCommentSend">发送</button>
                   </div>

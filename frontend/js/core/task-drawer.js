@@ -4141,7 +4141,7 @@ var pendingCommentFiles = [];
 /* 按任务保留未发送的评论草稿：切任务、保存表单或临时关闭抽屉后还能找回 */
 var commentDrafts = Object.create(null);
 var lastCommentDraftId = null;
-var COMMENT_FILE_RE = /\.(jpe?g|png|gif|webp|pdf|txt|md|zip|docx?|xlsx?|pptx?)$/i;
+var COMMENT_FILE_RE = /\.(jpe?g|png|gif|webp|pdf|txt|md|html?|zip|docx?|xlsx?|pptx?)$/i;
 var COMMENT_FILE_MAX = 10 * 1024 * 1024;
 var COMMENT_FILE_MAX_COUNT = 5;
 

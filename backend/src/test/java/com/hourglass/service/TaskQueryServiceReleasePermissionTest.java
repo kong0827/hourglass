@@ -143,7 +143,9 @@ class TaskQueryServiceReleasePermissionTest {
         project.setWorkspaceId(WS);
         project.setOwnerUserId("PM");
         when(reqs.selectById(REQ)).thenReturn(project);
-        ReleasePermissionService actual = new ReleasePermissionService(members, reqs, access);
+        ReleasePermissionService actual = new ReleasePermissionService(members, reqs, access,
+                new ReleaseAccessScopeService(mock(com.hourglass.mapper.WorkspaceMapper.class),
+                        mock(ActivityService.class)));
         TaskQueryService service = service(actual);
 
         task.setOwnerUserId("OTHER");

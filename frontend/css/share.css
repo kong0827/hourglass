@@ -75,8 +75,30 @@ body.share-error-mode .app{display:none;}
 .share-doc pre{
   margin:14px 0;padding:var(--space-3) 14px;border-radius:var(--r-md);
   background:var(--surface-sunken);overflow:auto;
+  white-space:pre-wrap;word-break:break-word;
 }
 .share-doc pre code{padding:0;background:none;font-size:13px;line-height:1.7;}
+/* 代码块：语言标签 + 悬停复制；容器负责定位，pre 自己横向滚动 */
+.share-code{position:relative;margin:14px 0;}
+.share-code>pre{margin:0;}
+.share-code[data-lang]>pre{padding-top:30px;}
+.share-code-lang{
+  position:absolute;top:7px;left:11px;z-index:1;pointer-events:none;
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;
+  line-height:1;color:var(--text-3);letter-spacing:.02em;
+}
+.share-code-tools{position:absolute;top:6px;right:6px;z-index:1;opacity:0;
+  transition:opacity var(--dur-fast) var(--ease-out);}
+.share-code:hover .share-code-tools,.share-code-tools:focus-within{opacity:1;}
+.share-code-btn{
+  height:22px;padding:0 8px;border:1px solid var(--border);border-radius:var(--r-xs);
+  background:var(--surface);color:var(--text-3);font:inherit;font-size:11px;line-height:1;
+  cursor:pointer;
+  transition:color var(--dur-fast) var(--ease-out),background var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out);
+}
+.share-code-btn:hover{color:var(--text);background:var(--surface-hover);}
+.share-code-btn.is-copied{color:var(--success-fg);border-color:var(--success-border);background:var(--success-soft);}
+@media (hover:none){.share-code-tools{opacity:.75;}}
 .share-doc table{border-collapse:collapse;width:auto;max-width:100%;margin:14px 0;font-size:14px;}
 .share-doc th,.share-doc td{border:1px solid var(--border);padding:var(--space-2) 10px;vertical-align:middle;}
 .share-doc th{background:var(--surface-sunken);font-weight:650;text-align:left;}
@@ -86,4 +108,44 @@ body.share-error-mode .app{display:none;}
 @media (max-width:900px){
   #view-doc{padding:0 10px 10px;}
   .share-doc{padding:var(--space-4);}
+}
+/* 分享者关闭「允许复制与打印」：禁选中、右键与拖图；打印只留一行说明 */
+body.share-no-copy .share-doc{user-select:none;-webkit-user-select:none;}
+body.share-no-copy .share-doc img{-webkit-user-drag:none;}
+.share-print-block{display:none;}
+@media print{
+  body.share-no-copy .app{display:none;}
+  body.share-no-copy .share-print-block{display:block;padding:24px;font-size:14px;color:#000;}
+}
+
+/* 文档分享：大纲与查找（只读，不新增常驻面板；表格不启用） */
+.doc-share-page{max-width:1040px;}
+.doc-share-tools{margin-left:auto;display:flex;align-items:center;gap:6px;}
+.doc-share-layout{display:flex;align-items:flex-start;gap:18px;width:100%;}
+.doc-share-layout .share-doc{flex:1;min-width:0;}
+.share-toc{
+  position:sticky;top:16px;flex:none;width:196px;max-height:calc(100vh - 120px);overflow:auto;
+  padding:8px 0 8px 10px;border-left:1px solid var(--border);
+}
+.share-toc[hidden]{display:none;}
+.share-toc-head{font-size:12px;font-weight:600;color:var(--text-3);padding:0 8px 6px;}
+.share-toc-body{display:flex;flex-direction:column;gap:1px;}
+.share-toc-body button{
+  display:block;width:100%;border:none;background:none;text-align:left;padding:4px 8px;
+  border-radius:var(--r-xs);font-size:12.5px;line-height:1.5;color:var(--text-2);cursor:pointer;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.share-toc-body button:hover{background:var(--surface-hover);color:var(--text);}
+.share-find{
+  display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;
+  border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);
+}
+.share-find[hidden]{display:none;}
+.share-find input{flex:1;min-width:0;border:none;background:none;outline:none;font-size:13px;color:var(--text);}
+.share-find-cnt{font-size:12px;color:var(--text-3);white-space:nowrap;}
+mark.share-hit{background:#fff1a8;color:inherit;border-radius:2px;padding:0 1px;}
+mark.share-hit.on{background:#ffd666;box-shadow:0 0 0 1px #d48806 inset;}
+@media (max-width:900px){
+  .doc-share-layout{flex-direction:column;gap:12px;}
+  .share-toc{position:static;width:100%;max-height:220px;border-left:none;border-bottom:1px solid var(--border);padding:4px 0 8px;}
 }

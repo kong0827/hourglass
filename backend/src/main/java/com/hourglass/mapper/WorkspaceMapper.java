@@ -24,6 +24,11 @@ public interface WorkspaceMapper {
     /** 回写最近一次推送尝试结果（设置页「是否真正生效」的依据） */
     int updateNotifyResult(@Param("id") String id, @Param("status") String status);
 
+    /** 空间级发布维护权限（逗号分隔身份集合；空值按默认管理者口径处理） */
+    String selectReleaseAccessScope(@Param("id") String id);
+
+    int updateReleaseAccessScope(@Param("id") String id, @Param("scope") String scope);
+
     int deleteById(String id);
 
     /** 该账号是唯一空间主的共享空间数量（删账号前校验，其他空间主不受影响） */

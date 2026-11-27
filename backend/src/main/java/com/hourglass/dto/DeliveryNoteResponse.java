@@ -58,6 +58,8 @@ public class DeliveryNoteResponse {
     private List<ReleaseOption> releaseOptions = new ArrayList<ReleaseOption>();
     private Baseline baseline;
     private Counts counts;
+    /** 本次发布涉及的项目（按工作项归属统计；单项目版本只有一行） */
+    private List<ProjectRow> projects = new ArrayList<ProjectRow>();
     private List<ScopeRow> scope = new ArrayList<ScopeRow>();
     private DemandSummary demandSummary;
     private List<DemandRow> demands = new ArrayList<DemandRow>();
@@ -175,6 +177,21 @@ public class DeliveryNoteResponse {
         private Integer done;
         private Integer doing;
         private Integer currentBound;
+        /** 按需求性质统计本次已上线项：新功能 / 体验优化 / 缺陷 / 其他；未关联需求的工作项不进这四类 */
+        private Integer newCount;
+        private Integer improveCount;
+        private Integer fixCount;
+        private Integer otherCount;
+        private Integer unlinkedCount;
+    }
+
+    @Data
+    public static class ProjectRow {
+        private String id;
+        private String name;
+        private Integer releasedCount;
+        private Integer pendingCount;
+        private Integer taskCount;
     }
 
     @Data
@@ -196,6 +213,13 @@ public class DeliveryNoteResponse {
         private Integer estimateMinutes;
         private Integer workMinutes;
         private String reason;
+        /** 归属项目（跨项目发布时用于分组；单项目版本内同值） */
+        private String projectId;
+        private String projectName;
+        /** 需求性质：new 新增 / improve 优化 / fix 修复 / other 其他；未关联需求时为空，不做推断 */
+        private String kind;
+        private String kindName;
+        private LocalDateTime completedAt;
     }
 
     @Data
@@ -225,6 +249,9 @@ public class DeliveryNoteResponse {
         private String targetVersionName;
         private LocalDate deliveredAt;
         private String note;
+        /** 需求性质：new 新增 / improve 优化 / fix 修复 / other 其他；空=未记录 */
+        private String kind;
+        private String kindName;
     }
 
     @Data

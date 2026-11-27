@@ -138,7 +138,7 @@ public class VersionPhaseService {
         fillBucket(resp.getUnbound(), unbound);
         resp.getUnbound().setBranches(branchStatsOf(unbound.tasks, branchBriefs));
         boolean identified = userId != null && !userId.trim().isEmpty();
-        boolean canManage = identified && permissions.canManageProject(userId, workspaceId, reqId);
+        boolean canManage = identified && permissions.canManageRelease(userId, workspaceId, reqId);
         List<VersionRelease> projectRecords = versionTaskMapper.selectReleaseRecordsByReq(workspaceId, reqId);
         Map<String, List<VersionRelease>> recordsByVersion = new HashMap<String, List<VersionRelease>>();
         for (VersionRelease record : projectRecords)
@@ -271,7 +271,7 @@ public class VersionPhaseService {
             }
             Boolean manage = canManage.get(row.getReqId());
             if (manage == null) {
-                manage = permissions.canManageProject(userId, workspaceId, row.getReqId());
+                manage = permissions.canManageRelease(userId, workspaceId, row.getReqId());
                 canManage.put(row.getReqId(), manage);
             }
             row.setCanManage(manage);

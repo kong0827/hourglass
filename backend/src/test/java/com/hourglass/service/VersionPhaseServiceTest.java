@@ -557,26 +557,29 @@ class VersionPhaseServiceTest {
         WorkspaceMember member = new WorkspaceMember();
         member.setRole("member");
         when(members.selectMember(WS, "U9")).thenReturn(member);
-        when(access.canWrite(WS, "U9", REQ)).thenReturn(true);
-        ReleasePermissionService actualPermissions = new ReleasePermissionService(members, reqs, access);
+        when(access.canWrite(any(WorkspaceMember.class), eq(WS), eq(REQ))).thenReturn(true);
+        com.hourglass.mapper.WorkspaceMapper workspaces = mock(com.hourglass.mapper.WorkspaceMapper.class);
+        when(workspaces.selectReleaseAccessScope(WS)).thenReturn("owner,admin,project_owner,project_write");
+        ReleasePermissionService actualPermissions = new ReleasePermissionService(members, reqs, access,
+                new ReleaseAccessScopeService(workspaces, mock(ActivityService.class)));
         VersionPhaseService actual = new VersionPhaseService(versions, versionTasks, reqs,
                 demands, timeLogs, users, access, branches, actualPermissions, releases, commitments);
         org.springframework.test.util.ReflectionTestUtils.setField(actual, "publications", publications);
 
         VersionStatsResponse initial = actual.versionStats(WS, REQ, "U9");
         assertEquals(0, initial.getVersions().get(0).getPreLaunchCount());
-        assertFalse(initial.getVersions().get(0).getCanPublish());
-        assertFalse(initial.getVersions().get(1).getCanPublish(), "折算任务或显示名都不授予其他版本发布权");
-        assertFalse(initial.getVersions().get(1).getCanManageReleasePlan());
+        assertTrue(initial.getVersions().get(0).getCanPublish(), "项目可写即可记录发布，不要求空间管理员");
+        assertTrue(initial.getVersions().get(1).getCanPublish(), "折算任务或显示名都不影响按项目写权限判定发布权");
+        assertTrue(initial.getVersions().get(1).getCanManageReleasePlan());
         assertEquals(7L, initial.getVersions().get(1).getRevision());
 
         real.setOwnerUserId("U9");
-        assertFalse(actual.versionStats(WS, REQ, "U9").getVersions().get(1).getCanPublish(), "任务负责人不自动获得版本发布管理权");
-        when(access.canWrite(WS, "U9", REQ)).thenReturn(false);
+        assertTrue(actual.versionStats(WS, REQ, "U9").getVersions().get(1).getCanPublish(), "任务负责人身份不是判定依据，写权限才是");
+        when(access.canWrite(any(WorkspaceMember.class), eq(WS), eq(REQ))).thenReturn(false);
         assertFalse(actual.versionStats(WS, REQ, "U9").getVersions().get(1).getCanPublish());
         assertFalse(actual.versionStats(WS, REQ).getVersions().get(1).getCanPublish(), "无身份不能沿用 canWrite(null) 的宽松语义");
 
-        when(access.canWrite(WS, "U9", REQ)).thenReturn(true);
+        when(access.canWrite(any(WorkspaceMember.class), eq(WS), eq(REQ))).thenReturn(true);
         project.setOwnerUserId("U9");
         VersionStatsResponse managed = actual.versionStats(WS, REQ, "U9");
         assertTrue(managed.getVersions().get(0).getCanManageReleasePlan());
@@ -593,13 +596,12 @@ class VersionPhaseServiceTest {
         bind(real, "V2");
         Task unbound = open("UNBOUND", FIRST_RELEASE.plusDays(1), 0, 20);
         when(versionTasks.selectStatsByReq(WS, REQ)).thenReturn(Arrays.asList(real, unbound));
-        when(permissions.canManageProject("U9", WS, REQ)).thenReturn(true);
+        when(permissions.canManageRelease("U9", WS, REQ)).thenReturn(true);
 
         VersionOverviewResponse response = service.overview(WS, "U9");
 
         assertEquals(1, response.getTotals().getVersionCount());
-        verify(permissions).canManageProject("U9", WS, REQ);
-        verify(permissions, never()).canPublishVersion(any(), any(), any(), anyList());
+        verify(permissions).canManageRelease("U9", WS, REQ);
         verify(versionTasks).selectStatsByReq(WS, REQ);
     }
 

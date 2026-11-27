@@ -254,7 +254,8 @@ class PermissionRulesTest {
         project.setWorkspaceId(WS);
         project.setOwnerUserId(MEMBER);
         when(requirementMapper.selectById(PROJECT)).thenReturn(project);
-        ReleasePermissionService release = new ReleasePermissionService(memberMapper, requirementMapper, projectAccessService);
+        ReleasePermissionService release = new ReleasePermissionService(memberMapper, requirementMapper,
+                projectAccessService, new ReleaseAccessScopeService(workspaceMapper, mock(ActivityService.class)));
         CategoryService categories = new CategoryService(mock(CategoryMapper.class), requirementMapper,
                 mock(ActivityService.class), mock(DeletionTraceService.class),
                 projectAccessService, release, mock(WorkspaceMetaCache.class),

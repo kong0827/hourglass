@@ -46,7 +46,8 @@ class RequirementDocControllerRoutingTest {
         ws.setId("W1");
         when(workspaceService.resolve(eq("U1"), any())).thenReturn(ws);
 
-        mvc = MockMvcBuilders.standaloneSetup(new RequirementDocController(docService, workspaceService,
+        mvc = MockMvcBuilders.standaloneSetup(new RequirementDocController(docService,
+                        mock(com.hourglass.service.RequirementDocTrashService.class), workspaceService,
                         mock(HtmlDocxService.class), mock(AttachmentService.class)))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -77,6 +78,15 @@ class RequirementDocControllerRoutingTest {
                 .andExpect(jsonPath("$.data.items[0].docTitle").value("登录需求"));
 
         verify(docService).feedActivities("W1", "U1", 0, 100);
+        verify(docService, never()).getVisible(any(), any(), any());
+    }
+
+    @Test
+    void trashListHitsTrashRouteInsteadOfDocDetail() throws Exception {
+        mvc.perform(get("/api/req-docs/trash").param("workspace", "W1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0));
+
         verify(docService, never()).getVisible(any(), any(), any());
     }
 

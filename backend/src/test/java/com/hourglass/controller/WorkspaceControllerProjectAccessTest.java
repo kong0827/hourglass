@@ -62,7 +62,8 @@ class WorkspaceControllerProjectAccessTest {
         notificationEvents = mock(NotificationEventService.class);
         mvc = MockMvcBuilders.standaloneSetup(new WorkspaceController(workspaceService, mock(UserMapper.class),
                         projectAccessService, projectMemberRoleService,
-                        requirementMapper, activityService, notificationEvents, auditService))
+                        requirementMapper, activityService, notificationEvents, auditService,
+                        mock(com.hourglass.service.ReleaseAccessScopeService.class)))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
         LoginUser user = new LoginUser("U1", "u1", "x", "我", "user");

@@ -3,18 +3,20 @@
 <mapper namespace="com.hourglass.mapper.ReqDocShareMapper">
 
   <select id="selectByDoc" resultType="ReqDocShare">
-    SELECT workspace_id, doc_id, token, created_at, expires_at FROM req_doc_share
+    SELECT workspace_id, doc_id, token, created_at, expires_at, allow_copy FROM req_doc_share
     WHERE workspace_id = #{workspaceId} AND doc_id = #{docId}
   </select>
 
   <select id="selectByToken" resultType="ReqDocShare">
-    SELECT workspace_id, doc_id, token, created_at, expires_at FROM req_doc_share WHERE token = #{token}
+    SELECT workspace_id, doc_id, token, created_at, expires_at, allow_copy FROM req_doc_share WHERE token = #{token}
   </select>
 
   <insert id="upsert">
-    INSERT INTO req_doc_share (workspace_id, doc_id, token, created_at, expires_at)
-    VALUES (#{workspaceId}, #{docId}, #{token}, COALESCE(#{createdAt}, CURRENT_TIMESTAMP), #{expiresAt})
-    ON DUPLICATE KEY UPDATE token = VALUES(token), created_at = VALUES(created_at), expires_at = VALUES(expires_at)
+    INSERT INTO req_doc_share (workspace_id, doc_id, token, created_at, expires_at, allow_copy)
+    VALUES (#{workspaceId}, #{docId}, #{token}, COALESCE(#{createdAt}, CURRENT_TIMESTAMP), #{expiresAt},
+            COALESCE(#{allowCopy}, 1))
+    ON DUPLICATE KEY UPDATE token = VALUES(token), created_at = VALUES(created_at), expires_at = VALUES(expires_at),
+                            allow_copy = VALUES(allow_copy)
   </insert>
 
   <delete id="deleteByDoc">

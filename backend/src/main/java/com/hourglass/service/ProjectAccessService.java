@@ -153,7 +153,11 @@ public class ProjectAccessService {
         if (userId == null) {
             return true;
         }
-        WorkspaceMember member = memberMapper.selectMember(workspaceId, userId);
+        return canWrite(memberMapper.selectMember(workspaceId, userId), workspaceId, projectId);
+    }
+
+    /** 已取到成员行时复用，避免同一判定重复回查；member 为 null 一律按无权限。 */
+    public boolean canWrite(WorkspaceMember member, String workspaceId, String projectId) {
         if (member == null) {
             return false;
         }

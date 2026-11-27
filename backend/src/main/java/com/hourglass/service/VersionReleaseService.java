@@ -476,11 +476,18 @@ public class VersionReleaseService {
         return encode(snapshot);
     }
 
-    /** 计划编辑器：只返回当前用户可管理的项目与版本，避免选出必然保存失败的组合。 */    public ReleasePlanOptions planOptions(String userId, String workspaceId) {
+    /** 计划编辑器：只返回当前用户可管理的项目与版本，避免选出必然保存失败的组合。 */
+    public ReleasePlanOptions planOptions(String userId, String workspaceId) {
         ReleasePlanOptions options = new ReleasePlanOptions();
         Map<String, ReleasePlanOptions.ProjectOption> projects = new LinkedHashMap<String, ReleasePlanOptions.ProjectOption>();
+        Map<String, Boolean> manageable = new LinkedHashMap<String, Boolean>();
         for (ReleasePlanOptionRow row : mapper.selectPlanVersionOptions(workspaceId)) {
-            if (!permissions.canManageProject(userId, workspaceId, row.getReqId())) continue;
+            Boolean manage = manageable.get(row.getReqId());
+            if (manage == null) {
+                manage = permissions.canManageRelease(userId, workspaceId, row.getReqId());
+                manageable.put(row.getReqId(), manage);
+            }
+            if (!manage) continue;
             ReleasePlanOptions.ProjectOption project = projects.get(row.getReqId());
             if (project == null) {
                 project = new ReleasePlanOptions.ProjectOption();
@@ -614,7 +621,7 @@ public class VersionReleaseService {
 
     private ProjectVersion lockVersion(String userId, String workspaceId, String id, String otherMember) {
         ProjectVersion initial = requireVersion(userId, workspaceId, id);
-        permissions.assertManageProject(userId, workspaceId, initial.getReqId());
+        permissions.assertManageRelease(userId, workspaceId, initial.getReqId());
         scopeLock.lockProjects(workspaceId, initial.getReqId());
         ProjectVersion current = requireVersionForUpdate(userId, workspaceId, id);
         if (!Objects.equals(initial.getReqId(), current.getReqId())) throw new AppException(409, "版本项目已变化");
@@ -625,7 +632,7 @@ public class VersionReleaseService {
             Map<String, Object> snapshot = memberMapper.selectDeliveryAccessForUpdate(workspaceId, member, null);
             if (member.equals(userId) && (snapshot == null || snapshot.get("role") == null)) throw AppException.badRequest("录入人必须是当前空间成员");
         }
-        permissions.assertManageProjectForUpdate(userId, workspaceId, current.getReqId());
+        permissions.assertManageReleaseForUpdate(userId, workspaceId, current.getReqId());
         if (isEnded(current.getStatus())) {
             throw AppException.badRequest("已关闭或已取消的版本不能创建发布计划或记录发布");
         }
@@ -742,7 +749,7 @@ public class VersionReleaseService {
         SortedSet<String> projectIds = new TreeSet<String>();
         for (ProjectVersion version : initial.values()) {
             projectIds.add(version.getReqId());
-            permissions.assertManageProject(userId, workspaceId, version.getReqId());
+            permissions.assertManageRelease(userId, workspaceId, version.getReqId());
         }
         scopeLock.lockProjects(workspaceId, projectIds.toArray(new String[0]));
         List<ProjectVersion> versions = new ArrayList<ProjectVersion>();
@@ -753,7 +760,7 @@ public class VersionReleaseService {
             if (isEnded(version.getStatus())) {
                 throw AppException.badRequest("已关闭或已取消的版本不能加入发布计划：" + version.getName());
             }
-            permissions.assertManageProjectForUpdate(userId, workspaceId, version.getReqId());
+            permissions.assertManageReleaseForUpdate(userId, workspaceId, version.getReqId());
             versions.add(version);
         }
         return versions;

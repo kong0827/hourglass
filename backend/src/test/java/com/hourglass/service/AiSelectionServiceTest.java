@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
@@ -175,6 +176,36 @@ class AiSelectionServiceTest {
         com.hourglass.dto.AiSelectionResponse res = svc.transform("u1", "w1", "doc1", req);
         assertEquals("字段说明表列出三个字段。", res.getText());
         assertEquals(0, res.getNotes().size());
+    }
+
+    /** 「提要求」：用户补的一句话必须进入提示词，而不是只存在前端 */
+    @Test
+    void instructionReachesRewritePrompt() {
+        RequirementDocService docService = mock(RequirementDocService.class);
+        AiConfigService configService = mock(AiConfigService.class);
+        AiClient client = mock(AiClient.class);
+        TaskMapper taskMapper = mock(TaskMapper.class);
+        RequirementDoc doc = new RequirementDoc();
+        doc.setId("doc1");
+        doc.setTitle("字段说明");
+        doc.setFormat("html");
+        when(docService.getVisible("w1", "u1", "doc1")).thenReturn(doc);
+        when(configService.resolve("u1", "w1")).thenReturn(new com.hourglass.dto.AiConfig());
+        AiClient.Reply reply = new AiClient.Reply();
+        reply.content = "建议文本";
+        when(client.chat(any(), any(), any(), anyBoolean())).thenReturn(reply);
+
+        AiSelectionService svc = new AiSelectionService(docService, configService, client, taskMapper);
+        AiSelectionRequest req = new AiSelectionRequest();
+        req.setAction("rewrite");
+        req.setSelection("字段说明表列出三个字段：id、status、updatedAt。");
+        req.setInstruction("面向非技术读者，语气更正式");
+
+        svc.transform("u1", "w1", "doc1", req);
+
+        org.mockito.ArgumentCaptor<String> userPrompt = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(client).chat(any(), any(), userPrompt.capture(), anyBoolean());
+        assertTrue(userPrompt.getValue().contains("面向非技术读者，语气更正式"));
     }
 
     private static String repeat(String unit, int times) {

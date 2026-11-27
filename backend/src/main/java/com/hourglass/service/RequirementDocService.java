@@ -9,6 +9,7 @@ import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hourglass.dto.ReqDocReorderRequest;
+import com.hourglass.dto.ReqDocNotifyRequest;
 import com.hourglass.dto.ReqDocSaveRequest;
 import com.hourglass.dto.ReqDocShareResponse;
 import com.hourglass.dto.ReqDocActivityView;
@@ -50,6 +51,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -120,13 +122,29 @@ public class RequirementDocService {
             .addAttributes("a", "href", "title", "target", "rel")
             .addProtocols("a", "href", "http", "https", "mailto");
 
-    /** style 只允许这三个属性（Quill 的颜色 / 背景 / 对齐） */
+    /**
+     * 允许保留的视觉样式：只收排版类“纯展示”属性，刻意排除 position / display / float /
+     * background-image / content 等可遮挡、隐藏或引用外部资源的属性。
+     * HTML 文件导入会把计算样式内联成这些属性，Word 导入也依赖这份白名单。
+     */
     private static final java.util.Set<String> STYLE_ALLOW = new java.util.HashSet<String>(
-            java.util.Arrays.asList("color", "background-color", "text-align"));
+            java.util.Arrays.asList(
+                    "color", "background-color", "text-align",
+                    "font-size", "font-weight", "font-style", "font-family", "line-height",
+                    "text-decoration", "text-decoration-line", "text-indent", "text-transform",
+                    "white-space", "word-break", "overflow-wrap", "letter-spacing", "direction",
+                    "vertical-align", "list-style-type",
+                    "margin", "margin-top", "margin-right", "margin-bottom", "margin-left",
+                    "padding", "padding-top", "padding-right", "padding-bottom", "padding-left",
+                    "border", "border-top", "border-right", "border-bottom", "border-left",
+                    "border-width", "border-style", "border-color", "border-collapse", "border-spacing",
+                    "border-radius",
+                    "width", "height", "max-width", "max-height", "min-width",
+                    "box-sizing", "table-layout"));
 
-    /** 属性值只允许颜色与对齐这类字面量，挡掉 url(...) / expression(...) */
-    private static final java.util.regex.Pattern STYLE_VALUE =
-            java.util.regex.Pattern.compile("^[#a-zA-Z0-9(),.%\\s-]{1,60}$");
+    /** 样式值里一旦出现这些片段就可能引用外部资源或执行表达式，整条丢弃 */
+    private static final String[] STYLE_VALUE_BLOCK = {
+            "url(", "expression", "javascript:", "@import", "behavior", "binding", "attr(", "\\"};
 
     /** xdocreport 用样式 id 作 class：英文 Word 是 Heading1，中文 Word 内置标题 id 是 1~6 */
     private static final java.util.regex.Pattern WORD_HEADING_TOKEN =
@@ -311,21 +329,34 @@ public class RequirementDocService {
     }
 
     /**
-     * 创建人保护（A 轻量档）：把草稿已有的「负责人 + 管理员」口径扩展到已发布文档的改删 / 发布撤回 / 恢复历史。
+     * 正文编辑门控：项目/空间可写 + 文档可见（getVisible 已校验）。
+     * 可见范围内的项目成员都能改正文、标题、分类、状态与恢复历史，与在线文档的协作习惯一致；
+     * 删除 / 可见范围 / 发布 / 迁移项目仍走 assertDocMutate（负责人或管理员）。
+     */
+    private void assertDocEdit(String workspaceId, String userId, RequirementDoc d) {
+        projectAccess.assertWrite(workspaceId, userId, d.getReqId());
+    }
+
+    /** 负责人本人或空间 owner/admin（或文档无负责人时回退项目可写；userId=null 为系统级联） */
+    private boolean canDocMutate(String workspaceId, String userId, RequirementDoc d) {
+        if (userId == null) {
+            return true;
+        }
+        String owner = Texts.trimToNull(d.getOwnerUserId());
+        return owner == null || owner.equals(userId) || projectAccess.canManage(workspaceId, userId);
+    }
+
+    /**
+     * 结构操作门控（删除 / 可见范围 / 发布撤回 / 项目迁移）：创建人保护。
      * 先走项目/空间可写门控；再要求负责人本人或空间 owner/admin。
      * 空负责人（历史自由文本）回退项目可写，不锁死；userId=null 为系统级联（项目删除等），跳过。
-     * 排序/新建子文档/分享链接不走此门控（组织/新增/分发，不改父文档内容或可见状态）。
      */
     private void assertDocMutate(String workspaceId, String userId, RequirementDoc d) {
         projectAccess.assertWrite(workspaceId, userId, d.getReqId());
-        if (userId == null) {
+        if (canDocMutate(workspaceId, userId, d)) {
             return;
         }
-        String owner = Texts.trimToNull(d.getOwnerUserId());
-        if (owner == null || owner.equals(userId) || projectAccess.canManage(workspaceId, userId)) {
-            return;
-        }
-        throw new AppException(403, "仅文档负责人或空间管理员可编辑 / 删除");
+        throw new AppException(403, "仅文档负责人或空间管理员可删除 / 调整可见范围 / 发布");
     }
 
     public List<Task> tasks(String workspaceId, String id) {
@@ -401,11 +432,30 @@ public class RequirementDocService {
     @Transactional
     public RequirementDoc update(String userId, String workspaceId, String id, ReqDocSaveRequest req) {
         RequirementDoc d = getVisible(workspaceId, userId, id);
-        assertDocMutate(workspaceId, userId, d);
+        assertDocEdit(workspaceId, userId, d);
         String oldVisibility = Texts.trimToNull(d.getVisibility());
         List<String> oldMemberIds = VIS_MEMBERS.equals(oldVisibility)
                 ? docMapper.selectVisibilityMemberIds(id) : java.util.Collections.<String>emptyList();
         String requestedVisibility = Texts.trimToNull(req.getVisibility());
+        /* 项目成员可改正文/标题/分类/状态；可见范围、负责人、所属项目属于治理项，仍限负责人或管理员 */
+        if (!canDocMutate(workspaceId, userId, d)) {
+            String oldVisNorm = oldVisibility == null ? VIS_TEAM : oldVisibility;
+            String requestedNorm = requestedVisibility == null ? null : visOf(requestedVisibility);
+            if (requestedNorm != null && !requestedNorm.equals(oldVisNorm)) {
+                throw new AppException(403, "仅文档负责人或空间管理员可调整可见范围");
+            }
+            if (req.getMemberIds() != null) {
+                throw new AppException(403, "仅文档负责人或空间管理员可调整可见成员");
+            }
+            String requestedOwner = Texts.trimToNull(req.getOwner());
+            if (requestedOwner != null && !requestedOwner.equals(Texts.trimToNull(d.getOwner()))) {
+                throw new AppException(403, "仅文档负责人或空间管理员可改派负责人");
+            }
+            String requestedReqId = Texts.trimToNull(req.getReqId());
+            if (requestedReqId != null && !requestedReqId.equals(Texts.trimToNull(d.getReqId()))) {
+                throw new AppException(403, "仅文档负责人或空间管理员可调整所属项目");
+            }
+        }
         if (requestedVisibility != null && VIS_TEAM.equals(oldVisibility)
                 && !VIS_TEAM.equals(requestedVisibility)) {
             /* 团队共享收窄会让其他成员突然看不到：只允许文档负责人操作，避免管理员误锁他人 */
@@ -674,7 +724,7 @@ public class RequirementDocService {
     @Transactional
     public RequirementDoc changeStatus(String userId, String workspaceId, String id, String status) {
         RequirementDoc d = getVisible(workspaceId, userId, id);
-        assertDocMutate(workspaceId, userId, d);
+        assertDocEdit(workspaceId, userId, d);
         if (!"draft".equals(status) && !"active".equals(status) && !"done".equals(status)) {
             throw AppException.badRequest("文档状态不合法");
         }
@@ -691,7 +741,7 @@ public class RequirementDocService {
     @Transactional
     public RequirementDoc rename(String userId, String workspaceId, String id, String title) {
         RequirementDoc d = getVisible(workspaceId, userId, id);
-        assertDocMutate(workspaceId, userId, d);
+        assertDocEdit(workspaceId, userId, d);
         String newTitle = Texts.cut(Texts.trimToNull(title), 100);
         if (newTitle == null) {
             throw AppException.badRequest("文档标题不能为空");
@@ -707,8 +757,8 @@ public class RequirementDocService {
     }
 
     /**
-     * 删除需求：任务上的关联解绑（任务本身不动），然后删需求。
-     * 任务保留原项目，所以不会连带删任务。
+     * 删除文档：移入回收站（30 天），任务上的关联、评论、历史与附件都保留，恢复后原样可用。
+     * 子文档立即提升到被删文档的父级；分享链接立即失效，避免对外继续暴露正文。
      */
     public void delete(String workspaceId, String id) {
         delete(null, workspaceId, id);
@@ -721,23 +771,18 @@ public class RequirementDocService {
         deletionTrace.recordDelete(workspaceId, userId, "requirement_doc_delete", "requirement_doc", id,
                 d.getTitle(), "删除需求文档「" + d.getTitle() + "」（"
                         + (d.getReqId() == null ? "未归属项目" : "项目 " + d.getReqId())
-                        + "；子文档上移，关联任务已解绑，评论与历史一并清理）");
+                        + "；移入回收站，30 天内可恢复）");
         /* 子文档提升到被删文档的父级，避免整棵子树变成孤儿 */
         docMapper.reparentChildren(workspaceId, id, d.getParentId());
-        docMapper.deleteDemandLinksByDoc(workspaceId, id);
-        java.util.List<String> affectedTaskIds = taskMapper.selectIdsByReqDocForCascade(workspaceId, id);
-        docMapper.clearTaskRef(workspaceId, d.getId());
-        deletionTrace.logTaskCascade(workspaceId, userId, affectedTaskIds,
-                "关联需求文档「" + d.getTitle() + "」已删除，自动解除关联");
-        commentMapper.deleteByDoc(workspaceId, id);
-        historyMapper.deleteByDoc(workspaceId, id);
+        /* 回收站里的文档必须立刻对外不可见：旧公开链接直接吊销 */
         shareMapper.deleteByDoc(workspaceId, id);
-        docMapper.deleteVisibilityMembersByDoc(workspaceId, id);
-        attachmentService.deleteByTarget(workspaceId, id, AttachmentService.KIND_DOC);
-        docMapper.delete(d.getId());
-        workActivityService.deleteByEntity(workspaceId, WorkActivityService.REQUIREMENT_DOC, id);
-        notifyDocOwner(d, userId, "文档「" + d.getTitle() + "」已被删除",
-                "需求文档已删除，关联任务已解绑");
+        if (docMapper.softDelete(workspaceId, id, userId) == 0) {
+            throw AppException.conflict("文档已被删除，请刷新后重试");
+        }
+        workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, id, userId,
+                "delete", "将文档「" + d.getTitle() + "」移入回收站");
+        notifyDocOwner(d, userId, "文档「" + d.getTitle() + "」已移入回收站",
+                "30 天内可在文档列表的回收站中恢复，过期后自动清理");
     }
 
     /** 项目被删除时连带清理（由 RequirementService 调用） */
@@ -788,8 +833,8 @@ public class RequirementDocService {
     @Transactional
     public RequirementDoc restore(String userId, String workspaceId, String docId, String historyId) {
         RequirementDoc d = getVisible(workspaceId, userId, docId);
-        /* 恢复历史版本会覆盖正文（等价 update），同走创建人保护，避免绕过 update 门控 */
-        assertDocMutate(workspaceId, userId, d);
+        /* 恢复历史版本会覆盖正文（等价 update），项目可见成员即可操作；删除仍限负责人/管理员 */
+        assertDocEdit(workspaceId, userId, d);
         RequirementDocHistory h = historyMapper.selectById(historyId);
         if (h == null || !docId.equals(h.getDocId()) || !workspaceId.equals(h.getWorkspaceId())) {
             throw AppException.notFound("历史版本不存在：" + historyId);
@@ -841,13 +886,121 @@ public class RequirementDocService {
         return withMembers(fresh);
     }
 
+    /**
+     * 通知成员：发布后或更新后按范围提醒，只写通知，不动正文与可见范围。
+     * 收件人先按文档可见范围收口，再交给通知服务按空间成员、项目可见性与个人偏好二次过滤。
+     */
+    @Transactional
+    public Map<String, Object> notifyMembers(String userId, String workspaceId, String id,
+                                             ReqDocNotifyRequest req) {
+        RequirementDoc d = getVisible(workspaceId, userId, id);
+        assertDocMutate(workspaceId, userId, d);
+        if (d.getPublishedAt() == null) {
+            throw AppException.badRequest("草稿还没发布，收到通知的人也打不开；先发布再通知");
+        }
+        String vis = Texts.trimToNull(d.getVisibility());
+        if (VIS_PERSONAL.equals(vis)) {
+            throw AppException.badRequest("仅负责人可见的文档不需要通知其他成员");
+        }
+        String scope = req.getScope() == null ? "" : req.getScope().trim().toLowerCase();
+        Set<String> targets = new LinkedHashSet<String>();
+        if ("users".equals(scope)) {
+            List<String> ids = req.getUserIds();
+            if (ids == null || ids.isEmpty()) {
+                throw AppException.badRequest("请选择要通知的成员");
+            }
+            if (ids.size() > 50) {
+                throw AppException.badRequest("一次最多通知 50 人");
+            }
+            for (String uid : ids) {
+                if (Texts.trimToNull(uid) != null) {
+                    targets.add(uid);
+                }
+            }
+        } else if ("members".equals(scope)) {
+            if (!VIS_MEMBERS.equals(vis)) {
+                throw AppException.badRequest("当前文档不是「指定成员可见」，请选择项目成员或指定人");
+            }
+            targets.addAll(docMapper.selectVisibilityMemberIds(id));
+        } else if ("project".equals(scope) || "workspace".equals(scope)) {
+            if (memberMapper == null) {
+                throw AppException.badRequest("成员名单暂不可用，请稍后再试");
+            }
+            List<WorkspaceMember> members = memberMapper.selectByWorkspace(workspaceId);
+            if ("project".equals(scope)) {
+                if (Texts.trimToNull(d.getReqId()) == null) {
+                    throw AppException.badRequest("空间级文档没有项目成员，请选择空间成员或指定人");
+                }
+                members = projectAccess.filterVisibleMembers(workspaceId, members, d.getReqId());
+            }
+            for (WorkspaceMember m : members) {
+                if (m.getUserId() != null) {
+                    targets.add(m.getUserId());
+                }
+            }
+        } else {
+            throw AppException.badRequest("通知范围不合法");
+        }
+        /* 指定成员可见：名单外的人点开也看不到，统一按可见名单收口（负责人始终可见） */
+        if (VIS_MEMBERS.equals(vis)) {
+            Set<String> allowed = new HashSet<String>(docMapper.selectVisibilityMemberIds(id));
+            String owner = Texts.trimToNull(d.getOwnerUserId());
+            if (owner != null) {
+                allowed.add(owner);
+            }
+            targets.retainAll(allowed);
+        }
+        targets.remove(userId);
+        boolean publish = "publish".equalsIgnoreCase(Texts.trimToNull(req.getEvent()));
+        String note = Texts.cut(Texts.trimToNull(req.getNote()), 100);
+        String title = "文档「" + d.getTitle() + "」" + (publish ? "已发布" : "有更新");
+        String body = publish ? "文档已发布，点开查看最新内容" : "文档刚有更新，点开查看最新内容";
+        if (note != null) {
+            body = body + "；附言：" + note;
+        }
+        java.time.LocalDateTime since = java.time.LocalDateTime.now().minusMinutes(30);
+        String suffix = notificationEvents.docLinkSuffix(id);
+        int sent = 0, skipped = 0, failed = 0;
+        for (String uid : targets) {
+            if (notificationMapper != null
+                    && notificationMapper.countRecentDocNotify(uid, "doc", id, "doc_changed", since) > 0) {
+                skipped++;
+                continue;
+            }
+            boolean ok = notificationEvents.notifyLinkedAs(uid, workspaceId,
+                    UserNotificationPreferenceService.DEMAND_STATUS,
+                    "doc_changed", title, body, "doc", id, d.getReqId(), suffix);
+            if (ok) {
+                sent++;
+            } else {
+                failed++;
+            }
+        }
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("sent", sent);
+        result.put("skipped", skipped);
+        result.put("failed", failed);
+        result.put("total", targets.size());
+        return result;
+    }
+
     /* ---------------- 只读分享 ---------------- */
 
     private static final int SHARE_DAYS = 30;
+    private static final int SHARE_DAYS_MIN = 1;
+    private static final int SHARE_DAYS_MAX = 365;
 
     /** 生成/重置分享链接：仅已发布文档可分享；权限=项目/空间可写者（分发已发布内容，不走创建人门控，与发布/改删区分） */
-    @Transactional
     public ReqDocShare createShare(String userId, String workspaceId, String docId) {
+        return createShare(userId, workspaceId, docId, null, null);
+    }
+
+    /**
+     * 生成/重置分享链接。days 省略默认 30 天（限 1~365）；allowCopy 省略默认允许复制与打印。
+     */
+    @Transactional
+    public ReqDocShare createShare(String userId, String workspaceId, String docId,
+                                   Integer days, Boolean allowCopy) {
         RequirementDoc d = getVisible(workspaceId, userId, docId);
         projectAccess.assertWrite(workspaceId, userId, d.getReqId());
         if (d.getPublishedAt() == null) {
@@ -857,15 +1010,17 @@ public class RequirementDocService {
         if (vis != null && !VIS_TEAM.equals(vis)) {
             throw AppException.badRequest("仅团队共享文档可生成公开分享链接，请先调整可见范围");
         }
+        int expireDays = days == null ? SHARE_DAYS : Math.max(SHARE_DAYS_MIN, Math.min(SHARE_DAYS_MAX, days));
         ReqDocShare share = new ReqDocShare();
         share.setWorkspaceId(workspaceId);
         share.setDocId(docId);
         share.setToken(Ids.genToken());
         share.setCreatedAt(java.time.LocalDateTime.now());
-        share.setExpiresAt(java.time.LocalDateTime.now().plusDays(SHARE_DAYS));
+        share.setExpiresAt(java.time.LocalDateTime.now().plusDays(expireDays));
+        share.setAllowCopy(allowCopy == null || allowCopy);
         shareMapper.upsert(share);
         workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, docId, userId, "share",
-                "生成了文档「" + d.getTitle() + "」的只读分享链接");
+                "生成了文档「" + d.getTitle() + "」的只读分享链接（" + expireDays + " 天）");
         return shareMapper.selectByDoc(workspaceId, docId);
     }
 
@@ -921,6 +1076,7 @@ public class RequirementDocService {
         resp.setStatus(d.getStatus());
         resp.setOwner(d.getOwner());
         resp.setUpdatedAt(d.getUpdatedAt());
+        resp.setAllowCopy(share.getAllowCopy() == null || share.getAllowCopy());
         resp.setGeneratedAt(java.time.LocalDateTime.now());
         return resp;
     }
@@ -1292,7 +1448,7 @@ public class RequirementDocService {
                 }
                 String k = part.substring(0, i).trim().toLowerCase();
                 String v = part.substring(i + 1).trim();
-                if (!STYLE_ALLOW.contains(k) || !STYLE_VALUE.matcher(v).matches()) {
+                if (!STYLE_ALLOW.contains(k) || !safeStyleValue(v)) {
                     continue;
                 }
                 if (sb.length() > 0) {
@@ -1306,6 +1462,33 @@ public class RequirementDocService {
                 el.attr("style", sb.toString());
             }
         }
+    }
+
+    /**
+     * 样式值校验：属性名已白名单，这里只挡“引用外部资源 / 执行表达式 / 转义注入”。
+     * 字体名与中文颜色名会带引号、逗号与 CJK 字符，不能再用字符白名单硬卡。
+     */
+    private static boolean safeStyleValue(String v) {
+        if (v == null) {
+            return false;
+        }
+        String s = v.trim();
+        if (s.isEmpty() || s.length() > 200) {
+            return false;
+        }
+        String lower = s.toLowerCase(java.util.Locale.ROOT);
+        for (String bad : STYLE_VALUE_BLOCK) {
+            if (lower.contains(bad)) {
+                return false;
+            }
+        }
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c < 0x20 || c == 0x7f || c == '<' || c == '>' || c == '{' || c == '}') {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

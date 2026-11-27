@@ -237,7 +237,10 @@ $("newMenu").addEventListener("click", function(e){
   if(kind === "req"){ showView("projects"); setTimeout(function(){ loadView("projects").then(function(m){ m.openProjectDialog(null); }); }, 60); return; }
   var target = NEW_ROUTE[kind];
   if(!target) return;
-  window.location.hash = "#/" + target + "?new=1";
+  /* 从跨项目视图新建版本：保留 pmode，让阶段页先说明切回哪个项目，再进按版本视图；否则 hash 丢参数会静默换视图 */
+  var pm = kind === "version" && activeView === "phase"
+    ? /[?&]pmode=(overview|schedule|allversions)(?:&|$)/.exec(String(window.location.hash || "")) : null;
+  window.location.hash = pm ? "#/phase?pmode=" + pm[1] + "&new=1" : "#/" + target + "?new=1";
   window.dispatchEvent(new CustomEvent("ds:route-go", { detail:{ view: target } }));
 });
 $("btnAlert").addEventListener("click", function(){

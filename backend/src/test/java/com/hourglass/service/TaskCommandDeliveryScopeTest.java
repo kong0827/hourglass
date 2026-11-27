@@ -326,10 +326,9 @@ class TaskCommandDeliveryScopeTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"false,true,false", "true,true,false", "false,true,true", "true,true,true",
-            "false,false,false", "true,false,false", "false,false,true", "true,false,true"})
+    @CsvSource({"false,false", "true,false", "false,true", "true,true"})
     void editOmittedOrNullVersionReturnsBindingAndCurrentPublicationFlags(
-            boolean explicitNull, boolean permitted, boolean published) {
+            boolean explicitNull, boolean published) {
         old.setBoardColumn("done");
         old.setCompletedAt(LocalDate.of(2026, 11, 8).atStartOfDay());
         old.setDemandId("D1");
@@ -343,7 +342,6 @@ class TaskCommandDeliveryScopeTest {
         if (explicitNull) req.setVersionIds(null);
         req.setTags(Collections.singletonList("已保存标签"));
         when(support.tagNames("W1", "K1")).thenReturn(Collections.emptyList(), req.getTags());
-        when(permissions.canPublishTask("U1", "W1", saved)).thenReturn(permitted);
 
         Task result = service.update("U1", "W1", "K1", req);
 
@@ -371,7 +369,6 @@ class TaskCommandDeliveryScopeTest {
         Task saved = savedUpdateResponse();
         saved.setCanPublish(true);
         saved.setCanUnpublish(true);
-        when(permissions.canPublishTask("U1", "W1", saved)).thenReturn(true);
         TaskSaveRequest req = assignedRequest("U1");
         req.setBoardColumn(column);
 
@@ -394,8 +391,6 @@ class TaskCommandDeliveryScopeTest {
         Task saved = savedUpdateResponse();
         saved.setCanPublish(old.getCanPublish());
         saved.setCanUnpublish(old.getCanUnpublish());
-        when(permissions.canPublishTask(eq("U1"), eq("W1"), any(Task.class)))
-                .thenAnswer(invocation -> "U1".equals(((Task) invocation.getArgument(2)).getOwnerUserId()));
         TaskSaveRequest req = assignedRequest(assignedToActor ? "U1" : "U2");
         req.setBoardColumn("done");
 
@@ -419,8 +414,6 @@ class TaskCommandDeliveryScopeTest {
         when(projects.selectById("R2")).thenReturn(nextProject);
         Task saved = savedUpdateResponse();
         saved.setCanPublish(true);
-        when(permissions.canPublishTask(eq("U1"), eq("W1"), any(Task.class)))
-                .thenAnswer(invocation -> "R1".equals(((Task) invocation.getArgument(2)).getReqId()));
         TaskSaveRequest req = assignedRequest("U1");
         req.setBoardColumn("done");
         req.setReqId("R2");
@@ -453,7 +446,6 @@ class TaskCommandDeliveryScopeTest {
         }).when(tasks).insert(any(Task.class));
         when(bindings.selectVersionIdsByTask("W1", "K2")).thenReturn(Collections.singletonList("V1"));
         when(support.tagNames("W1", "K2")).thenReturn(req.getTags());
-        when(permissions.canPublishTask("U1", "W1", saved)).thenReturn(true);
 
         Task result = service.create("U1", "W1", req);
 

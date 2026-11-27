@@ -2387,7 +2387,7 @@ function renderRuns(){
       : "";
     var upload = writable
       ? '<label class="btn sm add run-ev-add" title="上传失败证据：可多选，也可直接拖文件到本行">' + icon("plus", 12) + ' 证据'
-        + '<input type="file" hidden multiple data-run-file="' + esc(r.id) + '" accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx" /></label>'
+        + '<input type="file" hidden multiple data-run-file="' + esc(r.id) + '" accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.html,.htm,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx" /></label>'
       : "";
     var bug = r.bugTaskId
       ? '<button class="btn sm ghost" type="button" data-run-bug="' + esc(r.bugTaskId) + '">缺陷工作项</button>'
@@ -6268,7 +6268,7 @@ var plans = [];
 var planSeq = 0;
 var planDetail = null;        /* { plan, cases, passRate }，非空 = 正在看计划详情 */
 var planDetailSeq = 0;
-var planPendingOpen = null;   /* 跨视图跳转（交付说明）待打开的计划：列表加载完后落到详情，避免被 loadPlans 清掉 */
+var planPendingOpen = null;   /* 跨视图跳转（交付报告）待打开的计划：列表加载完后落到详情，避免被 loadPlans 清掉 */
 var planSel = {};             /* 详情页批量执行勾选：caseId -> true */
 var planBatchStatus = "passed";
 var editingPlanId = null;
@@ -7815,7 +7815,7 @@ function openSetRulePop(anchor){
     + '<p class="tc-rule-line">多归属：一条用例可进多个分组，分组间计数可重叠、<b>不能相加当总数</b>。</p>'
     + '<p class="tc-rule-line"><b>删除分组不删用例</b>，也不影响已加入的测试计划。</p>'
     + '<p class="tc-rule-line">分组可嵌套，<b>子组继承父组可见范围</b>，父组计数按子树去重。</p>'
-    + '<p class="tc-rule-line">只有<b>团队共享</b>分组进交付说明与发布证据；转团队需创建人操作。</p>'
+    + '<p class="tc-rule-line">只有<b>团队共享</b>分组进交付报告与发布证据；转团队需创建人操作。</p>'
     + '</div>';
   setRulePop = el;
   UI.openPop(el, anchor, { align: "left", width: 320, onClose: function(){ el.remove(); setRulePop = null; } });
@@ -7915,7 +7915,7 @@ function renderSetDetail(){
       + ' 条。目录被规则引用时不能删除。</span></p>';
   }else if(s.visibility !== "team"){
     html += '<p class="tc-setd-foot">' + icon("alert", 13)
-      + '<span>这个分组不进交付说明与发布证据；要写进证据需由创建人转为<b>团队共享</b>。</span></p>';
+      + '<span>这个分组不进交付报告与发布证据；要写进证据需由创建人转为<b>团队共享</b>。</span></p>';
   }
   box.innerHTML = html;
   box.hidden = false;
@@ -9966,7 +9966,7 @@ function tcHelpHTML(){
   return '<div class="menu-title">测试分类目录使用说明</div>' +
     '<div class="type-help-list">' +
       row("用例", "最小验证单元，挂在项目下；记录步骤与预期，最新一次执行结果（未执行/通过/失败/阻塞）决定统计口径。项目范围可切「全部项目」：按项目分组逐段加载，段内翻页；目录筛选、分组显示与拖拽归类只在单个项目下提供。") +
-      row("目录 / 分组", "项目目录是单归属：一个用例只属一个节点（层级不限、只禁止成环），拖到节点＝移动归属，计数不重叠并进覆盖矩阵。分组是多归属：拖到分组＝加入，原分组保留，删分组不删用例；动态分组按规则自动收录（可一键存成回归集），成员不能手工增删。可见范围分团队共享 / 指定成员 / 仅自己可见，只有团队共享分组进交付说明与发布证据。") +
+      row("目录 / 分组", "项目目录是单归属：一个用例只属一个节点（层级不限、只禁止成环），拖到节点＝移动归属，计数不重叠并进覆盖矩阵。分组是多归属：拖到分组＝加入，原分组保留，删分组不删用例；动态分组按规则自动收录（可一键存成回归集），成员不能手工增删。可见范围分团队共享 / 指定成员 / 仅自己可见，只有团队共享分组进交付报告与发布证据。") +
       row("查询", "排序字段与升降序、每页 50/100/200 条、按维度分组显示（段头带计数与结果分布，可折叠、可段内翻页、可整组全选）。统计条上的执行结果计数可直接点按筛选，计数始终是全项目口径、不随当前筛选变化。「全选筛选结果」按条件生效、含未加载的行；明确勾选只覆盖已加载的行。搜索默认只匹配标题 / 编号 / 分类，勾选「含步骤与前置」才搜大字段（较慢）。") +
       row("缺陷", "按缺陷（工作项类型=缺陷）逐行汇总当前项目范围，可切换「全部项目」或单个项目；默认只看未关闭并按严重度排序，跨项目时每行标明所属项目。待修复、修复中、待回归都算未关闭，进入完成列且回归通过才算关闭。") +
       row("测试计划", "从用例库圈选一批组成一轮测试：在计划详情里逐条勾选，或在用例页按筛选整批加入（一次最多 2000 条，已在计划内的自动跳过）。批量记录结果时同时写回用例最近结果并追加执行流水，按版本留痕，完成后锁定为快照。项目范围同样支持全部/单选，全部项目下按项目分组，新建计划需先选一个项目。") +
@@ -11284,7 +11284,7 @@ function setTcProject(reqId){
   }
 }
 
-/* 交付说明「打开原始记录」跳到指定计划：先记下待打开 id，列表加载完再落详情，避免被 loadPlans 清掉 */
+/* 交付报告「打开原始记录」跳到指定计划：先记下待打开 id，列表加载完再落详情，避免被 loadPlans 清掉 */
 function openPlanInProject(reqId, planId){
   planPendingOpen = planId || null;
   setTcProject(reqId);

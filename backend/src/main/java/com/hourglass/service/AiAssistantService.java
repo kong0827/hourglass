@@ -547,7 +547,7 @@ public class AiAssistantService {
         boolean canManage = releasePermission.canManageProject(userId, workspaceId, d.getReqId());
         if (!allowedDemandActions(d.getStatus(), d.getCloseReason(), canWrite, canManage).contains(action)) {
             if (SCHEDULE_ACTIONS.contains(action) && !canManage) {
-                throw new AppException(403, "仅空间主、管理员或项目负责人可管理排期与发布计划");
+                throw new AppException(403, "仅空间主、管理员或项目负责人可管理需求排期");
             }
             if (REVIEW_ACTIONS.contains(action) && !canWrite) {
                 throw new AppException(403, "你对该项目只有查看权限");

@@ -1,5 +1,5 @@
 /* ==========================================================================
-   delivery-doc.js · 一页式交付说明的纯渲染器
+   delivery-doc.js · 一页式交付报告的纯渲染器
    工作台（views/delivery.js）与接收人只读页（share.js）共用同一份投影。
    后端只给事实与口径，这里按「语气 × 详略」把事实投影成文：改生成控制不需要重新请求，
    快照冻结同一份 payload 后，接收人看到的文字与编制人完全一致。
@@ -55,17 +55,20 @@ import { icon } from "../core/icons.js";
   function signed(v) { var n = Number(v) || 0; return (n > 0 ? "+" : "") + num(n); }
 
   var TONES = { customer: "客户版", manager: "管理版", internal: "内部复盘版" };
-  var GRANULARITY = { brief: "按分类汇总", module: "按分类分组", items: "逐条列出" };
   var EVIDENCE_NAMES = ["仅关键依据", "含完整依据", "含制品校验值"];
   var VERBOSITY_NAMES = ["精简", "标准", "详细"];
   var OPERATION_NAMES = { deploy: "部署", redeploy: "重部署", rollback: "回滚" };
   var COVERAGE_NAMES = { full: "全量", partial: "部分", unknown: "覆盖未知" };
   var STATE_NAMES = { fulfilled: "已兑现", partial: "部分兑现", deferred: "已延后", pending: "未兑现" };
+  /* 需求性质：与需求池 itemKind 一一对应；工作项无该字段时不推断，按类型展示 */
+  var KIND_NAMES = { new: "新增", improve: "优化", fix: "修复", other: "其他" };
+  var KIND_TONES = { new: "ok", improve: "pri", fix: "warn", other: "" };
+  var GROUPS = { demand: "按需求", project: "按项目", type: "按类型" };
   var EVIDENCE_ICONS = { test: "checklist", demands: "demand", swap: "refresh" };
 
   /* 与后端 DeliveryNoteService.defaultOptions() 一一对应；后端只接受这些键 */
   var DEFAULTS = {
-    tone: "customer", releaseId: "", includeUnreleased: true, granularity: "module", showChanges: true,
+    tone: "customer", releaseId: "", includeUnreleased: true, groupBy: "demand", showChanges: true,
     showEffort: false, effortDim: "module", evidence: 1, verbosity: 1, density: "cozy", brand: true, watermark: false,
     showDemands: true, showDefects: true, showRelease: true, showAcceptance: true, showSupport: true,
     showCaliber: false, showRevisions: false
@@ -82,7 +85,7 @@ import { icon } from "../core/icons.js";
     o.verbosity = Math.max(0, Math.min(2, nz(o.verbosity)));
     o.evidence = Math.max(0, Math.min(2, nz(o.evidence)));
     if (!TONES[o.tone]) o.tone = "customer";
-    if (!GRANULARITY[o.granularity]) o.granularity = "module";
+    if (!GROUPS[o.groupBy]) o.groupBy = "demand";
     return o;
   }
   function toneName(t) { return TONES[t] || TONES.customer; }
@@ -101,11 +104,13 @@ import { icon } from "../core/icons.js";
   function sectionList(d) {
     var o = options(d), list = [];
     list.push({ k: "summary", title: "交付摘要" });
-    list.push({ k: "scope", title: "交付范围" });
-    if (o.showDemands && arr(d.demands).length) list.push({ k: "demands", title: "需求兑现" });
-    if (o.showChanges) list.push({ k: "changes", title: "变更说明" });
-    list.push({ k: "quality", title: "质量与验证" });
+    /* 内容清单是正文主线：回答「这次发了什么」；其余章节都是补充口径 */
+    list.push({ k: "scope", title: "交付内容" });
+    if (o.showChanges) list.push({ k: "changes", title: "变更记录" });
+    list.push({ k: "quality", title: "验证与遗留" });
     if (o.showDefects) list.push({ k: "defects", title: "缺陷与已知问题" });
+    /* 需求兑现率是管理口径，客户版用内容清单里的需求分组表达，不重复列一张表 */
+    if (o.showDemands && o.tone !== "customer" && arr(d.demands).length) list.push({ k: "demands", title: "需求兑现" });
     if (o.showEffort) list.push({ k: "effort", title: o.tone === "customer" ? "投入概况" : "投入与负载" });
     if (o.showRelease) list.push({ k: "release", title: "发布与运行信息" });
     list.push({ k: "risks", title: "后续计划与风险" });
@@ -367,7 +372,7 @@ import { icon } from "../core/icons.js";
     var pending = !isLocked && CONFIRM_FIELDS.indexOf(field) !== -1 && !confirmed(d, field);
     var edited = narrative(d, field);
     var val = edited != null ? edited : autoText(d, field);
-    var editable = !isLocked && (view.editMode || view.editingField === field);
+    var editable = !isLocked && d.canEdit !== false && (view.editMode || view.editingField === field);
     return '<div class="dl-narr-wrap' + (pending ? " pending" : "") + '" data-dl-wrap="' + field + '">'
       + '<div class="dl-narr" data-dl-field="' + field + '"'
       + (editable ? ' contenteditable="true" spellcheck="false" role="textbox" aria-label="编辑这段说明"' : "") + ">"
@@ -394,121 +399,179 @@ import { icon } from "../core/icons.js";
   /* ==================== 各区块 ==================== */
 
   function secSummary(d, n, view) {
-    var c = d.counts || {}, q = d.quality || {}, def = d.defects || {}, ds = d.demandSummary || {}, o = options(d);
-    var g = gates(d), tiles = [];
-    tiles.push(metric("released", nz(c.released) + "/" + nz(c.planned), "",
-      g.blocked ? "范围已完成（未发布）" : "已生产发布",
-      g.blocked ? "已完成 " + nz(c.done) + " 项 · 未完成 " + nz(c.pending) + " 项" : "未纳入本次 " + nz(c.pending) + " 项",
-      g.blocked ? "warn" : "ok"));
-    tiles.push(q.passRatePct == null
-      ? metric("passRate", "—", "", "回归通过率", q.missing ? "未创建测试计划" : "无有效分母", "warn")
-      : metric("passRate", num(q.passRatePct), "%", "回归通过率",
-        "通过 " + nz(q.passedCount) + " / 有效执行 " + (nz(q.executedCount) - nz(q.skippedCount)),
-        nz(q.passRatePct) >= 90 ? "ok" : "warn"));
-    if (o.showDemands && arr(d.demands).length) {
-      tiles.push(metric("demands", ds.ratePct == null ? "—" : num(ds.ratePct), ds.ratePct == null ? "" : "%",
-        "需求兑现率", "已兑现 " + nz(ds.fulfilled) + " / " + nz(ds.total) + " 条",
-        nz(ds.ratePct) >= 90 ? "ok" : "warn"));
-    } else {
-      tiles.push(metric("deferred", nz(c.deferred) + nz(c.pending), "项", "后续计划",
-        "延后 " + nz(c.deferred) + " · 未纳入 " + nz(c.pending), "warn"));
-    }
-    if (o.showEffort && !d.effort.missing) {
-      tiles.push(metric("effort", hours(d.effort.workMinutes), "h", "累计投入",
-        "预估 " + hours(d.effort.estimateMinutes) + "h · 偏差 " + signed(hours(d.effort.deviationMinutes)) + "h", "pri"));
-    } else {
-      tiles.push(metric("defects", def.missing ? "—" : nz(def.openCount), def.missing ? "" : "项", "未关闭缺陷",
-        def.missing ? "未采集缺陷" : nz(def.blockerOpenCount) ? nz(def.blockerOpenCount) + " 项可能阻塞验收" : "均不阻塞验收",
-        nz(def.blockerOpenCount) ? "bad" : "warn"));
-    }
+    var c = d.counts || {}, g = gates(d), kinds = kindCounts(d);
+    var projects = arr(d.projects), unshipped = nz(c.pending) + nz(c.deferred);
+    var projectNames = projects.map(function (p) { return p.name; }).filter(Boolean);
+    var tiles = [
+      metric("released", nz(c.released) + "/" + nz(c.planned), "", g.blocked ? "已完成 / 承诺" : "已上线 / 承诺",
+        g.blocked ? "未完成 " + nz(c.pending) + " 项 · 未确认发布" : "本次未上线 " + unshipped + " 项",
+        g.blocked ? "warn" : "ok"),
+      metric("kinds", kinds.new + " / " + kinds.improve + " / " + kinds.fix, "", "新增 / 优化 / 修复",
+        kindsText(kinds, true) || (g.blocked ? "承诺台账暂无工作项" : "本次没有已上线工作项"), "pri"),
+      metric("projects", projects.length + " / " + nz(d.demandSummary && d.demandSummary.total), "",
+        "涉及项目 / 涉及需求",
+        projectNames.length > 2 ? projectNames.slice(0, 2).join(" · ") + " 等 " + projectNames.length + " 个"
+          : projectNames.join(" · ") || "未归属项目", ""),
+      g.blocked
+        ? metric("unshipped", nz(c.pending), "项", "尚未完成", "延后 " + nz(c.deferred) + " 项 · 未确认生产发布", nz(c.pending) ? "warn" : "ok")
+        : metric("unshipped", unshipped, "项", "本次未上线", "未完成 " + nz(c.pending) + " · 顺延 " + nz(c.deferred), unshipped ? "warn" : "ok")
+    ];
     return sec("summary", n, "交付摘要", "自动生成 · 数字只读，文字可改",
       '<div class="dl-mgrid">' + tiles.join("") + "</div>" + narr(d, "summary", view));
   }
 
-  function scopeRows(d) {
-    var o = options(d);
-    return arr(d.scope).filter(function (x) { return o.includeUnreleased || x.state === "released"; });
+  /* 交付内容：先回答「这次发了什么」，再按需求 / 项目 / 类型给出分组。
+     性质取需求池 itemKind；工作项未关联需求时不推断性质，单独计数。 */
+  var TYPE_LABELS = { story: "需求", task: "任务", bug: "缺陷", epic: "主题" };
+  var TYPE_ORDER = ["story", "task", "bug", "epic", ""];
+  var SCOPE_STATE_NAMES = { released: "已上线", done: "已完成", pending: "未纳入", deferred: "延后" };
+
+  function typeName(x) { return x.itemTypeName || TYPE_LABELS[x.itemType] || "工作项"; }
+  function demandMap(d) {
+    var map = {};
+    arr(d.demands).forEach(function (x) { if (x.id) map[x.id] = x; });
+    return map;
   }
-  function stateBadge(state, isBlocked) {
-    if (state === "released") return badge("ok", "已发布");
-    if (state === "deferred") return badge("warn", "延后");
-    if (state === "done") return badge(isBlocked ? "" : "ok", "已完成");
-    return badge("", isBlocked ? "未完成" : "未纳入本次");
+  function kindCountsOf(rows) {
+    var c = { new: 0, improve: 0, fix: 0, other: 0, unlinked: 0 };
+    rows.forEach(function (x) { if (KIND_NAMES[x.kind]) c[x.kind]++; else c.unlinked++; });
+    return c;
   }
-  function scopeRowHTML(x, isBlocked) {
-    var sub = [x.ref, x.owner, x.targetVersionName ? "去向 " + x.targetVersionName : ""].filter(Boolean).join(" · ");
-    return '<div class="dl-row body"><span class="dl-mod">' + esc(x.module || "未分分类") + "</span>"
-      + '<span class="tt"><b>' + esc(x.title) + "</b><span>" + esc(sub) + "</span></span>"
-      + '<span class="ty">' + esc(x.itemTypeName || "任务") + "</span>"
-      + "<span>" + stateBadge(x.state, isBlocked) + "</span></div>";
+  /* 已上线取后端按快照统计的数；未确认发布时按承诺台账统计，口径由副标题写清 */
+  function kindCounts(d) {
+    var c = d.counts || {};
+    if (blocked(d)) return kindCountsOf(arr(d.scope));
+    return { new: nz(c.newCount), improve: nz(c.improveCount), fix: nz(c.fixCount), other: nz(c.otherCount), unlinked: nz(c.unlinkedCount) };
   }
-  function secScope(d, n, view) {
-    var o = options(d), c = d.counts || {}, b = d.baseline || {}, rows = scopeRows(d), g = gates(d);
-    var segs = [
-      { v: nz(c.released), c: "var(--success)", n: "已发布 " + nz(c.released) },
-      { v: g.blocked ? nz(c.done) : 0, c: "var(--dl-teal)", n: "已完成待发布 " + nz(c.done) },
-      { v: nz(c.pending), c: "var(--dl-slate)", n: "未完成 " + nz(c.pending) },
-      { v: nz(c.deferred), c: "var(--warning)", n: "延后 " + nz(c.deferred) }
-    ].filter(function (s) { return s.v > 0 || s.n.indexOf("已发布") === 0; });
-    var scale = Math.max(nz(c.planned), nz(b.taskCount), 1);
-    var head = "";
-    if (b.capturedAt) {
-      head = '<div class="dl-baseline"><span class="dl-bl-lab">基线承诺</span><div class="dl-bl-bar">'
-        + bar([{ v: nz(b.taskCount), c: "var(--primary-border)", n: "基线 " + nz(b.taskCount) + " 项" }], scale)
-        + "<b>" + nz(b.taskCount) + " 项 · " + esc(timeText(b.capturedAt)) + "</b></div></div>"
-        + '<div class="dl-baseline"><span class="dl-bl-lab">当前台账</span><div class="dl-bl-bar">'
-        + bar(segs, scale) + "<b>" + nz(c.planned) + " 项</b></div></div>"
-        + legend(segs.concat([{ v: 0, c: "var(--primary-border)", n: "基线（" + timeText(b.capturedAt) + " 冻结）" }]))
-        + (nz(b.addedCount) || nz(b.removedCount)
-          ? '<div class="dl-effort-foot"><span>基线后新增 <b>' + nz(b.addedCount) + "</b> 项</span><span>移出 <b>"
-            + nz(b.removedCount) + "</b> 项</span><span>当前绑定 <b>" + nz(c.currentBound) + "</b> 项</span></div>"
-          : "")
-        + (b.late ? gap() + missing("承诺基线建立<b>晚于发布日</b>，此前的变更没有对照，不反推原因。") : "");
-    } else {
-      head = missing("尚未冻结承诺基线，无法给出「最初承诺 vs 现在」的对照；下表为当前承诺台账。")
-        + gap() + bar(segs, scale) + legend(segs);
+  function kindsText(c, withOther) {
+    var parts = [];
+    if (c.new) parts.push("新增 " + c.new);
+    if (c.improve) parts.push("优化 " + c.improve);
+    if (c.fix) parts.push("修复 " + c.fix);
+    if (withOther && c.other) parts.push("其他 " + c.other);
+    if (withOther && c.unlinked) parts.push("未关联需求 " + c.unlinked);
+    return parts.join(" · ");
+  }
+  function kindBadge(kind) {
+    return KIND_NAMES[kind] ? badge(KIND_TONES[kind] || "", KIND_NAMES[kind]) : badge("", "未关联");
+  }
+  function scopeState(x, isBlocked) {
+    if (x.state === "released") return badge("ok", "已上线");
+    if (x.state === "deferred") return badge("warn", "延后");
+    if (x.state === "done") return badge(isBlocked ? "" : "ok", "已完成");
+    return badge("", isBlocked ? "未完成" : "未纳入");
+  }
+  function demandLabel(drow, fallbackId, fallbackTitle) {
+    return [drow ? demandNo(drow) : noText("DM", 0, fallbackId), fallbackTitle || (drow && drow.title)]
+      .filter(Boolean).join(" ");
+  }
+  function scopeItemRow(x, o, ctx) {
+    var drow = x.demandId ? ctx.dm[x.demandId] : null;
+    var parts = [x.ref || itemNo(x), typeName(x)];
+    if (ctx.multiProject && x.projectName) parts.push(x.projectName);
+    if (ctx.groupBy !== "demand" && x.demandId) parts.push(demandLabel(drow, x.demandId, x.demandTitle));
+    if (o.tone !== "customer" && x.owner) parts.push(x.owner);
+    return '<div class="dl-crow">'
+      + '<span class="tt"><b>' + esc(x.title) + "</b><span>" + esc(parts.filter(Boolean).join(" · ")) + "</span></span>"
+      + "<span>" + (ctx.hideKind ? "" : kindBadge(x.kind)) + "</span>"
+      + "<span>" + scopeState(x, ctx.blocked) + "</span></div>";
+  }
+  function scopeGroups(rows, groupBy, dm) {
+    var groups = [], index = {};
+    function slot(key, title) {
+      if (!index[key]) { index[key] = { key: key, title: title, rows: [] }; groups.push(index[key]); }
+      return index[key];
+    }
+    rows.forEach(function (x) {
+      if (groupBy === "type") {
+        var t = x.itemType || "";
+        slot("t:" + t, TYPE_LABELS[t] || typeName(x)).rows.push(x);
+      } else if (groupBy === "project") {
+        slot("p:" + (x.projectId || "__none__"), x.projectName || "未归属项目").rows.push(x);
+      } else {
+        var k = x.demandId || "__unlinked__";
+        var drow = x.demandId ? dm[x.demandId] : null;
+        slot("d:" + k, x.demandId ? demandLabel(drow, x.demandId, x.demandTitle) : "未关联需求").rows.push(x);
+      }
+    });
+    if (groupBy === "type") {
+      groups.sort(function (a, b) {
+        return TYPE_ORDER.indexOf(a.key.slice(2)) - TYPE_ORDER.indexOf(b.key.slice(2));
+      });
+    }
+    /* 未关联需求垫底：先看有需求归属的交付，再看零散工作项 */
+    if (groupBy === "demand") {
+      var unlinked = groups.filter(function (g) { return g.key === "d:__unlinked__"; });
+      groups = groups.filter(function (g) { return g.key !== "d:__unlinked__"; }).concat(unlinked);
+    }
+    return groups;
+  }
+  function scopeGroupHTML(g, o, ctx) {
+    var chips = "";
+    if (ctx.groupBy === "demand") {
+      var p = g.rows[0];
+      if (p && p.projectName && ctx.multiProject) chips = chip("", p.projectName);
+    } else if (ctx.groupBy === "project") {
+      var ids = {}, n = 0;
+      g.rows.forEach(function (x) { if (x.demandId && !ids[x.demandId]) { ids[x.demandId] = 1; n++; } });
+      chips = chip("", n ? n + " 个需求" : "无关联需求");
     }
     var body;
-    if (!rows.length) {
-      body = missing(o.includeUnreleased ? "承诺台账为空：本版本没有绑定工作项。" : "本次发布快照内没有「已发布」项；打开「含未发布项」可看承诺台账全貌。");
-    } else if (o.granularity === "brief") {
-      var mods = {};
-      rows.forEach(function (x) {
-        var m = x.module || "未分分类";
-        mods[m] = mods[m] || { t: 0, r: 0, o: 0, sample: [] };
-        mods[m].t++;
-        if (x.state === "released") mods[m].r++; else mods[m].o++;
-        if (mods[m].sample.length < 2) mods[m].sample.push(x.title);
+    if (ctx.groupBy === "project") {
+      var subs = [], sidx = {};
+      g.rows.forEach(function (x) {
+        var k = x.demandId || "__unlinked__";
+        if (!sidx[k]) { sidx[k] = { key: k, rows: [] }; subs.push(sidx[k]); }
+        sidx[k].rows.push(x);
       });
-      body = '<div class="dl-rows"><div class="dl-row head"><span>分类</span><span>交付内容</span><span>已发布</span><span>状态</span></div>'
-        + Object.keys(mods).map(function (m) {
-          var s = mods[m];
-          return '<div class="dl-row body"><span class="dl-mod">' + esc(m) + "</span>"
-            + '<span class="tt"><b>' + s.t + " 项工作项</b><span>" + esc(s.sample.join(" / ")) + "…</span></span>"
-            + '<span class="ty">' + s.r + " / " + s.t + "</span><span>"
-            + (s.o ? badge("warn", "含 " + s.o + " 项未发布") : badge("ok", "全部发布")) + "</span></div>";
-        }).join("") + "</div>";
-    } else if (o.granularity === "module") {
-      var groups = {};
-      rows.forEach(function (x) {
-        var m = x.module || "未分分类";
-        (groups[m] = groups[m] || []).push(x);
-      });
-      body = Object.keys(groups).map(function (m) {
-        return '<div class="dl-modgroup"><div class="dl-modgroup-head"><span class="dl-mod">' + esc(m)
-          + '</span><span class="cnt">' + groups[m].length + " 项</span></div>"
-          + '<div class="dl-rows">' + groups[m].map(function (x) { return scopeRowHTML(x, g.blocked); }).join("") + "</div></div>";
+      body = subs.map(function (s) {
+        var drow = s.key === "__unlinked__" ? null : ctx.dm[s.key];
+        var title = s.key === "__unlinked__" ? "未关联需求" : demandLabel(drow, s.key, "");
+        return '<div class="dl-csub"><div class="dl-csub-h"><span>' + esc(title) + '</span><span class="cnt">'
+          + s.rows.length + " 项" + (kindsText(kindCountsOf(s.rows), true) ? " · " + esc(kindsText(kindCountsOf(s.rows), true)) : "")
+          + "</span></div>" + s.rows.map(function (x) { return scopeItemRow(x, o, ctx); }).join("") + "</div>";
       }).join("");
     } else {
-      body = '<div class="dl-rows"><div class="dl-row head"><span>分类</span><span>工作项</span><span>类型</span><span>状态</span></div>'
-        + rows.map(function (x) { return scopeRowHTML(x, g.blocked); }).join("") + "</div>";
+      body = g.rows.map(function (x) { return scopeItemRow(x, o, ctx); }).join("");
     }
-    var more = (o.granularity !== "items" && rows.length && !view.readonly)
-      ? '<div class="dl-more-row"><button class="btn sm ghost" type="button" data-dl-act="gran" data-dl-gran="items">展开逐条 '
-        + rows.length + " 项" + icon("chevronRight", 12) + "</button></div>" : "";
-    return sec("scope", n, "交付范围",
-      nz(c.planned) + " 项承诺 · " + (o.includeUnreleased ? "含未发布项" : "仅列已发布"),
-      head + gap() + body + more);
+    return '<div class="dl-cgrp"><div class="dl-cgrp-head"><span class="gt">' + esc(g.title) + "</span>"
+      + '<span class="gm">' + esc(kindsText(kindCountsOf(g.rows), true)) + "</span>"
+      + '<span class="sp"></span>' + chips + "</div>"
+      + '<div class="dl-rows">' + body + "</div></div>";
+  }
+  function unshippedBlock(rows, dm, o) {
+    var items = rows.map(function (x) {
+      var drow = x.demandId ? dm[x.demandId] : null;
+      var sub = [x.ref || itemNo(x), x.demandId ? demandLabel(drow, x.demandId, x.demandTitle) : "未关联需求",
+        o.tone === "customer" ? "" : x.owner].filter(Boolean).join(" · ");
+      return '<div class="dl-off-row"><span class="dl-ot">' + esc(typeName(x)) + "</span>"
+        + '<div class="dl-om"><b>' + esc(x.title) + "</b><span>" + esc(sub) + "</span></div>"
+        + (kindBadge(x.kind)) + '<span class="r">' + esc(x.reason || "未纳入本次发布") + "</span></div>";
+    }).join("");
+    return gap() + '<div class="dl-off"><div class="dl-off-head"><b>本次未上线</b><span>'
+      + rows.length + " 项 · 不计入本次交付，不计入上线统计</span></div>" + items + "</div>";
+  }
+  function secScope(d, n, view) {
+    var o = options(d), c = d.counts || {}, g = gates(d), dm = demandMap(d);
+    var all = arr(d.scope), rest = [];
+    all.forEach(function (x) { if (x.state !== "released") rest.push(x); });
+    /* 已确认发布后主线只列快照内已上线项；草稿期没有「已上线」，退回承诺台账全貌 */
+    var listed = g.blocked ? all : all.filter(function (x) { return x.state === "released"; });
+    var ctx = { dm: dm, blocked: g.blocked, multiProject: arr(d.projects).length > 1, groupBy: o.groupBy, hideKind: false };
+    var body;
+    if (!listed.length) {
+      body = missing(g.blocked
+        ? "承诺台账为空：本版本没有绑定工作项。"
+        : "本次发布快照内没有「已上线」的工作项；本说明不虚构交付内容。");
+    } else {
+      body = scopeGroups(listed, o.groupBy, dm).map(function (grp) { return scopeGroupHTML(grp, o, ctx); }).join("");
+    }
+    var off = !g.blocked && o.includeUnreleased && rest.length ? unshippedBlock(rest, dm, o) : "";
+    var composition = kindsText(kindCounts(d), false);
+    return sec("scope", n, "交付内容",
+      g.blocked ? "承诺台账 " + nz(c.planned) + " 项 · 草稿，未确认发布"
+        : "已上线 " + nz(c.released) + " 项" + (composition ? " · " + composition : "") + " · " + GROUPS[o.groupBy],
+      body + off);
   }
 
   function secDemands(d, n) {
@@ -842,17 +905,17 @@ import { icon } from "../core/icons.js";
 
   function secInternal(d, n, view) {
     var val = narrative(d, "internal");
-    var editable = !locked(d) && !view.readonly && (view.editMode || view.editingField === "internal");
+    var editable = !locked(d) && !view.readonly && d.canEdit !== false && (view.editMode || view.editingField === "internal");
     var body = '<div class="dl-narr-wrap"><div class="dl-narr" data-dl-field="internal"'
       + (editable ? ' contenteditable="true" spellcheck="false" role="textbox" aria-label="编辑内部备注"' : "") + ">"
       + esc(val == null ? "" : val) + "</div>"
-      + (val == null && !editable && !view.readonly ? '<div class="dl-narr-bar"><span class="nb-t">尚未填写内部备注，点「编辑文字」后可写。</span></div>' : "")
+      + (val == null && !editable && !view.readonly && d.canEdit !== false ? '<div class="dl-narr-bar"><span class="nb-t">尚未填写内部备注，点「编辑文字」后可写。</span></div>' : "")
       + "</div>"
       + (view.readonly ? "" : '<div class="dl-narr-bar">' + chip("bad", "切到客户版 / 管理版即隐藏，分享接口不下发", "lock") + "</div>");
     return sec("internal", n, "内部备注", "仅内部版可见 · 永不进入分享链接", body, "dl-internal-sec");
   }
   function secNote(d, n, view) {
-    var editable = !locked(d) && !view.readonly && (view.editMode || view.editingField === "note");
+    var editable = !locked(d) && !view.readonly && d.canEdit !== false && (view.editMode || view.editingField === "note");
     return sec("note", n, "补充说明", "由编制人填写",
       '<div class="dl-narr-wrap"><div class="dl-narr" data-dl-field="note"'
       + (editable ? ' contenteditable="true" spellcheck="false" role="textbox" aria-label="编辑补充说明"' : "") + ">"
@@ -917,7 +980,7 @@ import { icon } from "../core/icons.js";
     var head = '<div class="dl-doc-head">'
       + (watermark ? '<div class="dl-watermark">草稿</div>' : "")
       + (o.brand ? '<div class="dl-letter"><span class="dl-mark">' + HOURGLASS + "</span>"
-        + '<div><div class="lt">沙漏 · 交付说明</div><div class="ls">DELIVERY STATEMENT</div></div>'
+        + '<div><div class="lt">沙漏 · 交付报告</div><div class="ls">DELIVERY REPORT</div></div>'
         + '<span class="grow"></span><div class="dl-doc-no">' + esc(d.docNo || "未编号") + "<br>"
         + esc(timeText(d.generatedAt)) + "</div></div>" : "")
       + '<div class="dl-kicker">' + esc(toneName(o.tone)) + (view.readonly ? " · 只读快照" : "") + "</div>"
@@ -944,7 +1007,8 @@ import { icon } from "../core/icons.js";
       + (nz(d.snapshotSeq) ? chip("plum", "第 " + nz(d.snapshotSeq) + " 份") : "")
       + "</div>"
       + (view.readonly || view.clean ? "" : '<div class="dl-doc-tools">'
-        + '<button class="btn sm" type="button" data-dl-act="edit-mode"' + (locked(d) ? " disabled" : "") + ">"
+        + '<button class="btn sm" type="button" data-dl-act="edit-mode"' + (locked(d) || d.canEdit === false ? " disabled" : "")
+        + (locked(d) ? ' title="快照已锁定，不能编辑"' : d.canEdit === false ? ' title="你对该项目只有查看权限，不能编辑文字"' : "") + ">"
         + icon("edit", 13) + (view.editMode ? "完成编辑" : "编辑文字") + "</button>"
         + '<button class="btn sm ghost" type="button" data-dl-act="sources">' + icon("eye", 13) + "数据来源总览</button>"
         + chip("", "数字只读 · 点击任意数字看来源") + "</div>")
@@ -990,28 +1054,47 @@ import { icon } from "../core/icons.js";
   /* ==================== 数字来源 ==================== */
 
   function sourceInfo(d, key) {
-    var c = d.counts || {}, q = d.quality || {}, def = d.defects || {}, e = d.effort || {}, ds = d.demandSummary || {};
+    var c = d.counts || {}, def = d.defects || {}, e = d.effort || {}, ds = d.demandSummary || {};
     var rel = d.release, rows = [];
     function row(id, m, s) { return { id: id, m: m, s: s }; }
     function scopeRow(x) { return row(x.ref || x.id, x.title, [x.module, x.owner, x.targetVersionName].filter(Boolean).join(" · ")); }
     if (key === "released") {
-      rows = (rel ? [row(relNo(rel), "发布快照 · 已发布 " + nz(rel.publishedCount) + " 项 · 未纳入 " + nz(rel.excludedCount) + " 项",
+      rows = (rel ? [row(relNo(rel), "发布快照 · 已上线 " + nz(rel.publishedCount) + " 项 · 未纳入 " + nz(rel.excludedCount) + " 项",
         (rel.environmentName || rel.environment) + " · " + timeText(rel.occurredAt) + " · 不可变快照，记录后不可修改")] : [])
         .concat(arr(d.scope).filter(function (x) { return x.state === "released"; }).slice(0, 8).map(scopeRow));
       return {
-        title: "已生产发布 " + nz(c.released) + " / " + nz(c.planned), view: "phase", refId: d.versionId,
-        caliber: "口径：选中发布记录快照中处理结果为「已发布」的工作项数 / 版本承诺台账项数（当前绑定 + 基线内已移出）。完成列不等于交付。",
+        title: "已上线 " + nz(c.released) + " / " + nz(c.planned), view: "phase", refId: d.versionId,
+        caliber: "口径：选中发布记录快照中处理结果为「已上线」的工作项数 / 版本承诺台账项数（当前绑定 + 基线内已移出）。完成列不等于交付。",
         rows: rows
       };
     }
-    if (key === "passRate") {
+    if (key === "kinds") {
+      var kk = kindCounts(d);
       return {
-        title: "回归通过率 " + (q.passRatePct == null ? "—" : num(q.passRatePct) + "%"), view: "testcases", refId: q.planId,
-        caliber: "口径：通过 / （已执行 − 跳过）。跳过表示本次不适用，不计入分母；未执行不计入。数据来自关联本版本的测试计划执行结果。",
-        rows: q.missing ? [row("—", "未创建测试计划或未圈选用例", "没有执行结果，不显示通过率")]
-          : [row(q.planName || "计划", "圈选 " + nz(q.caseCount) + " 条 · 已执行 " + nz(q.executedCount) + " 条", "通过 " + nz(q.passedCount) + " · 失败 " + nz(q.failedCount) + " · 阻塞 " + nz(q.blockedCount)),
-            row("VALID", "有效分母 " + (nz(q.executedCount) - nz(q.skippedCount)) + " 条", "已执行去掉跳过 " + nz(q.skippedCount) + " 条"),
-            row("COVER", "执行覆盖 " + (q.coveragePct == null ? "—" : num(q.coveragePct) + "%"), "已执行 / 圈选总数")]
+        title: "新增 " + kk.new + " · 优化 " + kk.improve + " · 修复 " + kk.fix, view: "phase", refId: d.versionId,
+        caliber: "口径：工作项按其关联需求在需求池登记的性质（新功能 / 体验优化 / 缺陷 / 其他）归类；未关联需求的工作项不推断性质，单独计为「未关联需求」。",
+        rows: arr(d.scope).filter(function (x) { return blocked(d) || x.state === "released"; }).map(function (x) {
+          return row(itemNo(x), x.title, [KIND_NAMES[x.kind] || "未关联需求", x.demandTitle, x.projectName].filter(Boolean).join(" · "));
+        })
+      };
+    }
+    if (key === "projects") {
+      return {
+        title: "涉及 " + arr(d.projects).length + " 个项目 · " + nz(ds.total) + " 条需求", view: "phase", refId: d.versionId,
+        caliber: "口径：项目取发布快照内工作项的归属项目；需求取本次承诺范围内涉及的需求（含需求池在册与快照出现过的需求）。单项目版本只有一行。",
+        rows: arr(d.projects).map(function (p) {
+          return row(p.id, p.name, "已上线 " + nz(p.releasedCount) + " 项 · 未上线 " + nz(p.pendingCount) + " 项 · 共 " + nz(p.taskCount) + " 项");
+        })
+      };
+    }
+    if (key === "unshipped") {
+      var off = arr(d.scope).filter(function (x) { return x.state !== "released"; });
+      return {
+        title: "本次未上线 " + off.length + " 项", view: "phase", refId: d.versionId,
+        caliber: "口径：承诺台账中未进入本次发布快照的项，含未完成、已完成未纳入与改版本延后；原因取台账列与目标版本，不推断。",
+        rows: off.map(function (x) {
+          return row(itemNo(x), x.title, [SCOPE_STATE_NAMES[x.state] || x.state, x.reason, x.targetVersionName ? "去向 " + x.targetVersionName : ""].filter(Boolean).join(" · "));
+        })
       };
     }
     if (key === "demands") {
@@ -1022,13 +1105,6 @@ import { icon } from "../core/icons.js";
           return row(x.id, x.title, (STATE_NAMES[x.state] || x.state) + " · 工作项 " + nz(x.releasedCount) + " / " + nz(x.taskCount)
             + (x.targetVersionName ? " · 去向 " + x.targetVersionName : ""));
         })
-      };
-    }
-    if (key === "deferred") {
-      return {
-        title: "后续计划 " + (nz(c.deferred) + nz(c.pending)) + " 项", view: "phase", refId: d.versionId,
-        caliber: "口径：承诺台账中未随本次发布交付的项，含改版本延后与未纳入快照；去向取工作项的目标版本。",
-        rows: arr(d.scope).filter(function (x) { return x.state !== "released"; }).map(scopeRow)
       };
     }
     if (key === "defects" || key === "blockerDefects") {
@@ -1085,7 +1161,7 @@ import { icon } from "../core/icons.js";
   }
   function sourcesOverview(d) {
     return [
-      { name: "交付摘要 / 交付范围", from: "版本承诺台账 + 发布记录快照", table: "version_task / version_commitment_task / version_release_item" },
+      { name: "交付摘要 / 交付内容", from: "版本承诺台账 + 发布记录快照", table: "version_task / version_commitment_task / version_release_item" },
       { name: "需求兑现", from: "需求池条目与工作项关联 + 发布快照", table: "demand / version_release_item" },
       { name: "变更说明", from: "承诺基线对照 + 排期与改版本日志", table: "version_commitment_task / task_log / version_log" },
       { name: "质量与验证", from: "测试计划执行结果", table: "test_plan / test_plan_case" },
@@ -1106,7 +1182,7 @@ import { icon } from "../core/icons.js";
     sectionList(d).forEach(function (s, i) { idx[s.k] = i + 1; });
     function heading(key, title) { L.push(""); L.push("## " + idx[key] + ". " + title); }
     function text(field) { var v = narrative(d, field); L.push(v == null ? autoText(d, field) : v); }
-    L.push("# 交付说明 · " + (d.projectName || "") + " · " + (d.versionName || ""));
+    L.push("# 交付报告 · " + (d.projectName || "") + " · " + (d.versionName || ""));
     L.push("");
     L.push("- 语气：" + toneName(o.tone) + "　交付对象：" + audience(d));
     L.push("- 交付周期：" + periodText(d));
@@ -1118,18 +1194,35 @@ import { icon } from "../core/icons.js";
     L.push("");
     L.push("| 指标 | 数值 | 口径 |");
     L.push("| --- | --- | --- |");
-    L.push("| 已发布 | " + nz(c.released) + " / " + nz(c.planned) + " | 发布快照中处理结果为已发布 / 承诺台账 |");
-    L.push("| 未纳入本次 | " + nz(c.pending) + " | 承诺台账内未随本次发布交付 |");
-    L.push("| 改版本延后 | " + nz(c.deferred) + " | 已改到后续版本，保留在台账 |");
+    var kk = kindCounts(d);
+    L.push("| 已上线 | " + nz(c.released) + " / " + nz(c.planned) + " | 发布快照中已上线的工作项 / 承诺台账 |");
+    L.push("| 新增 / 优化 / 修复 | " + kk.new + " / " + kk.improve + " / " + kk.fix + " | 关联需求在需求池登记的性质；未关联需求不推断 |");
+    L.push("| 涉及项目 / 涉及需求 | " + arr(d.projects).length + " / " + nz(ds.total) + " | 发布快照内工作项所属项目与实际涉及的需求 |");
+    L.push("| 本次未上线 | " + nz(c.pending) + " | 承诺台账内未随本次发布交付（含延后 " + nz(c.deferred) + " 项） |");
     L.push("| 回归通过率 | " + (q.passRatePct == null ? "未执行回归" : num(q.passRatePct) + "%") + " | 通过 / （已执行 − 跳过） |");
     if (idx.demands) L.push("| 需求兑现率 | " + (ds.ratePct == null ? "—" : num(ds.ratePct) + "%") + " | 全部工作项已发布的需求 / 涉及需求 |");
     if (!def.missing) L.push("| 未关闭缺陷 | " + nz(def.openCount) + " | 其中阻塞验收 " + nz(def.blockerOpenCount) + " 项 |");
     if (idx.effort) L.push("| 实际投入 | " + (e.missing ? "未记录工时" : hours(e.workMinutes) + "h") + " | 计时 + 补记 |");
-    heading("scope", "交付范围");
-    scopeRows(d).forEach(function (x) {
-      L.push("- [" + (STATE_NAMES[x.state] || (x.state === "released" ? "已发布" : x.state === "done" ? "已完成" : x.state === "deferred" ? "延后" : "未完成")) + "] "
-        + (x.module || "未分分类") + " · " + x.title + "（" + [x.ref, x.itemTypeName, x.targetVersionName].filter(Boolean).join(" · ") + "）");
+    heading("scope", "交付内容");
+    var gk = gates(d), dmk = demandMap(d), scopeAll = arr(d.scope), scopeOff = [];
+    scopeAll.forEach(function (x) { if (x.state !== "released") scopeOff.push(x); });
+    var scopeList = gk.blocked ? scopeAll : scopeAll.filter(function (x) { return x.state === "released"; });
+    L.push(gk.blocked ? "尚未确认生产发布：以下为承诺台账，未上线不代表已交付。" : "以下为本次发布快照内已上线的工作项，按" + GROUPS[o.groupBy] + "分组。");
+    if (!scopeList.length) L.push("- 无已上线工作项（不虚构交付内容）");
+    scopeList.forEach(function (x) {
+      var drow = x.demandId ? dmk[x.demandId] : null;
+      var meta = [x.ref || itemNo(x), typeName(x), x.demandId ? demandLabel(drow, x.demandId, x.demandTitle) : "未关联需求",
+        o.tone === "customer" ? "" : x.owner].filter(Boolean).join(" · ");
+      L.push("- [" + (SCOPE_STATE_NAMES[x.state] || x.state) + "]" + (KIND_NAMES[x.kind] ? " " + KIND_NAMES[x.kind] : "") + " "
+        + x.title + "（" + meta + "）");
     });
+    if (!gk.blocked && scopeOff.length) {
+      L.push("");
+      L.push("**本次未上线**（" + scopeOff.length + " 项，不计入本次交付）");
+      scopeOff.forEach(function (x) {
+        L.push("- " + x.title + "（" + (x.ref || itemNo(x)) + "）　" + (x.reason || ""));
+      });
+    }
     if (idx.demands) {
       heading("demands", "需求兑现");
       arr(d.demands).forEach(function (x) {
@@ -1285,7 +1378,7 @@ import { icon } from "../core/icons.js";
   function htmlDocument(d, css) {
     return "<!DOCTYPE html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"UTF-8\" />\n"
       + '<meta name="viewport" content="width=device-width, initial-scale=1" />\n'
-      + "<title>交付说明 · " + esc(d.projectName || "") + " · " + esc(d.versionName || "") + "</title>\n"
+      + "<title>交付报告 · " + esc(d.projectName || "") + " · " + esc(d.versionName || "") + "</title>\n"
       + "<style>\n" + (css || "") + "\n"
       + "body{margin:0;padding:24px;background:var(--bg-app);color:var(--text);font-family:var(--font-sans);}\n"
       + ".dl-export-wrap{max-width:900px;margin:0 auto;}\n"
@@ -1296,14 +1389,14 @@ import { icon } from "../core/icons.js";
   }
 
   function exportBaseName(d) {
-    var raw = (d.projectName || "交付说明") + "-" + (d.versionName || "") + "-" + (d.docNo || dateText(d.generatedAt));
+    var raw = (d.projectName || "交付报告") + "-" + (d.versionName || "") + "-" + (d.docNo || dateText(d.generatedAt));
     return raw.replace(/[\\/:*?"<>|\s]+/g, "-").replace(/^-+|-+$/g, "");
   }
 
   /* 压到一页：只调生成控制，不改任何事实 */
   function leanPatch() {
     return {
-      verbosity: 0, density: "compact", granularity: "brief", evidence: 0,
+      verbosity: 0, density: "compact", groupBy: "type", evidence: 0,
       showEffort: false, showRelease: false, showSupport: false, showCaliber: false, showRevisions: false
     };
   }
@@ -1311,7 +1404,7 @@ import { icon } from "../core/icons.js";
   var DD = {
     DEFAULTS: DEFAULTS,
     TONES: TONES,
-    GRANULARITY: GRANULARITY,
+    GROUPS: GROUPS,
     EVIDENCE_NAMES: EVIDENCE_NAMES,
     VERBOSITY_NAMES: VERBOSITY_NAMES,
     options: options,

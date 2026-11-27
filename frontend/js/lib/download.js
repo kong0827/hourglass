@@ -14,7 +14,7 @@ function triggerDownload(filename, text, mime){
 
 export { triggerDownload, printDeliveryPaper, registerDeliveryPrintSource };
 
-/* 交付说明「存为 PDF」：把纸张放进独立宿主，delivery.css 的 @media print 只显示它，
+/* 交付报告「存为 PDF」：把纸张放进独立宿主，delivery.css 的 @media print 只显示它，
    应用外壳（侧栏、控制区、弹窗）不会混进 PDF。工作台与接收人页共用同一套打印口径。
    深色主题下临时切回浅色令牌，否则浅色纸面上会印出浅色文字。
    宿主与 html[data-dl-print] 标记只在打印期间存在：甘特的 A3 横向打印不受影响。 */
@@ -57,7 +57,7 @@ function printDeliveryPaper(sheetHTML){
 }
 
 window.addEventListener("beforeprint", function(){
-  /* 点按钮时宿主已挂好；这里只兜住浏览器原生打印，且只在交付说明页生效 */
+  /* 点按钮时宿主已挂好；这里只兜住浏览器原生打印，且只在交付报告页生效 */
   if(document.getElementById("dlPrintHost") || !printSource) return;
   var html = printSource();
   if(html) mountPrintHost(html);

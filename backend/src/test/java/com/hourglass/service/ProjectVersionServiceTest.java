@@ -49,6 +49,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.same;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -595,10 +596,11 @@ class ProjectVersionServiceTest {
         request.setTaskChangeReason("  调整交付范围  ");
         service.update(USER, WS, "V1", request);
 
-        InOrder order = inOrder(lock, releases, versionTasks, tasks, permissions, taskAudit);
+        InOrder order = inOrder(lock, releases, versionTasks, tasks, access, taskAudit);
         order.verify(lock).lockProjects(WS, "R1");
+        order.verify(access).assertWriteForUpdate(WS, USER, "R1");
         order.verify(releases).selectActiveTasksByProjectForUpdate(WS, "R1");
-        order.verify(permissions).assertManageProjectForUpdate(USER, WS, "R1");
+        order.verify(access).assertWriteForUpdate(WS, USER, "R1");
         order.verify(lock).lockTask(WS, "T1");
         order.verify(versionTasks).insertBatch(WS, "V1", Collections.singletonList("T1"));
         order.verify(tasks).touchDeliveryRevision(WS, "T1");
@@ -619,7 +621,6 @@ class ProjectVersionServiceTest {
                 Collections.singletonMap("versionIds", Arrays.asList("V1", "V2")), "调整交付范围");
         verify(versionTasks, never()).deleteByTaskId(anyString(), anyString());
         verify(versionTasks, never()).deleteBinding(WS, "T3", "V2");
-        verify(permissions, never()).assertPublishTaskForUpdate(anyString(), anyString(), any());
         verify(versionTasks).insertBatch(WS, "V1", Collections.singletonList("T3"));
         verify(versionTasks, never()).insertBatch(eq(WS), anyString(), eq(Collections.singletonList("T2")));
         verify(tasks, times(3)).touchDeliveryRevision(eq(WS), anyString());
@@ -665,7 +666,7 @@ class ProjectVersionServiceTest {
             code = 400;
         }
         if ("permission".equals(state)) {
-            doThrow(new AppException(403, "只读项目")).when(permissions).assertManageProjectForUpdate(USER, WS, "R1");
+            doNothing().doThrow(new AppException(403, "只读项目")).when(access).assertWriteForUpdate(WS, USER, "R1");
             code = 403;
         }
         if ("moved-project".equals(state)) current.setReqId("R2");
@@ -727,7 +728,7 @@ class ProjectVersionServiceTest {
         when(deliveryNotes.selectSnapshotIdsByVersion(WS, "V1")).thenReturn(Collections.singletonList("DN1"));
         AppException error = assertThrows(AppException.class, () -> service.delete(USER, WS, "V1"));
         assertEquals(422, error.getCode());
-        assertTrue(error.getMessage().contains("交付说明快照"));
+        assertTrue(error.getMessage().contains("交付报告快照"));
         assertEquals(422, assertThrows(AppException.class, () -> service.deleteByReq(WS, "R1")).getCode());
         verify(versions, never()).deleteById(anyString(), anyString());
         verify(versions, never()).deleteByReq(anyString(), anyString());

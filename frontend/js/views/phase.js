@@ -246,8 +246,18 @@ function enterPhaseView(){
   var afterReqs = function(){
     syncReqSel();
     if(wantNew){
+      /* 跨项目视图没有「当前项目」可写：若还记着上次进入的项目，先切回该项目的按版本视图再开弹窗，
+         避免「跳转过来只得到一句提示」；没有可回落的项目或只读时才提示。 */
+      var crossMode = viewMode === "overview" || viewMode === "schedule" || viewMode === "allversions";
+      if(crossMode && rt.phaseReqId && canWritePhase()){
+        toast("已切到 " + (reqNameById(rt.phaseReqId) || "上次的项目") + "，继续新建版本", "fs");
+        viewMode = "version";
+        syncPhaseModeHash(viewMode);
+        syncModeSeg();
+      }
       if(viewMode === "overview" || viewMode === "schedule" || viewMode === "allversions") toast("请先切换到具体项目，再新建版本", "warn");
       else if(!rt.phaseReqId) toast("先选择项目，再新建版本", "warn");
+      else if(!canWritePhase()) denyPhaseReadOnly();
       else openVersionDialog(null);
     }
     if(viewMode === "overview") loadOverview();
@@ -268,11 +278,11 @@ function enterPhaseView(){
   }
 }
 function reloadView(){
-  if(viewMode === "overview"){ loadOverview(); return; }
-  if(viewMode === "schedule"){ loadSchedule(); return; }
-  if(viewMode === "allversions"){ loadAllVersions(); return; }
+  if(viewMode === "overview"){ return loadOverview(); }
+  if(viewMode === "schedule"){ return loadSchedule(); }
+  if(viewMode === "allversions"){ return loadAllVersions(); }
   invalidateVersionCache(rt.phaseReqId);
-  loadPhaseData();
+  return loadPhaseData();
 }
 
 /* ---------- 全部项目总览（管理端） ---------- */
@@ -426,8 +436,8 @@ function renderAllVersions(){
       + '<button class="btn sm primary" type="button" data-allv-plan>新建发布计划</button></div>';
   }else{
     selbar = '<p class="allv-hint">' + (manageCount
-      ? "勾选可管理的版本后，可跨项目新建一个发布计划；只读项目不可勾选。"
-      : "当前项目均无发布计划权限，仅可查看版本；需要创建计划请联系空间主、管理员或项目负责人。") + '</p>';
+      ? "勾选可管理的版本后，可跨项目新建一个发布计划；无发布计划权限的项目不可勾选。"
+      : "当前项目均无发布计划权限，仅可查看版本；如需创建计划，请联系空间主或管理员在「设置 → 工作流 → 发布权限」中勾选你的身份。") + '</p>';
   }
   var body = "";
   if(!filtered.length){
@@ -439,7 +449,7 @@ function renderAllVersions(){
         lastReq = r.reqId;
         var count = filtered.filter(function(x){ return x.reqId === r.reqId; }).length;
         body += '<tr class="allv-group"><td colspan="7"><span class="allv-gname">' + esc(r.projectName) + '</span>'
-          + '<span class="allv-gmeta">' + count + ' 个版本 · ' + (r.canManage ? '可创建计划' : '只读 · 无发布权限') + '</span></td></tr>';
+          + '<span class="allv-gmeta">' + count + ' 个版本 · ' + (r.canManage ? '可创建计划' : '无计划权限') + '</span></td></tr>';
       }
       var on = allVersionsSel.indexOf(r.versionId) !== -1;
       var ended = versionEnded({ status: r.versionStatus });
@@ -454,7 +464,7 @@ function renderAllVersions(){
         + '<td>' + (r.targetDate ? esc(String(r.targetDate).substring(0, 10)) : '<span class="mute">未设置</span>') + '</td>'
         + '<td class="num">' + (r.taskCount == null ? "—" : r.taskCount) + '</td>'
         + '<td>' + (r.latestReleaseDate ? esc(String(r.latestReleaseDate).substring(0, 10)) : "—") + '</td>'
-        + '<td><span class="allv-perm' + (r.canManage ? '' : ' is-off') + '">' + (r.canManage ? '可创建计划' : '无发布权限') + '</span></td>'
+        + '<td><span class="allv-perm' + (r.canManage ? '' : ' is-off') + '">' + (r.canManage ? '可创建计划' : '无计划权限') + '</span></td>'
         + '</tr>';
     });
   }
@@ -1827,7 +1837,7 @@ function openVersionRowMenu(anchor, id){
   add("plan", "计划与历史");
   if(flags.editable) add("edit", "编辑版本");
   if(flags.editable) add("tasks", "管理工作项");
-  add("delivery", "交付说明");
+  add("delivery", "交付报告");
   add("note", v.status === "released" ? "发布说明" : "当前规划说明");
   if(flags.canPublish) add("actual", "记录实际发布");
   if(flags.editable && v.status === "planned") add("start", "开始开发");
@@ -1948,7 +1958,7 @@ function versionCardHTML(v){
   acts += '<button class="btn sm" type="button" data-ver-open="' + esc(v.id) + '" title="打开版本详情页：范围、投入、需求、发布事实与操作记录">版本详情</button>';
   acts += '<button class="btn sm" type="button" data-ver-detail="' + esc(v.id) + '" title="查看计划与发布历史">计划与历史</button>';
   acts += '<button class="btn sm ghost" type="button" data-ver-note="' + esc(v.id) + '">' + (st === "released" ? '发布说明' : '当前规划说明') + '</button>';
-  acts += '<button class="btn sm ghost" type="button" data-ver-delivery="' + esc(v.id) + '" title="把承诺范围、实际发布、回归结果与遗留问题聚合成一份可对外提交的说明">交付说明</button>';
+  acts += '<button class="btn sm ghost" type="button" data-ver-delivery="' + esc(v.id) + '" title="把承诺范围、实际发布、回归结果与遗留问题聚合成一份可对外提交的说明">交付报告</button>';
   if(permissions.canPublish === true) acts += '<button class="btn sm" type="button" data-ver-release="' + esc(v.id) + '">记录实际发布</button>';
   var contentLocked = versionContentLocked(permissions) || versionContentLocked(v);
   var ended = versionEnded(permissions) || versionEnded(v);
@@ -2573,10 +2583,27 @@ function saveVersion(){
     }
     btnSaveVer.disabled = false;
     UI.closeModal($("dlgVersion"));
-    toast((savedId ? "已更新版本「" : "已创建版本「") + v.name + "」", "fs");
     editingVerId = null;
     notifyDeliveryChanged(v.reqId || rt.phaseReqId);
-    reloadView();
+    /* 新建后给下一步：刷新列表拿到该版本的发布计划权限标记，再决定是「去制定」还是说明为什么不能制定；
+       只有项目写权限的人不该点进一个只能看的计划页 */
+    var refreshed = Promise.resolve(reloadView());
+    if(savedId){ toast("已更新版本「" + v.name + "」", "fs"); return; }
+    refreshed.then(function(){
+      var nv = findVersion(v.id);
+      if(nv && nv.canManageReleasePlan !== true){
+        toast("已创建版本「" + v.name + "」；当前身份不能维护发布计划，需管理员在「设置 → 工作流 → 发布权限」放开", "warn");
+        return;
+      }
+      UI.toastAction("已创建版本「" + v.name + "」", "去制定发布计划", function(){
+        openReleaseDetail(v.id, "plan");
+      }, "fs", 10000);
+    }, function(){
+      /* 刷新失败拿不到权限标记：仍给入口，由计划页说明只读原因 */
+      UI.toastAction("已创建版本「" + v.name + "」", "打开发布计划", function(){
+        openReleaseDetail(v.id, "plan");
+      }, "fs", 10000);
+    });
   }).catch(function(ex){
     if(!versionDialogCurrent() || seq !== versionDialogSeq) return;
     btnSaveVer.disabled = false;
@@ -2705,12 +2732,12 @@ function openReleaseDetail(id, entry, onClose, knownVersion, presetVersionIds, f
   }).catch(function(ex){ toast(ex.message || "打开发布计划失败", "bad"); });
 }
 function releaseRecordHTML(record){ return releaseSnapshotHTML(record); }
-/* 交付说明是低频视图：按需拉模块再落路由，不把纸张渲染器拉进版本页首屏 */
+/* 交付报告是低频视图：按需拉模块再落路由，不把纸张渲染器拉进版本页首屏 */
 function openDeliveryNote(versionId, releaseId){
-  if(!versionId){ toast("这条记录没有归属版本，无法生成说明", "warn"); return; }
+  if(!versionId){ toast("这条记录没有归属版本，无法生成交付报告", "warn"); return; }
   import("../core/view-loader.js").then(function(m){
     return m.loadView("delivery").then(function(mod){ mod.openDeliveryNote(versionId, releaseId); });
-  }).catch(function(ex){ toast(ex.message || "打开交付说明失败", "bad"); });
+  }).catch(function(ex){ toast(ex.message || "打开交付报告失败", "bad"); });
 }
 /* 版本详情是独立路由页：按需拉模块再落 hash，链接可分享、浏览器可后退 */
 function openVersionPage(reqId, versionId, tab){
@@ -2752,6 +2779,8 @@ export function mountReleaseWorkspace(pageHost, opts){
   var storageKey = "hourglass:release-pending:" + JSON.stringify([wsId, userId, id]);
   var plans = [], planId = opts.planId || null, records = [], tasks = [], members = [], preview = null, previewContext = null;
   var busy = false, loadSeq = 0, previewSeq = 0, mayManage = false, mayPublish = false;
+  /* 预览失效后要说清是「没预览过」还是「改过已过期」；范围区还兼顾异常清单，只在清单变化时重绘 */
+  var previewStale = false, previewTried = false, scopeSig = "", scopeMode = "";
   var planOptions = null, planScopeVersionIds = null, planVersionQuery = "", planTaskPoolCache = {}, planTaskFetchKey = "", planTaskErrorKey = "", planTaskSeq = 0;
   var presetPlanVersionIds = opts.presetVersionIds && opts.presetVersionIds.length ? normalizedIds(opts.presetVersionIds) : null;
   var pending = null, storageError = "", recoveryMessage = "", recoveredRecord = null, retryAllowed = false, resetAllowed = false;
@@ -2771,6 +2800,8 @@ export function mountReleaseWorkspace(pageHost, opts){
   var planJustSaved = false, planSavedRevision = null, restoreScroll = null, entryFocus = entry === "actual";
   var actualDraft = {planId:"", occurredAt:localMinute(), environment:"production", targetKeys:"", coverage:"full", artifactRef:"", artifactDigest:"", operation:"deploy", relatedReleaseId:"", executorUserId:"", actualTaskIds:[], deviationReason:"", result:"success", notes:"", failureReason:""};
   var actualPlanTouched = false;
+  /* 用户亲手改过的实际字段：计划带入只补没动过的值，避免覆盖已经记录的事实 */
+  var actualTouched = {};
   /* 实际发布面的本机草稿：长表单中途离开 / 刷新后能接着填；只存当前版本的字段与勾选，不参与正式记录 */
   var actualDraftKey = "hourglass:release-actual-draft:" + JSON.stringify([wsId, userId, id]);
   var ACTUAL_DRAFT_KEYS = ["planId", "occurredAt", "environment", "targetKeys", "coverage", "artifactRef", "artifactDigest", "operation", "relatedReleaseId", "executorUserId", "deviationReason", "result", "notes", "failureReason"];
@@ -2867,10 +2898,33 @@ export function mountReleaseWorkspace(pageHost, opts){
       return (project.versions || []).some(function(ver){ return selected.indexOf(ver.id) !== -1; });
     }).length;
   }
+  /* 计划里未出现在「可管理版本」清单中的版本：仍展示，保存前拦截并说明原因。
+     缺项可能是无该项目写权限，也可能是版本已关闭 / 取消；前者不可勾选，后者取消勾选即移出。
+     planOptions 加载失败时不做本地判定，交回后端校验，避免把全部版本误标为不可管理。 */
+  function unmanageablePlanVersions(){
+    if(!planOptions || !Array.isArray(planOptions.projects)) return [];
+    var selected = planVersionSelection(), known = {};
+    planVersionGroups().forEach(function(project){
+      (project.versions || []).forEach(function(ver){ known[ver.id] = true; });
+    });
+    var p = selectedPlan(), meta = {};
+    if(p && Array.isArray(p.versions)){
+      p.versions.forEach(function(row){ if(row && row.versionId) meta[row.versionId] = row; });
+    }
+    /* 可选清单只含「未结束且可写」的版本，缺项有两种原因：已关闭 / 取消，或没有该项目写权限。
+       两种都要能看见，但处理方式不同：前者取消勾选即移出计划，后者要找对应项目负责人。 */
+    return selected.filter(function(vid){ return !known[vid]; }).map(function(vid){
+      var row = meta[vid] || {}, status = row.versionStatus || "";
+      return { versionId:vid, versionName:row.versionName || vid, projectName:row.projectName || "",
+        status:status, ended: status === "closed" || status === "canceled" };
+    });
+  }
   function planVersionPicker(disabled){
-    var selected = planVersionSelection(), groups = planVersionGroups();
-    if(!groups.length) return '<p class="hint">没有可管理的版本</p>';
-    var q = String(planVersionQuery || "").trim().toLowerCase(), shown = 0, total = 0;
+    var selected = planVersionSelection(), groups = planVersionGroups(), missing = unmanageablePlanVersions();
+    var ended = missing.filter(function(ver){ return ver.ended; }),
+        locked = missing.filter(function(ver){ return !ver.ended; });
+    if(!groups.length && !missing.length) return '<p class="hint">没有可管理的版本</p>';
+    var q = String(planVersionQuery || "").trim().toLowerCase(), shown = missing.length, total = missing.length;
     var html = groups.map(function(project){
       var all = project.versions || [];
       total += all.length;
@@ -2889,10 +2943,27 @@ export function mountReleaseWorkspace(pageHost, opts){
           return '<label class="release-version-row' + (on ? ' is-selected' : '') + (fixed ? ' is-fixed' : '') + '"' + (fixed ? ' title="当前版本固定包含在计划中"' : '') + '><input type="checkbox" data-plan-version="' + esc(ver.id) + '"' + (on ? ' checked' : '') + (disabled || fixed ? ' disabled' : '') + '><span><b>' + esc(ver.name || ver.id) + '</b><small>' + esc(versionStatusName(ver.status)) + (ver.targetDate ? ' · 目标 ' + esc(ver.targetDate) : '') + (fixed ? ' · 当前版本' : '') + '</small></span></label>';
         }).join('') + '</div>';
     }).join('');
+    var endedHtml = ended.length
+      ? '<div class="release-version-group" role="group" aria-label="计划内已关闭或已取消的版本">'
+        + '<div class="release-version-project"><span class="release-version-project-name">已关闭 / 已取消</span><span class="release-version-project-count is-on">' + ended.length + '</span></div>'
+        + ended.map(function(ver){
+            var fixed = ver.versionId === id, on = fixed || selected.indexOf(ver.versionId) !== -1;
+            return '<label class="release-version-row' + (on ? ' is-selected' : '') + (fixed ? ' is-fixed' : '') + ' is-ended" title="' + (fixed ? '当前版本固定包含在计划中，且版本已关闭或取消' : '版本已关闭或取消，不能继续留在发布计划里；取消勾选即可移出') + '"><input type="checkbox" data-plan-version="' + esc(ver.versionId) + '"' + (on ? ' checked' : '') + (disabled || fixed ? ' disabled' : '') + '><span><b>' + esc(ver.versionName || ver.versionId) + '</b><small>' + esc(ver.projectName ? ver.projectName + ' · ' : '') + esc(versionStatusName(ver.status)) + (fixed ? ' · 当前版本' : ' · 取消勾选移出计划') + '</small></span></label>';
+          }).join('')
+        + '</div>'
+      : '';
+    var lockedHtml = locked.length
+      ? '<div class="release-version-group" role="group" aria-label="不在你的可管理范围">'
+        + '<div class="release-version-project"><span class="release-version-project-name">不在你的可管理范围</span><span class="release-version-project-count is-on">' + locked.length + '</span></div>'
+        + locked.map(function(ver){
+            return '<label class="release-version-row is-selected is-locked" title="该版本所属项目你没有写权限（或项目已归档），保存前请让对应项目负责人调整计划"><input type="checkbox" checked disabled data-plan-version-locked="' + esc(ver.versionId) + '"><span><b>' + esc(ver.versionName || ver.versionId) + '</b><small>' + esc(ver.projectName ? ver.projectName + ' · ' : '') + '需该项目写权限</small></span></label>';
+          }).join('')
+        + '</div>'
+      : '';
     return '<div class="release-version-picker" role="group" aria-label="计划包含的版本">'
       + '<div class="release-version-tools"><input type="search" data-plan-version-search value="' + esc(planVersionQuery || "") + '" placeholder="搜索版本或项目" aria-label="搜索版本或项目" autocomplete="off">'
       + '<span class="release-version-count" role="status">显示 ' + shown + ' / 共 ' + total + ' 个版本</span></div>'
-      + html + '</div>'
+      + html + endedHtml + lockedHtml + '</div>'
       + '<p class="hint">计划可跨版本、跨项目；当前版本固定包含。计划只是意图，实际发布仍按单个版本登记，全部包含版本都完成生产部署 / 重部署后计划才自动完成。</p>';
   }
   /* 搜索只重建版本清单本身；勾选以 planScopeVersionIds 为准，不会被重绘丢掉 */
@@ -2966,23 +3037,157 @@ export function mountReleaseWorkspace(pageHost, opts){
     });
     return best ? best.id : "";
   }
-  /* 原生 select 会截断长选项，另起一行把所选计划的完整信息与偏差提示露出来 */
-  function planSummaryInfo(a){
-    var p = plans.find(function(item){ return item.id === a.planId; });
-    if(!a.planId) return {text:"未关联计划：按紧急记录处理，确认时需填写「未按计划发布的原因」。", warn:false};
-    if(!p) return {text:"所选计划不在当前列表中，请重新选择。", warn:true};
-    var diffs = [];
-    if(p.environment !== a.environment) diffs.push("环境为" + releaseEnvironmentName(p.environment) + "，当前实际为" + releaseEnvironmentName(a.environment));
-    if(p.coverage !== a.coverage) diffs.push("覆盖为" + coverageName(p.coverage) + "，当前实际为" + coverageName(a.coverage));
-    if(p.status !== "ready") diffs.push("状态为" + releaseStatusName(p.status));
-    if(normalizedIds(p.versionIds).length && normalizedIds(p.versionIds).indexOf(id) === -1) diffs.push("计划不包含当前版本");
-    var base = "计划 " + planWhen(p) + " · " + releaseEnvironmentName(p.environment) + " · " + coverageName(p.coverage) + " · " + normalizedIds(p.plannedTaskIds).length + " 项 · " + planRef(p) + planVersionSummary(p);
-    var multi = normalizedIds(p.versionIds).length > 1 ? "；本次只登记当前版本，全部包含版本生产成功后才自动完成计划。" : "";
-    return {text: base + (diffs.length ? "；" + diffs.join("；") + "，确认时需填写「未按计划发布的原因」。" : "；环境、覆盖与状态一致。") + multi, warn:!!diffs.length};
+  /* ===== 计划带入 + 计划 vs 实际实时对照 =====
+     计划在第 1 步维护；实际页只补「和计划不同的部分」。带入只填空字段，用户亲手改过的值不覆盖；
+     「按计划重填」是显式覆盖。差异只影响说明要求，不改写工作项状态。 */
+  function scopeTaskIds(){
+    return normalizedIds(tasks.filter(function(t){ return taskVersionIds(t).indexOf(id) !== -1; }).map(function(t){ return t.id; }));
   }
-  function planSummaryHTML(a){
-    var s = planSummaryInfo(a);
-    return '<p class="release-plan-summary' + (s.warn ? ' is-warn' : '') + '" data-release-plan-summary role="status">' + esc(s.text) + '</p>';
+  /* 多版本计划：实际记录只登记当前版本的任务，其他版本在各自的记录里核对（与后端 omitted 口径一致） */
+  function planActualTaskIds(p){
+    var scope = scopeTaskIds();
+    return normalizedIds((p || {}).plannedTaskIds).filter(function(tid){ return scope.indexOf(tid) !== -1; });
+  }
+  function actualTouchedKey(target){
+    if(!target || !target.matches) return "";
+    if(target.matches('[data-release-occurredAt]')) return "occurredAt";
+    if(target.matches('[data-release-environment]')) return "environment";
+    if(target.matches('[data-release-coverage]')) return "coverage";
+    if(target.matches('[data-release-targetKeys]')) return "targetKeys";
+    if(target.matches('[data-actual-task]')) return "actualTaskIds";
+    return "";
+  }
+  function inheritPlanFields(force, prev){
+    var p = plans.find(function(item){ return item.id === actualDraft.planId; });
+    if(!p) return [];
+    var a = actualDraft, filled = [];
+    if(force || !actualTouched.environment){
+      var env = p.environment || "production";
+      if(a.environment !== env){
+        a.environment = env;
+        /* 环境变了，可引用的历史事件也随之变化 */
+        a.relatedReleaseId = "";
+        filled.push("环境");
+      }
+    }
+    if(force || !actualTouched.coverage){
+      var cov = p.coverage || "full";
+      if(a.coverage !== cov){ a.coverage = cov; filled.push("覆盖范围"); }
+    }
+    /* 目标键与工作项：换计划时，仍等于上一个计划带入值的字段随之替换；用户亲手改过的不动 */
+    var prevTargets = prev ? normalizedIds(prev.targetKeys) : [];
+    var currentTargets = lines(a.targetKeys);
+    var targets = normalizedIds(p.targetKeys).join("\n");
+    if(targets && (force || (!actualTouched.targetKeys && (!currentTargets.length || sameIds(currentTargets, prevTargets)))) && a.targetKeys !== targets){
+      a.targetKeys = targets; filled.push("目标键");
+    }
+    var planTasks = planActualTaskIds(p), prevTasks = prev ? planActualTaskIds(prev) : [];
+    if(planTasks.length && (force || (!actualTouched.actualTaskIds && (!a.actualTaskIds.length || sameIds(a.actualTaskIds, prevTasks)))) && !sameIds(a.actualTaskIds, planTasks)){
+      a.actualTaskIds = planTasks; filled.push("工作项");
+    }
+    if(force){
+      var when = localMinute(p.plannedAt);
+      if(when && new Date(when).getTime() <= Date.now() && a.occurredAt !== when){ a.occurredAt = when; filled.push("发生时间"); }
+    }
+    return filled;
+  }
+  function syncActualFieldInputs(){
+    [["[data-release-occurredAt]", "occurredAt"], ["[data-release-environment]", "environment"], ["[data-release-coverage]", "coverage"], ["[data-release-targetKeys]", "targetKeys"]].forEach(function(pair){
+      var el = layer.querySelector(pair[0]);
+      if(el) el.value = actualDraft[pair[1]] || "";
+    });
+    layer.querySelectorAll('[data-actual-task]').forEach(function(cb){ cb.checked = actualDraft.actualTaskIds.indexOf(cb.getAttribute("data-actual-task")) !== -1; });
+  }
+  var inheritSig = "", diffSig = "";
+  function renderPlanInherit(){
+    var host = layer.querySelector('[data-release-plan-inherit]');
+    if(!host){ inheritSig = ""; return; }
+    var p = plans.find(function(item){ return item.id === actualDraft.planId; });
+    if(!p){ if(inheritSig){ host.innerHTML = ""; inheritSig = ""; } return; }
+    var planTasks = planActualTaskIds(p), targets = normalizedIds(p.targetKeys), vids = normalizedIds(p.versionIds);
+    var sig = [p.id, planTasks.length, targets.join(","), p.plannedAt || "", vids.length, pending || storageError ? "x" : ""].join("|");
+    if(sig === inheritSig) return;
+    inheritSig = sig;
+    var multi = vids.length > 1 ? ' 计划包含 ' + vids.length + ' 个版本，本次只登记当前版本；全部版本生产成功后计划自动完成。' : '';
+    host.innerHTML = '<div class="release-inherit">'
+      + '<div class="release-inherit-h"><b>计划带入</b><span class="tag tag-info">' + esc(releasePlanNoText(p.planNo) || ("#" + p.id)) + '</span><span class="sp"></span>'
+      + '<button class="btn sm ghost" type="button" data-release-apply-plan' + (pending || storageError ? ' disabled' : '') + '>按计划重填</button></div>'
+      + '<p class="release-inherit-b">计划范围：' + planTasks.length + ' 项 · ' + esc(releaseEnvironmentName(p.environment || "production")) + ' · ' + esc(p.plannedAt ? fmtReleaseTime(p.plannedAt).slice(0, 16) : "时间未定") + (targets.length ? ' · ' + esc(targets.join(" / ")) : '') + '。修改环境、覆盖范围、目标键或工作项会标为计划偏差，下方「计划 vs 实际」实时对照；时间变更只记录。' + esc(multi) + '</p>'
+      + '</div>';
+  }
+  /* 「未按计划发布的原因」默认收在高级折叠里：被拦下时展开并聚焦，避免只看到提示却找不到输入框 */
+  function revealDeviationReason(){
+    var adv = layer && layer.querySelector("[data-release-advanced]");
+    if(adv && !adv.open){ advancedOpen = true; adv.open = true; }
+    var box = layer && layer.querySelector('[data-release-deviationReason]');
+    if(!box) return;
+    try{ box.scrollIntoView({block:"center", behavior:"smooth"}); }catch(ex){ try{ box.scrollIntoView(); }catch(ex2){ /* noop */ } }
+    try{ box.focus({preventScroll:true}); }catch(ex3){ try{ box.focus(); }catch(ex4){ /* noop */ } }
+  }
+  function renderActualDiff(){
+    var host = layer.querySelector('[data-release-diff]');
+    if(!host){ diffSig = ""; return; }
+    var p = plans.find(function(item){ return item.id === actualDraft.planId; });
+    if(!p){
+      /* 无计划时对照表无从展开，但原因仍是必填：就地给出切计划和填原因的入口。
+         内容无输入控件，直接重设，避免重绘后旧缓存把提示吞掉 */
+      diffSig = "no-plan";
+      host.innerHTML = '<div class="release-diff"><div class="release-diff-h"><b>计划 vs 实际</b><span class="tag tag-warning">未关联计划</span></div>'
+        + '<p class="hint">本次没有选择发布计划，需要在「未按计划发布的原因」里说明缘由；也可以回到第 1 步选择一个就绪计划。</p>'
+        + '<div class="release-diff-acts"><button class="btn sm" type="button" data-diff-plan>去选择发布计划</button>'
+        + '<button class="btn sm ghost" type="button" data-diff-reason>填写原因</button></div></div>';
+      return;
+    }
+    var a = actualDraft, rows = [], same = [];
+    var cmp = function(label, planText, actualText, diff, action){
+      if(diff) rows.push({label:label, plan:planText, actual:actualText, diff:diff, action:action || ""});
+      else same.push(label);
+    };
+    var planMs = p.plannedAt ? new Date(p.plannedAt).getTime() : NaN;
+    var actMs = a.occurredAt ? new Date(a.occurredAt).getTime() : NaN;
+    var timeDiff = !a.occurredAt ? "未填写"
+      : isNaN(planMs) ? "计划未定时间"
+      : (function(){ var m = Math.round((actMs - planMs) / 60000); return m === 0 ? "" : (m > 0 ? "晚 " + m + " 分钟" : "早 " + (-m) + " 分钟"); })();
+    cmp("发生时间", p.plannedAt ? fmtReleaseTime(p.plannedAt).slice(0, 16) : "时间未定", a.occurredAt ? fmtReleaseTime(a.occurredAt).slice(0, 16) : "未填写", timeDiff, !isNaN(planMs) && planMs <= Date.now() ? "occurredAt" : "");
+    cmp("环境", releaseEnvironmentName(p.environment || "production"), releaseEnvironmentName(a.environment), (p.environment || "production") !== a.environment ? "不同" : "", "environment");
+    cmp("覆盖范围", coverageName(p.coverage || "full"), coverageName(a.coverage), (p.coverage || "full") !== a.coverage ? "不同" : "", "coverage");
+    var planTargets = normalizedIds(p.targetKeys), actualTargets = lines(a.targetKeys);
+    cmp("目标键", planTargets.join(" / ") || "未填写", actualTargets.join(" / ") || "未填写",
+      sameIds(planTargets, actualTargets) ? "" : (planTargets.length === actualTargets.length ? "内容不同" : "数量不同"), "targetKeys");
+    var planTasks = planActualTaskIds(p), allPlan = normalizedIds(p.plannedTaskIds);
+    var omitted = planTasks.filter(function(tid){ return a.actualTaskIds.indexOf(tid) === -1; });
+    var extra = a.actualTaskIds.filter(function(tid){ return planTasks.indexOf(tid) === -1; });
+    var unfinished = a.actualTaskIds.filter(function(tid){ var t = tasks.find(function(x){ return x.id === tid; }); return !t || t.boardColumn !== "done"; });
+    var taskDiff = [];
+    if(omitted.length) taskDiff.push("计划内未选入 " + omitted.length + " 项");
+    if(extra.length) taskDiff.push("超出计划 " + extra.length + " 项");
+    if(unfinished.length) taskDiff.push("其中 " + unfinished.length + " 项未完成");
+    var otherVersions = allPlan.length - planTasks.length;
+    cmp("工作项", planTasks.length + " 项" + (otherVersions ? "（另 " + otherVersions + " 项属其他版本）" : ""), a.actualTaskIds.length ? a.actualTaskIds.length + " 项" : "未勾选", taskDiff.join(" · "), "actualTaskIds");
+    var planVids = normalizedIds(p.versionIds);
+    if(planVids.length && planVids.indexOf(id) === -1) rows.push({label:"适用版本", plan:planVids.length + " 个版本", actual:"当前版本", diff:"计划不包含当前版本", action:"plan"});
+    else same.push("适用版本");
+    if(p.status !== "ready") rows.push({label:"计划状态", plan:releaseStatusName(p.status), actual:"—", diff:p.status === "completed" ? "计划已完成，不可复用" : "计划未就绪", action:"plan"});
+    else same.push("计划状态");
+    var sig = [p.id, p.status || "", rows.map(function(r){ return [r.label, r.plan, r.actual, r.diff].join(":"); }).join("|"), same.join(","), unfinished.length].join("|");
+    if(sig === diffSig) return;
+    diffSig = sig;
+    if(!rows.length){
+      host.innerHTML = '<div class="release-diff"><div class="release-diff-h"><b>计划 vs 实际</b><span class="tag tag-success">与计划一致</span></div><p class="hint">发生时间、环境、覆盖范围、目标键与工作项都与计划一致，无需填写计划偏差原因。</p></div>';
+      return;
+    }
+    host.innerHTML = '<div class="release-diff"><div class="release-diff-h"><b>计划 vs 实际</b><span class="tag tag-warning">差异 ' + rows.length + ' 项</span>' + (same.length ? '<span class="hint">一致：' + esc(same.join("、")) + '</span>' : '') + '</div>'
+      + '<div class="tbl-wrap"><table class="phase-tbl release-diff-tbl"><thead><tr><th>对照项</th><th>计划</th><th>实际</th><th>差异</th><th>处理</th></tr></thead><tbody>'
+      + rows.map(function(r){
+        var act = r.action === "plan" ? '<button class="btn sm ghost" type="button" data-diff-plan>去检查发布计划</button>'
+          : r.action === "actualTaskIds" ? '<button class="btn sm ghost" type="button" data-diff-apply="actualTaskIds">按计划勾选</button>'
+          : r.action ? '<button class="btn sm ghost" type="button" data-diff-apply="' + r.action + '">按计划</button>' : '';
+        return '<tr><td>' + esc(r.label) + '</td><td>' + esc(r.plan) + '</td><td>' + esc(r.actual) + '</td><td class="diff">' + esc(r.diff || "不同") + '</td><td>' + act + '</td></tr>';
+      }).join("")
+      + '</tbody></table></div>'
+      + '<div class="release-diff-acts">' + (unfinished.length ? '<button class="btn sm" type="button" data-diff-drop>取消未完成项（' + unfinished.length + '）</button>' : '')
+      + '<button class="btn sm" type="button" data-diff-reason>填写未按计划发布的原因</button>'
+      + '<span class="hint">环境、覆盖范围、目标键与工作项偏离计划需填写原因；时间偏差只记录，不改写工作项状态。</span></div></div>';
   }
   /* 计划负责人 / 实际执行人：与分支、详情同一套人员浮层（公司分组 + 主岗位 / 兼岗）。
      候选 = 本空间成员；值存在隐藏 input（data-plan-owner / data-release-executorUserId），
@@ -3396,7 +3601,7 @@ export function mountReleaseWorkspace(pageHost, opts){
     syncPickerGroups(prefix);
   }
   function afterPick(prefix){
-    if(prefix === "actual") readActual();
+    if(prefix === "actual"){ readActual(); actualTouched.actualTaskIds = true; }
     invalidatePreview();
     if(prefix === "plan") dropSavedBanner();
     error("", prefix);
@@ -3547,7 +3752,11 @@ export function mountReleaseWorkspace(pageHost, opts){
     var planEl = layer.querySelector("[data-plan-readiness]");
     if(planEl){
       var b = planBody();
-      var items = [[!!b.plannedAt, "计划时间"], [!!b.ownerUserId, "负责人"], [b.plannedTaskIds.length > 0, "工作项（已选 " + b.plannedTaskIds.length + " 项）"], [b.targetKeys.length > 0, "目标键（" + b.targetKeys.length + " 个）"], [b.status === "ready", "状态：就绪"]];
+      var items = [[!!b.plannedAt, "计划时间"], [!!b.ownerUserId, "负责人"], [b.plannedTaskIds.length > 0, "工作项（已选 " + b.plannedTaskIds.length + " 项）"]];
+      /* 目标键与后端 dimensions() 同口径：全量 / 部分覆盖必须明确目标，覆盖未知可留空，与是否就绪无关 */
+      if(b.coverage !== "unknown") items.push([b.targetKeys.length > 0, "目标键（覆盖为全量 / 部分时必填）"]);
+      items.push([b.status === "ready", "状态：就绪"]);
+      if(planReasonRequired(b)) items.push([!!b.reason, "理由（修改就绪计划 / 取消计划必填）"]);
       var miss = items.filter(function(x){ return !x[0]; }).map(function(x){ return x[1]; });
       planEl.className = "release-readiness" + (miss.length ? "" : " is-ready");
       planEl.textContent = "就绪条件 " + (items.length - miss.length) + "/" + items.length + "：" + (miss.length ? "还缺 " + miss.join("、") : "已满足，可保存为就绪计划");
@@ -3556,6 +3765,8 @@ export function mountReleaseWorkspace(pageHost, opts){
     }
     updateReadyCard();
     updateSteps();
+    renderPlanInherit();
+    renderActualDiff();
   }
   function switchTab(key, focus){
     if(key === "content") key = "history";
@@ -3603,6 +3814,11 @@ export function mountReleaseWorkspace(pageHost, opts){
     var plannedAt = p && p.plannedAt && localMinute(p.plannedAt) === localPlanned ? p.plannedAt : localPlanned;
     return {id:p ? p.id : null, revision:p ? p.revision : null, versionIds:planVersionSelection(), plannedAt:plannedAt, ownerUserId:value("plan", "owner") || null, status:value("plan", "status"), notes:value("plan", "notes").trim(), risks:value("plan", "risks").trim(), reason:value("plan", "reason").trim(), plannedTaskIds:checks("plan"), environment:value("plan", "environment"), targetKeys:lines(value("plan", "targets")), coverage:value("plan", "coverage")};
   }
+  /* 与后端一致：只有「原计划已就绪」或「改为取消」才必须填理由，新建草稿无需理由 */
+  function planReasonRequired(b){
+    var p = selectedPlan();
+    return !!((p && p.status === "ready") || (b && b.status === "canceled"));
+  }
   function planDirty(){
     var p = selectedPlan();
     if(!mayManage || (p && p.status === "completed") || !layer.querySelector('[data-plan-planned]')) return false;
@@ -3618,7 +3834,7 @@ export function mountReleaseWorkspace(pageHost, opts){
     if(!b.plannedAt) missing.push("计划时间");
     if(!b.ownerUserId) missing.push("负责人");
     if(!b.plannedTaskIds.length) missing.push("至少 1 个工作项");
-    if(!b.targetKeys.length) missing.push("目标键");
+    if(b.coverage !== "unknown" && !b.targetKeys.length) missing.push("目标键");
     if(missing.length){ error("设为「就绪」还需补齐：" + missing.join("、"), "plan"); return false; }
     error("", "plan");
     return true;
@@ -3752,17 +3968,66 @@ export function mountReleaseWorkspace(pageHost, opts){
       retryAllowed = !old.rejection; resetAllowed = !!old.rejection; return true;
     });
   }
+  function anomaliesHTML(list, hasReason){
+    return '<div class="rel-anomaly" role="status">'
+      + '<div class="rel-anomaly-h"><b>本次事实有 ' + list.length + ' 处需要说明</b><span>' + (hasReason ? "原因已填写，可以重新预览。" : "系统只记录事实，不会改写工作项状态。") + '</span></div>'
+      + '<ul class="rel-anomaly-list">' + list.map(function(x){
+        return '<li><span>' + esc(x.text) + '</span>'
+          + (x.code === "notDone" ? '<button type="button" class="rel-need-go" data-anomaly-drop="' + esc(x.taskId) + '">取消勾选</button>' : '')
+          + '</li>';
+      }).join("") + '</ul>'
+      + '<div class="rel-anomaly-acts">'
+      + (hasReason
+        ? '<button type="button" class="btn sm primary" data-anomaly-recheck>重新预览</button>'
+        : '<button type="button" class="btn sm" data-anomaly-reason>填写未按计划发布的原因</button>')
+      + '<button type="button" class="btn sm ghost" data-anomaly-plan>去检查发布计划</button>'
+      + '</div>'
+      + '<p class="hint">说明原因后重新预览即可继续；也可以取消勾选未完成项，让本次范围与计划一致。</p></div>';
+  }
+  /* 预览结果优先展示；没有预览结果时，展示异常清单或下一步提示，避免只留一句含糊的「已变化」 */
+  function renderScopeState(force){
+    var host = layer.querySelector('[data-release-scope]');
+    if(!host || preview) return;
+    var list = actualAnomalies();
+    var reasonEl = layer.querySelector('[data-release-deviationReason]');
+    var hasReason = !!(reasonEl && String(reasonEl.value || "").trim());
+    /* 首次打开只给下一步提示；点过预览（或被拦）后才展开异常清单，避免一进来就像报错 */
+    var showAnomalies = list.length && (previewTried || previewStale);
+    var mode = showAnomalies ? "anomaly" : (previewStale ? "stale" : "empty");
+    var sig = list.map(function(x){ return x.code + ":" + (x.taskId || ""); }).join("|") + (hasReason ? "|reason" : "");
+    if(!force && sig === scopeSig && mode === scopeMode) return;
+    scopeSig = sig; scopeMode = mode;
+    if(mode === "anomaly"){ host.innerHTML = anomaliesHTML(list, hasReason); return; }
+    host.innerHTML = '<p class="hint">' + (mode === "stale"
+      ? '字段已改动，之前的预览已过期，请重新预览。'
+      : '尚未预览：点上方「预览本次范围与预检结果」核对本次交付范围，预览通过后才可记录发布。') + '</p>';
+  }
   function invalidatePreview(){
+    if(preview) previewStale = true;
     preview = null; previewContext = null; previewSeq++;
-    var el = layer.querySelector('[data-release-scope]');
-    if(el) el.innerHTML = '<p class="hint">范围或确认上下文已变化，请重新预览；实际选择不会被计划替换。</p>';
+    renderScopeState();
     syncControls();
+  }
+  function confirmBlockReason(blockedNoReason){
+    if(busy) return "正在处理，请稍候";
+    if(!mayPublish) return "当前账号对该项目没有写权限，不能记录发布";
+    if(pending) return "有待确认的发布请求，请先处理上方的查询 / 重试提示";
+    if(storageError) return "会话存储异常，无法安全提交发布请求";
+    if(planDirty()) return "发布计划还有未保存改动，请先保存或放弃";
+    if(!actualReady()) return "右侧就绪条件尚未全部满足";
+    if(blockedNoReason) return "发布检查存在阻断项，需填写「未按计划发布的原因」";
+    if(!preview) return "请先点「预览本次范围与预检结果」并确认通过";
+    if(preview.canPublish === false) return "预览判定本次事实有异常，需填写原因后重新预览";
+    return "";
   }
   function syncControls(){
     var confirm = layer.querySelector('[data-release-confirm]');
     /* 阻断项不禁止记录事实，但必须留下未按计划发布的原因；预览已判定不可发布时也不放行确认 */
     var blockedNoReason = releaseCheck && releaseCheck.verdict === "block" && actualDraft.result === "success" && !String(actualDraft.deviationReason || "").trim();
-    if(confirm) confirm.disabled = busy || !mayPublish || !!pending || !!storageError || !preview || preview.canPublish === false || planDirty() || blockedNoReason || !actualReady();
+    if(confirm){
+      confirm.disabled = busy || !mayPublish || !!pending || !!storageError || !preview || preview.canPublish === false || planDirty() || blockedNoReason || !actualReady();
+      confirm.title = confirm.disabled ? confirmBlockReason(blockedNoReason) : "按预览范围记录本次实际发布";
+    }
     layer.querySelectorAll('[data-release-save], [data-plan-new], [data-release-preview], [data-release-draft]').forEach(function(b){ b.disabled = busy || !!pending || !!storageError; });
     var retry = layer.querySelector('[data-release-retry]'); if(retry) retry.disabled = busy || !mayPublish || !retryAllowed || !!storageError;
     var reset = layer.querySelector('[data-release-reset]'); if(reset) reset.disabled = busy || !pending || !pending.rejection || !!storageError;
@@ -4641,7 +4906,17 @@ export function mountReleaseWorkspace(pageHost, opts){
       ? ' · 本版本已覆盖工作项 ' + releaseCheck.workItemsCovered + '/' + releaseCheck.workItemsTotal
       : '';
     var planCoverageHTML = '<span data-plan-check-coverage>' + esc(planCoverage) + '</span>';
-    var planSection = '<section class="release-section"><h3>发布计划</h3><div class="row row-gap"><select data-plan-select aria-label="选择独立发布计划"' + (pending ? ' disabled' : '') + '>' + options([["", "＋ 新建独立计划"]].concat(planChoices), planId || "") + '</select>' + '</div><p class="hint">计划 ' + esc(p.id ? (releasePlanNoText(p.planNo) || ("#" + p.id)) : "未保存") + ' · 修订 ' + esc(p.revision || "—") + ' · ' + esc(releaseStatusName(p.status)) + ' · ' + esc(releaseEnvironmentName(p.environment || "production")) + ' · ' + esc(coverageName(p.coverage || "full")) + ' · ' + esc(planWhen(p)) + (p.versionCount > 1 ? ' · ' + esc(p.versionCount) + ' 个版本（已完成 ' + esc(p.releasedVersionCount || 0) + '）' : '') + '。计划只描述打算怎么发，不改变实际交付事实；已完成计划不可修改。</p>'
+    /* 只读原因分开说明：无发布维护权限 / 计划已完成 / 待确认请求 / 本机草稿异常，避免只给一句「此计划只读」 */
+    var planLockReasons = [];
+    if(!mayManage) planLockReasons.push("当前身份不能维护发布计划，也不能记录实际发布：默认仅空间主、管理员与项目负责人（且对该项目可写）可操作；如你对该项目可写，可请管理员在「设置 → 工作流 → 发布权限」放开「项目可写成员」。");
+    if(p.status === "completed") planLockReasons.push("计划已完成，只读；需要调整请新建独立计划。");
+    if(pending) planLockReasons.push("本机有一条待确认的发布请求，处理前计划只读。");
+    if(storageError) planLockReasons.push("本机草稿读取异常，暂以只读方式展示计划。");
+    var planLockHTML = '<p class="hint">' + esc(planLockReasons.length ? planLockReasons.join(" ") : "此计划只读。") + '</p>';
+    var planSection = '<section class="release-section"><div class="rel-section-head"><h3>发布计划</h3><span class="row row-gap">'
+      + '<span class="tag ghost">' + esc(releaseStatusName(p.status)) + '</span>'
+      + (!locked ? '<button class="btn sm soft" type="button" data-release-save>' + (p.id ? '保存此计划' : '新建独立计划') + '</button>' : '')
+      + '</span></div><div class="row row-gap"><select data-plan-select aria-label="选择独立发布计划"' + (pending ? ' disabled' : '') + '>' + options([["", "＋ 新建独立计划"]].concat(planChoices), planId || "") + '</select>' + '</div><p class="hint">计划 ' + esc(p.id ? (releasePlanNoText(p.planNo) || ("#" + p.id)) : "未保存") + ' · 修订 ' + esc(p.revision || "—") + ' · ' + esc(releaseEnvironmentName(p.environment || "production")) + ' · ' + esc(coverageName(p.coverage || "full")) + ' · ' + esc(planWhen(p)) + (p.versionCount > 1 ? ' · ' + esc(p.versionCount) + ' 个版本（已完成 ' + esc(p.releasedVersionCount || 0) + '）' : '') + '。计划只描述打算怎么发，不改变实际交付事实；已完成计划不可修改。</p>'
       + '<div data-release-prep-host></div>'
       + heading("基本信息", "计划发布的时间与责任人；环境与覆盖范围用于和实际记录比对偏差。")
       + '<div class="form-grid">' + field("计划发布时间（本地）", '<input type="datetime-local" step="60" data-plan-planned value="' + esc(p.plannedAt ? localMinute(p.plannedAt) : "") + '"' + disabled + '>', "计划发布的时间，使用本地时间；只用于计划与偏差对比，不代表实际发生时间。")
@@ -4649,7 +4924,7 @@ export function mountReleaseWorkspace(pageHost, opts){
         + field("计划环境", '<select data-plan-environment' + disabled + '>' + options(envs, p.environment || "production") + '</select>', "计划面向的环境；实际环境不同会在预检中记为偏差，需要填写原因。")
         + field("计划覆盖", '<select data-plan-coverage' + disabled + '>' + options(coverage, p.coverage || "full") + '</select>', "计划覆盖范围：全量、部分或覆盖未知；与实际覆盖一致才不构成偏差。") + '</div>'
       + heading('计划包含的版本（<span data-plan-version-count>' + planVersionSelection().length + '</span> 个 · <span data-plan-version-project-count>' + planSelectionProjects(planVersionSelection()) + '</span> 个项目）', "可跨版本、跨项目选择；当前版本固定包含。计划包含的所有版本都完成生产部署 / 重部署后，计划才自动完成。") + '<div data-plan-version-host>' + planVersionPicker(locked) + '</div>'
-      + field("计划目标键（每行一个）", '<textarea data-plan-targets placeholder="如 prod-shanghai-a，每行一个"' + disabled + '>' + esc(normalizedIds(p.targetKeys).join('\n')) + '</textarea>', "计划影响的部署目标或服务键，每行一个；与实际目标键一致才不构成偏差。")
+      + field("计划目标键（每行一个）", '<textarea data-plan-targets placeholder="如 prod-shanghai-a，每行一个"' + disabled + '>' + esc(normalizedIds(p.targetKeys).join('\n')) + '</textarea>', "计划影响的部署目标或服务键，每行一个；覆盖为全量 / 部分时必填，覆盖未知可留空；与实际目标键一致才不构成偏差。")
       + heading('这次计划发布哪些工作项（<span data-plan-task-count>' + normalizedIds(p.plannedTaskIds).length + '</span> 项' + planCoverageHTML + '）', "勾选这次计划发布的工作项；设为「就绪」时至少 1 项。实际记录会独立选择，不自动继承计划范围。") + taskRows("plan", normalizedIds(p.plannedTaskIds), locked)
       + '<div data-plan-sync-host></div>'
       + '<div data-plan-branches-host></div>'
@@ -4657,13 +4932,15 @@ export function mountReleaseWorkspace(pageHost, opts){
       + heading("说明与状态", "计划说明、风险与回滚方案；计划状态决定能否被实际记录引用。")
       + field("计划说明", '<textarea data-plan-notes maxlength="2000"' + disabled + '>' + esc(p.notes || "") + '</textarea>')
       + field("风险与回滚方案", '<textarea data-plan-risks maxlength="1000"' + disabled + '>' + esc(p.risks || "") + '</textarea>', "建议写清回滚命令、数据兼容处理和回滚后的验证步骤。")
-      + field("计划状态", '<select data-plan-status' + disabled + '>' + options([["draft", "草稿"], ["ready", "就绪"], ["canceled", "取消"]].concat(p.status === "completed" ? [["completed", "已完成（只读）"]] : []), p.status || "draft") + '</select>', "只有「就绪」计划可被实际记录直接引用；就绪需要计划时间、负责人、至少 1 个工作项和目标键。草稿、取消或已完成会触发偏差校验，需要填写理由。")
-      + (!locked ? '<div class="release-save-bar">' + field("新建 / 修改理由", '<textarea class="textarea" rows="2" data-plan-reason maxlength="500" placeholder="说明为什么新建或修改此计划"></textarea>', "", true) + '<p class="release-error" data-plan-error role="alert"></p><div class="release-save-acts"><button class="btn sm primary" data-release-save type="button">' + (p.id ? '保存此计划' : '新建独立计划') + '</button></div></div>' : '<p class="hint">此计划只读</p>') + '</section>';
+      + field("计划状态", '<select data-plan-status' + disabled + '>' + options([["draft", "草稿"], ["ready", "就绪"], ["canceled", "取消"]].concat(p.status === "completed" ? [["completed", "已完成（只读）"]] : []), p.status || "draft") + '</select>', "只有「就绪」计划可被实际记录直接引用；就绪需要计划时间、负责人和至少 1 个工作项。修改已就绪的计划或取消计划需填写理由。")
+      + (!locked ? '<div class="release-save-bar">' + field("计划变更理由", '<textarea class="textarea" rows="2" data-plan-reason maxlength="500" placeholder="修改已就绪计划或取消计划时必填"></textarea>', "修改已就绪计划或取消计划时必填；新建草稿可留空。") + '<p class="release-error" data-plan-error role="alert"></p><div class="release-save-acts"><button class="btn sm primary" data-release-save type="button">' + (p.id ? '保存此计划' : '新建独立计划') + '</button></div></div>' : planLockHTML) + '</section>';
     var actualSection = mayPublish ? '<div class="release-actual"><section class="release-section release-actual-main"><h3>实际发布事实</h3><p class="hint">只填本次真实发生的交付；失败、测试和回滚记录不等于生产生效。</p><div class="form-grid">'
-        + field("本次关联计划", '<select data-release-planId' + actualDisabled + '>' + actualPlanOptions(a) + '</select>', "关联计划用于预检对比；无计划即紧急记录。环境或状态不一致的计划仍可选择，但必须填写原因。", false, planSummaryHTML(a))
+        + field("本次关联计划", '<select data-release-planId' + actualDisabled + '>' + actualPlanOptions(a) + '</select>', "关联计划用于预检对比；无计划即紧急记录。环境或状态不一致的计划仍可选择，但必须填写原因。")
         + field("实际发生时间（本地）", '<input type="datetime-local" step="60" data-release-occurredAt value="' + esc(a.occurredAt) + '"' + actualDisabled + '>', "真实发生时间，不能晚于当前时间；与计划时间不同需填写原因。", true)
         + field("实际环境", '<select data-release-environment' + actualDisabled + '>' + options(envs, a.environment) + '</select>', "真实发布环境；与计划环境不同需填写原因。")
         + field("实际结果", '<select data-release-result' + actualDisabled + '>' + options([["success", "成功"], ["failed", "失败"]], a.result) + '</select>', "记录本次真实结果；失败必须填写失败原因。") + '</div>'
+        + '<div data-release-plan-inherit></div>'
+        + '<div data-release-diff></div>'
         + '<div data-release-check-host></div>'
         + '<div class="form-grid">' + field("实际执行人（独立于记录人）", releaseOwnerControl("actual", a.executorUserId, actualDisabled), "实际执行发布的人，独立于记录人。", true)
         + field("制品标识", '<input type="text" data-release-artifactRef maxlength="500" placeholder="如 hourglass-server.jar#8b44737" value="' + esc(a.artifactRef) + '"' + actualDisabled + '>', "可识别的制品名或构建号，例如 jar 名#提交号，提交号写在这里；不要用普通版本名代替制品证据。", true)
@@ -4690,7 +4967,8 @@ export function mountReleaseWorkspace(pageHost, opts){
       + '<div class="release-panel" id="release-panel-plan" data-release-panel="plan"' + (activeTab === "plan" ? '' : ' hidden') + '>' + planSection + '</div>'
       + (mayPublish ? '<div class="release-panel" id="release-panel-actual" data-release-panel="actual"' + (activeTab === "actual" ? '' : ' hidden') + '>' + actualSection + '</div>' : '')
       + '<div class="release-panel" id="release-panel-history" data-release-panel="history"' + (activeTab === "history" ? '' : ' hidden') + '>' + historySection + versionLogSection + contentSection + '</div>';
-    renderHistory(); renderVersionLog(); renderCheck(); renderPrep(); syncWatch(); syncControls(); syncAdvanced(); updateChecklists(); refreshPlanBranches(); filterPicker("plan"); filterPicker("actual"); error(storageError); UI.wireTooltips(dlg.body);
+    inheritSig = ""; diffSig = "";
+    renderHistory(); renderVersionLog(); renderCheck(); renderPrep(); syncWatch(); syncControls(); syncAdvanced(); updateChecklists(); renderScopeState(true); refreshPlanBranches(); filterPicker("plan"); filterPicker("actual"); error(storageError); UI.wireTooltips(dlg.body);
     if(restoreScroll != null){ dlg.scrollTo(restoreScroll); restoreScroll = null; }
     if(entryFocus){ entryFocus = false; focusActual(); }
     if(mayManage && activeTab === "plan") ensurePlanTaskPool();
@@ -4720,8 +4998,12 @@ export function mountReleaseWorkspace(pageHost, opts){
       taskOptionsCache[reqId] = tasks; if(cache && rt.phaseReqId === reqId) cache.tasks = tasks;
       if(planId === null) planId = opts.forceNewPlan ? "" : (plans.length ? plans[0].id : "");
       if(planId && !plans.some(function(p){ return p.id === planId; })) planId = "";
+      /* 本机草稿里关联的计划已不可见：按无计划处理，避免拿着失效 id 去预检 */
+      if(actualDraft.planId && !plans.some(function(p){ return p.id === actualDraft.planId; })) actualDraft.planId = "";
       /* 首次进入实际记录面：自动带出匹配版本与环境的就绪计划，避免误记成紧急发布 */
       if(!pending && !storageError && !actualPlanTouched && !actualDraft.planId) actualDraft.planId = preferredActualPlanId();
+      /* 首次进入自动关联就绪计划时同步带入范围与目标；本机草稿或用户亲手选过计划的场景不动 */
+      if(!pending && !storageError && !actualPlanTouched && actualDraft.planId) inheritPlanFields(false);
       /* 刷新 / 重新加载时重新拉版本操作记录，避免展示过期列表 */
       verLog = {id:null, rows:[], error:""}; verLogSeq++;
       /* 工具栏在释放容器外：重画 body 前必须先解禁，否则「刷新 / 返回版本」会一直停在被禁用状态 */
@@ -4732,16 +5014,44 @@ export function mountReleaseWorkspace(pageHost, opts){
       dlg.body.innerHTML = '<p class="release-error" role="alert">' + esc(ex.message || "加载失败；旧请求仍保留") + '</p><button class="btn" data-release-refresh type="button">重新查询 / 加载</button>';
     });
   }
+  /* 逐条列出「本次事实与计划不一致」的项：预览前、预览被拦后都按这张清单展示，
+     让用户看到具体是哪几项，而不是只知道有一句「存在异常」。判定口径与 validate 完全同源。 */
+  function actualAnomalies(b){
+    if(!layer || !layer.querySelector('[data-release-occurredAt]')) return [];
+    b = b || context();
+    var p = plans.find(function(x){ return x.id === b.planId; }) || null, out = [], diffs = [];
+    if(!p){
+      out.push({code:"noPlan", text:"本次没有关联发布计划"});
+    }else{
+      if(p.status !== "ready") diffs.push("计划状态不是「就绪」");
+      if(p.environment !== b.environment) diffs.push("发布环境不同");
+      if(p.coverage !== b.coverage) diffs.push("覆盖范围不同");
+      if(!sameIds(p.targetKeys, b.targetKeys)) diffs.push("目标键不同");
+      /* 多版本计划只核对当前版本的任务，与差异表、计划带入同源 */
+      if(!sameIds(planActualTaskIds(p), b.actualTaskIds)) diffs.push("勾选的工作项与计划不同");
+      /* 时间偏差只在对照表里记录：计划时间通常是目标窗口，逐次强制说明会变成噪声 */
+      if(diffs.length) out.push({code:"planDeviation", text:"计划偏差：" + diffs.join("；")});
+    }
+    b.actualTaskIds.forEach(function(tid){
+      var t = tasks.find(function(x){ return x.id === tid; });
+      if(!t){ out.push({code:"missingTask", text:"工作项已不存在：" + tid}); return; }
+      if(t.boardColumn !== "done"){
+        out.push({code:"notDone", taskId:t.id, text:"未完成：『" + t.title + "』当前在「" + colName(t.boardColumn || "todo") + "」"});
+        return;
+      }
+      if(t.completedAt && b.occurredAt && new Date(t.completedAt).getTime() > new Date(b.occurredAt).getTime()){
+        out.push({code:"late", taskId:t.id, text:"完成时间晚于发布时刻：『" + t.title + "』完成于 " + fmtReleaseTime(t.completedAt)});
+      }
+    });
+    return out;
+  }
   function validate(b){
     if(!b.occurredAt || new Date(b.occurredAt).getTime() > Date.now()) return "请填写不晚于当前时间的实际发生时间";
     if(!b.artifactRef || (b.artifactDigest && !/^[a-f0-9]{64}$/.test(b.artifactDigest))) return "制品标识必填；SHA256 要么留空，要么填完整 64 位十六进制（commit id 不算）";
     if(!b.executorUserId || !members.some(function(m){ return (m.userId || m.id) === b.executorUserId; })) return "请选择当前成员作为独立实际执行人";
     if(!b.actualTaskIds.length || !b.targetKeys.length) return "请明确选择实际工作项和至少一个目标键";
     if(b.result === "failed" && !b.failureReason) return "记录失败必须填写失败原因（展开「高级与异常字段」）";
-    var p = plans.find(function(p){ return p.id === b.planId; });
-    var anomaly = !p || p.status !== "ready" || p.environment !== b.environment || p.coverage !== b.coverage || !sameIds(p.targetKeys, b.targetKeys) || !sameIds(p.plannedTaskIds, b.actualTaskIds) || utc(localMinute(p.plannedAt)) !== b.occurredAt;
-    if(b.actualTaskIds.some(function(tid){ var t = tasks.find(function(t){ return t.id === tid; }); return !t || t.boardColumn !== "done" || (t.completedAt && new Date(t.completedAt).getTime() > new Date(b.occurredAt).getTime()); })) anomaly = true;
-    if(anomaly && !b.deviationReason) return "无计划、计划偏差、未完成或完成日期异常须填写「未按计划发布的原因」（展开「高级与异常字段」），不会伪造完成记录";
+    if(actualAnomalies(b).length && !b.deviationReason) return "本次事实有异常，需填写「未按计划发布的原因」；也可先处理下方列出的异常项。";
     if(b.result === "success" && releaseCheck && releaseCheck.verdict === "block" && !String(b.deviationReason || "").trim()) return "发布检查存在阻断项：成功发布须填写「未按计划发布的原因」";
     var ref = records.find(function(r){ return r.id === b.relatedReleaseId; });
     if(b.relatedReleaseId && (!ref || ref.environment !== b.environment || ref.operation === "rollback")) return "请选择同环境可引用的正式事件";
@@ -4753,23 +5063,30 @@ export function mountReleaseWorkspace(pageHost, opts){
   }
   function runPreview(){
     if(busy || !mayPublish || !current()) return;
-    setBusy(true); error("", "actual");
+    setBusy(true); error("", "actual"); previewTried = true;
     reconcile().then(function(){
       if(!current()) return;
       if(pending || storageError){ setBusy(false); render(); error(recoveryMessage || storageError); return; }
       if(planDirty()){ setBusy(false); error("计划有未保存改动，请保存或放弃后预览", "actual"); return; }
       var b = context(), msg = validate(b);
-      if(msg){ setBusy(false); error(msg, "actual"); return; }
+      if(msg){
+        setBusy(false); error(msg, "actual"); previewStale = true; renderScopeState(true);
+        if(msg.indexOf("未按计划发布的原因") !== -1) revealDeviationReason();
+        return;
+      }
       invalidatePreview(); var seq = ++previewSeq, fingerprint = JSON.stringify(b);
       return API.post(base + "/release-preview", b).then(function(rs){
         if(!current() || seq !== previewSeq) return;
         setBusy(false);
         if(fingerprint !== JSON.stringify(context()) || planDirty()){ invalidatePreview(); return; }
         if(!rs.scopeToken){ error("预览未返回范围令牌，不能确认", "actual"); return; }
-        preview = rs; previewContext = fingerprint;
+        preview = rs; previewContext = fingerprint; previewStale = false; scopeMode = "";
         /* 预览内的检查与确认时重新计算同源；先展示它，避免拿旧计划的结论做判断 */
         if(rs.testCheck){ releaseCheck = rs.testCheck; renderCheck(); syncControls(); }
-        if(rs.requiresDeviationReason){ advancedOpen = true; var adv = layer.querySelector("[data-release-advanced]"); if(adv) adv.open = true; }
+        if(rs.requiresDeviationReason || rs.canPublish === false){
+          error("预览未通过：本次事实存在异常，需填写「未按计划发布的原因」后重新预览。", "actual");
+          revealDeviationReason();
+        }
         var actualPlan = plans.find(function(p){ return p.id === b.planId; });
         var omittedIds = normalizedIds(rs.plannedTaskIds || (actualPlan || {}).plannedTaskIds).filter(function(tid){ return b.actualTaskIds.indexOf(tid) === -1; });
         function scopeTask(tid){
@@ -4783,8 +5100,14 @@ export function mountReleaseWorkspace(pageHost, opts){
           + '<h4>预检提示（不改变工作状态）</h4>' + (rs.warnings || []).map(function(w){ return '<p class="hint">' + esc(typeof w === "string" ? w : JSON.stringify(w)) + '</p>'; }).join('')
           + '<ul class="release-scope">' + (rs.excluded || []).filter(function(x){ return omittedIds.indexOf((x.task || {}).id || x.taskId) === -1; }).map(function(x){ return '<li>预检异常：' + esc((x.task || {}).title || x.title || x.taskId || "—") + ' · ' + esc(x.reason || x.disposition || "—") + '</li>'; }).join('') + '</ul>';
         syncControls();
+        /* 窄屏右栏会堆到表单下方：预览可用时把「就绪条件」带进视野，找不到记录按钮的问题就没有了 */
+        if(rs.canPublish !== false && !rs.requiresDeviationReason
+          && window.matchMedia && window.matchMedia("(max-width:1099px)").matches){
+          var readyCard = layer.querySelector(".rel-ready");
+          if(readyCard) readyCard.scrollIntoView({block:"start", behavior:"smooth"});
+        }
       });
-    }).catch(function(ex){ if(current()){ setBusy(false); invalidatePreview(); error(ex.message || "查询 / 预览失败，待确认请求仍保留", "actual"); } });
+    }).catch(function(ex){ if(current()){ setBusy(false); invalidatePreview(); previewStale = true; renderScopeState(true); error(ex.message || "查询 / 预览失败，待确认请求仍保留", "actual"); } });
   }
   function sendPending(){
     if(!pending || pending.rejection || !mayPublish || !current()) return;
@@ -4812,12 +5135,6 @@ export function mountReleaseWorkspace(pageHost, opts){
     if(select) select.innerHTML = options([["", "请选择（回滚必填）"]].concat(refs.map(function(r){ return [r.id, (releaseNoText(r.releaseNo) || "#" + r.id) + " · " + r.result + " · " + releaseOperationName(r.operation) + " · " + fmtReleaseTime(r.occurredAt)]; })), a.relatedReleaseId);
     var planSelect = layer.querySelector('[data-release-planId]');
     if(planSelect) planSelect.innerHTML = actualPlanOptions(a);
-    var summary = layer.querySelector('[data-release-plan-summary]');
-    if(summary){
-      var info = planSummaryInfo(a);
-      summary.textContent = info.text;
-      summary.classList.toggle("is-warn", info.warn);
-    }
     var pick = layer.querySelector('[data-actual-picker]');
     if(pick) pick.outerHTML = taskRows("actual", a.actualTaskIds, false);
   }
@@ -4874,11 +5191,19 @@ export function mountReleaseWorkspace(pageHost, opts){
       return;
     }
     if(e.target.matches('[data-plan-version]')){
-      var selectedVersions = Array.from(layer.querySelectorAll('[data-plan-version]:checked')).map(function(el){ return el.getAttribute('data-plan-version'); });
-      planScopeVersionIds = normalizedIds(selectedVersions.concat(id));
+      /* 只合并本次渲染出来的复选框状态；被搜索过滤掉或置灰（无该项目写权限）的已选版本必须原样保留，
+         否则一次勾选就会把它们静默从计划里删掉。 */
+      var prevSelected = planVersionSelection(), checkedNow = {};
+      layer.querySelectorAll('[data-plan-version]').forEach(function(el){ checkedNow[el.getAttribute('data-plan-version')] = el.checked; });
+      var nextSelected = prevSelected.filter(function(vid){ return checkedNow[vid] !== false; });
+      layer.querySelectorAll('[data-plan-version]:checked').forEach(function(el){
+        var vid = el.getAttribute('data-plan-version');
+        if(nextSelected.indexOf(vid) === -1) nextSelected.push(vid);
+      });
+      planScopeVersionIds = normalizedIds(nextSelected.concat(id));
       layer.querySelectorAll('.release-version-row').forEach(function(row){
         var cb = row.querySelector('[data-plan-version]');
-        row.classList.toggle('is-selected', !!(cb && cb.checked));
+        if(cb) row.classList.toggle('is-selected', cb.checked);
       });
       syncPlanVersionMeta();
       dropSavedBanner(); error("", "plan"); invalidatePreview();
@@ -4888,9 +5213,19 @@ export function mountReleaseWorkspace(pageHost, opts){
     if(e.target.matches('input,select,textarea')){
       var scope = e.target.closest('[data-release-panel="plan"]') ? "plan" : e.target.closest('[data-release-panel="actual"]') ? "actual" : "";
       if(scope){ error("", scope); if(scope === "plan"){ dropSavedBanner(); dismissPlanDraftBanner(); schedulePlanDraft(); } }
+      /* 用户亲手改过的实际字段不再被「计划带入」覆盖 */
+      var touchedKey = actualTouchedKey(e.target);
+      if(touchedKey) actualTouched[touchedKey] = true;
       /* 用户亲自选过计划（含“无计划”）后，环境变化或重绘都不再自动改选 */
-      if(e.target.matches('[data-release-planId]')) actualPlanTouched = true;
-      readActual(); invalidatePreview(); syncAdvanced();
+      var planPicked = e.target.matches('[data-release-planId]');
+      var prevPlan = planPicked ? plans.find(function(item){ return item.id === actualDraft.planId; }) : null;
+      if(planPicked) actualPlanTouched = true;
+      readActual();
+      if(planPicked){
+        var filled = inheritPlanFields(false, prevPlan);
+        if(filled.length){ syncActualFieldInputs(); toast("已按计划带入：" + filled.join("、"), "fs"); }
+      }
+      invalidatePreview(); syncAdvanced();
       if(e.target.matches('[data-actual-task]')) filterPicker("actual");
       if(e.target.matches('[data-plan-task]')){ filterPicker("plan"); refreshPlanBranches(); }
       updateChecklists();
@@ -4899,19 +5234,19 @@ export function mountReleaseWorkspace(pageHost, opts){
       if(e.target.matches('[data-release-operation], [data-release-environment], [data-release-coverage], [data-release-relatedReleaseId], [data-release-planId]')){
         if(e.target.matches('[data-release-operation], [data-release-environment]')) actualDraft.relatedReleaseId = "";
         refreshActualReferences();
-        if(e.target.matches('[data-release-planId]')) loadCheck();
+        if(planPicked) loadCheck();
       }
     }
   }
   layer.addEventListener("input", changed); layer.addEventListener("change", changed);
-  /* 失焦即时校验（P-FB-2）：计划理由必填，离开输入框即提示，不必等点保存才发现；
+  /* 失焦即时校验（P-FB-2）：需填理由时离开输入框即提示，不必等点保存才发现；
      其余计划字段失焦时顺带复检「就绪」必填项。只读 / 待确认 / 存储异常时不校验。 */
   layer.addEventListener("focusout", function(e){
     if(busy || !current() || planDraftLocked()) return;
     var t = e.target;
     if(!t || !t.matches || !t.closest || !t.closest('[data-release-panel="plan"]')) return;
     if(t.matches('[data-plan-reason]')){
-      if(!t.value.trim()) error("保存前请填写新建 / 修改计划理由", "plan");
+      if(planReasonRequired(planBody()) && !t.value.trim()) error("修改已就绪计划或取消计划必须填写理由", "plan");
       return;
     }
     validatePlanReady();
@@ -4953,6 +5288,50 @@ export function mountReleaseWorkspace(pageHost, opts){
     }
     if(e.target.closest('[data-plan-sync-close]')){ var syncHost = layer.querySelector("[data-plan-sync-host]"); if(syncHost) syncHost.innerHTML = ""; return; }
     if(busy || !current()) return;
+    var applyPlan = e.target.closest('[data-release-apply-plan]');
+    if(applyPlan){
+      readActual();
+      var filled = inheritPlanFields(true);
+      syncActualFieldInputs();
+      refreshActualReferences();
+      invalidatePreview(); syncAdvanced(); updateChecklists(); filterPicker("actual");
+      toast(filled.length ? "已按计划重填：" + filled.join("、") : "当前已与计划一致", "fs");
+      return;
+    }
+    var diffApply = e.target.closest('[data-diff-apply]');
+    if(diffApply){
+      readActual();
+      var planRow = plans.find(function(item){ return item.id === actualDraft.planId; });
+      if(planRow){
+        var diffKey = diffApply.getAttribute("data-diff-apply");
+        if(diffKey === "occurredAt"){
+          var when = localMinute(planRow.plannedAt);
+          if(when && new Date(when).getTime() <= Date.now()){ actualDraft.occurredAt = when; actualTouched.occurredAt = true; }
+          else toast("计划时间在未来，不能当作实际发生时间", "warn");
+        }else if(diffKey === "environment"){ actualDraft.environment = planRow.environment || "production"; actualDraft.relatedReleaseId = ""; actualTouched.environment = true; }
+        else if(diffKey === "coverage"){ actualDraft.coverage = planRow.coverage || "full"; actualTouched.coverage = true; }
+        else if(diffKey === "targetKeys"){ actualDraft.targetKeys = normalizedIds(planRow.targetKeys).join("\n"); actualTouched.targetKeys = true; }
+        else if(diffKey === "actualTaskIds"){ actualDraft.actualTaskIds = planActualTaskIds(planRow); actualTouched.actualTaskIds = true; }
+        syncActualFieldInputs();
+        refreshActualReferences();
+        invalidatePreview(); syncAdvanced(); updateChecklists(); filterPicker("actual");
+      }
+      return;
+    }
+    if(e.target.closest('[data-diff-plan]')){ switchTab("plan"); return; }
+    if(e.target.closest('[data-diff-reason]')){ revealDeviationReason(); return; }
+    if(e.target.closest('[data-diff-drop]')){
+      readActual();
+      var dropped = actualDraft.actualTaskIds.filter(function(tid){ var t = tasks.find(function(x){ return x.id === tid; }); return !t || t.boardColumn !== "done"; });
+      if(!dropped.length){ toast("当前勾选的工作项都已完成", "warn"); return; }
+      actualDraft.actualTaskIds = actualDraft.actualTaskIds.filter(function(tid){ return dropped.indexOf(tid) === -1; });
+      actualTouched.actualTaskIds = true;
+      syncActualFieldInputs();
+      refreshActualReferences();
+      invalidatePreview(); syncAdvanced(); updateChecklists(); filterPicker("actual");
+      toast("已取消勾选 " + dropped.length + " 个未完成工作项", "fs");
+      return;
+    }
     if(e.target.closest('[data-release-watch-toggle]')){ toggleWatch(); return; }
     if(e.target.closest('[data-prep-retry]')){ loadPrep(); return; }
     if(e.target.closest('[data-prep-me]')){ openMyPrep(); return; }
@@ -5050,18 +5429,46 @@ export function mountReleaseWorkspace(pageHost, opts){
     }
     if(e.target.closest('[data-plan-new]')){ if(mayManage) confirmDiscardPlan(function(){ readActual(); planId = ""; planJustSaved = false; planScopeVersionIds = null; planVersionQuery = ""; planTaskFetchKey = ""; planTaskErrorKey = ""; prepState.planId = ""; prepState.data = null; watchState.planId = ""; watchState.loaded = false; invalidatePreview(); render(); }); return; }
     if(e.target.closest('[data-release-preview]')){ runPreview(); return; }
+    /* 异常清单内的就地处理：取消勾选 / 聚焦原因输入 / 回计划面核对 */
+    var anomalyDrop = e.target.closest('[data-anomaly-drop]');
+    if(anomalyDrop){
+      var dropId = anomalyDrop.getAttribute('data-anomaly-drop');
+      var dropCb = layer.querySelector('[data-actual-task="' + dropId + '"]');
+      if(dropCb){ dropCb.checked = false; afterPick("actual"); }
+      return;
+    }
+    if(e.target.closest('[data-anomaly-reason]')){ revealDeviationReason(); return; }
+    if(e.target.closest('[data-anomaly-recheck]')){ runPreview(); return; }
+    if(e.target.closest('[data-anomaly-plan]')){ switchTab("plan", true); return; }
     if(e.target.closest('[data-release-save]')){
       var p = selectedPlan(); if(!mayManage || (p && p.status === "completed")) return;
+      var missingVersions = unmanageablePlanVersions();
+      if(missingVersions.length){
+        var versionText = function(ver){ return (ver.versionName || ver.versionId) + (ver.projectName ? "（" + ver.projectName + "）" : ""); };
+        var endedSelected = missingVersions.filter(function(ver){ return ver.ended; });
+        var noPermission = missingVersions.filter(function(ver){ return !ver.ended; });
+        var tips = [];
+        if(endedSelected.length) tips.push("先取消勾选移出已关闭 / 已取消的版本：" + endedSelected.map(versionText).join("、") + "。");
+        if(noPermission.length) tips.push("版本 " + noPermission.map(versionText).join("、") + " 所属项目你没有写权限，请联系对应项目负责人调整该计划，或新建一个只含你可管理版本的计划。");
+        error("计划还不能保存。" + tips.join(""), "plan");
+        return;
+      }
       var b = planBody();
-      if(!b.reason){ error("请填写新建 / 修改计划理由", "plan"); return; }
-      if(b.status === "ready" && (!b.plannedAt || !b.ownerUserId || !b.plannedTaskIds.length || !b.targetKeys.length)){ error("就绪计划需要时间、负责人、明确任务范围与目标键", "plan"); return; }
+      if(planReasonRequired(b) && !b.reason){ error("修改已就绪计划或取消计划必须填写理由", "plan"); return; }
+      /* 与后端 dimensions() 一致：覆盖未知才允许没有目标键 */
+      if(b.coverage !== "unknown" && !b.targetKeys.length){ error("覆盖为全量或部分时必须填写至少 1 个目标键，或把覆盖改为未知", "plan"); return; }
+      if(b.status === "ready" && (!b.plannedAt || !b.ownerUserId || !b.plannedTaskIds.length)){ error("就绪计划需要计划时间、负责人和至少 1 个工作项", "plan"); return; }
       readActual(); setBusy(true); invalidatePreview();
       (p ? API.put(base + "/release-plan", b) : API.post(base + "/release-plans", b)).then(function(saved){ if(current()){ clearPlanDraft(); dismissPlanDraftBanner(); planId = saved.id; planJustSaved = true; planSavedRevision = saved.revision == null ? null : saved.revision; restoreScroll = dlg.scrollTop(); setBusy(false); toast("独立发布计划已保存", "fs"); load(); } }).catch(function(ex){ if(current()){ setBusy(false); error(ex.message || "计划保存失败", "plan"); } }); return;
     }
     var confirm = e.target.closest('[data-release-confirm]');
     if(!confirm || confirm.disabled || !preview || !mayPublish) return;
     var b = context(), msg = validate(b);
-    if(msg){ error(msg, "actual"); return; }
+    if(msg){
+      error(msg, "actual");
+      if(msg.indexOf("未按计划发布的原因") !== -1) revealDeviationReason();
+      return;
+    }
     if(planDirty() || JSON.stringify(b) !== previewContext){ invalidatePreview(); error("完整上下文已变化，请重新预览", "actual"); return; }
     b.scopeToken = preview.scopeToken; b.planRevision = preview.planRevision == null ? null : preview.planRevision;
     b.idempotencyKey = window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : "release-" + Date.now() + "-" + Math.random().toString(36).slice(2);

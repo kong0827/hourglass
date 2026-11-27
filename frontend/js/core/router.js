@@ -74,7 +74,7 @@ var VIEWS = {
   phase:    { title:"版本", sub:"版本计划、工作项范围与交付情况", enter:lazyEnter("phase", "enterPhaseView") },
   version:  { title:"版本详情", sub:"计划与实际、工时构成与发布记录", enter:lazyEnter("version", "enterVersionView") },
   release:  { title:"发布工作台", sub:"发布计划、实际发布与历史记录", enter:lazyEnter("release", "enterReleaseView") },
-  delivery: { title:"交付说明", sub:"面向使用方的变更说明", enter:lazyEnter("delivery", "enterDeliveryView") },
+  delivery: { title:"交付报告", sub:"面向使用方的变更说明", enter:lazyEnter("delivery", "enterDeliveryView") },
   demands:  { title:"需求池", sub:"未进入版本的需求与来源", enter:lazyEnter("demands", "enterDemandsView") },
   requirements: { title:"文档", sub:"空间文档、分类与协作记录", enter:enterRequirementsLazy },
   dochistory: { title:"文档历史", sub:"历史版本的正文与修订", enter:enterDocHistoryLazy },
@@ -143,7 +143,7 @@ var SUBNAV_PARENT = { project:"projects", workcolumn:"board", canceled:"board" }
 var NAV_GROUPS = [
   { title:"我的", items:[["review","周回顾"]] },
   { title:"规划", items:[["demands","需求池"],["portfolio","项目集"],["phase","版本"]] },
-  { title:"交付", items:[["delivery","交付说明"],["requirements","文档"],["testcases","测试"]] },
+  { title:"交付", items:[["delivery","交付报告"],["requirements","文档"],["testcases","测试"]] },
   { title:"分析", items:[["insight","洞察"],["investment","投入"],["workload","风险与负载"]] },
   { title:"", items:[["settings","设置"]] }
 ];
@@ -479,7 +479,7 @@ window.addEventListener("popstate", function(){
     var relMod = viewModule("release");
     if(relMod && relMod.refreshFromHash) relMod.refreshFromHash();
   }else if(n === "delivery"){
-    /* 交付说明：深链换版本时跟着 hash 重新聚合 */
+    /* 交付报告：深链换版本时跟着 hash 重新聚合 */
     var dlMod = viewModule("delivery");
     if(dlMod && dlMod.refreshFromHash) dlMod.refreshFromHash();
   }else if(n === "dochistory"){

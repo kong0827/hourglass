@@ -1,8 +1,8 @@
 -- ============================================================================
 -- sql/baseline/01_schema_full.sql · 沙漏 Hourglass 完整基线 DDL（MySQL 8，utf8mb4）
--- Updated 2026-11-24: full schema after migrations 01-124 (94 tables；107/108 为数据回填、110/116/117/118/122/124 为列变更，均不改表数；123 新增周五补记承接表)。
+-- Updated 2026-11-27: full schema after migrations 01-128 (94 tables；107/108 为数据回填、110/116/117/118/122/124/126/127/128 为列变更，均不改表数；123 新增周五补记承接表)。
 --
--- 完整结构与 sql/01-70、71-89 增量链等效（含 64 测试流程、65 计划-版本关联、66 新成员默认不参与、68 成员公司与项目角色标注、69 成员职能与标签选项、70 项目手动排序、71 富文本描述、74 用例编号、76 需求人工交付判定、77 测试负责人、78 版本终态、79 承诺基线、80 项目里程碑、81 交付说明、82 工作项编号、83 发布条目编号、84 需求编号、85 发布计划编号、86 快照需求编号、87 编号序列、88 用例-工作项追溯、89 发布测试检查策略、93 模块目录层级与用例集、94 文档分类树与空间级文档、95 团队共享 AI 配置、96 动态分组与指定成员可见、97 子任务排序、98 项目多仓库 Git 只读同步、99 文档可见范围、100 用例目录合并与嵌套分组、101 文档分类默认可见范围、102 工作项历史发布人工标记、103 需求池评论、104 需求关注人、105 需求已完成主状态、106 项目集与项目拆分、109 工作项终态已取消、110 评论正文放宽 2000 字、113 需求评审人、114 测试计划执行人、115 发布准备与计划关注、116 推送补充说明、117 企业微信群发送结果、118 保存视图参数放宽、119 交付说明分享补强、120 周五补记、121 轻量自动化与定时报告、123 周五补记未处理项承接、124 工作项创建人）；不包含历史业务数据回填。
+-- 完整结构与 sql/01-70、71-89 增量链等效（含 64 测试流程、65 计划-版本关联、66 新成员默认不参与、68 成员公司与项目角色标注、69 成员职能与标签选项、70 项目手动排序、71 富文本描述、74 用例编号、76 需求人工交付判定、77 测试负责人、78 版本终态、79 承诺基线、80 项目里程碑、81 交付说明、82 工作项编号、83 发布条目编号、84 需求编号、85 发布计划编号、86 快照需求编号、87 编号序列、88 用例-工作项追溯、89 发布测试检查策略、93 模块目录层级与用例集、94 文档分类树与空间级文档、95 团队共享 AI 配置、96 动态分组与指定成员可见、97 子任务排序、98 项目多仓库 Git 只读同步、99 文档可见范围、100 用例目录合并与嵌套分组、101 文档分类默认可见范围、102 工作项历史发布人工标记、103 需求池评论、104 需求关注人、105 需求已完成主状态、106 项目集与项目拆分、109 工作项终态已取消、110 评论正文放宽 2000 字、113 需求评审人、114 测试计划执行人、115 发布准备与计划关注、116 推送补充说明、117 企业微信群发送结果、118 保存视图参数放宽、119 交付说明分享补强、120 周五补记、121 轻量自动化与定时报告、123 周五补记未处理项承接、124 工作项创建人、125 文档表格格式、126 发布制品摘要选填、127 发布维护权限范围、128 文档回收站与分享复制开关）；不包含历史业务数据回填。
 -- 全新部署执行本文件即可，无需再跑 sql/ 目录；已有库的日常升级仍使用 sql/ 增量脚本。
 -- 可重复执行（DROP TABLE IF EXISTS + CREATE TABLE）。
 -- ⚠ 本文件含 USE hourglass 与 DROP TABLE，只适用于目标库就是 hourglass 的全新部署。
@@ -783,6 +783,7 @@ CREATE TABLE `req_doc_share` (
   `token` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '分享令牌（URL 参数）',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `expires_at` datetime DEFAULT NULL COMMENT '过期时间（空=长期有效）',
+  `allow_copy` tinyint(1) NOT NULL DEFAULT '1' COMMENT '1=允许复制与打印 / 0=仅在线阅读',
   PRIMARY KEY (`workspace_id`,`doc_id`),
   UNIQUE KEY `uk_token` (`token`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='需求文档只读分享';
@@ -886,10 +887,13 @@ CREATE TABLE `requirement_doc` (
   `owner_user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '负责人账号ID',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted_at` datetime DEFAULT NULL COMMENT '移入回收站时间；NULL=正常',
+  `deleted_by` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '删除人账号ID',
   PRIMARY KEY (`id`),
   KEY `idx_ws` (`workspace_id`),
   KEY `idx_req` (`req_id`),
   KEY `idx_ws_updated` (`workspace_id`,`updated_at`),
+  KEY `idx_ws_deleted` (`workspace_id`,`deleted_at`),
   KEY `idx_doc_parent` (`workspace_id`,`req_id`,`parent_id`),
   KEY `idx_doc_category` (`workspace_id`,`category_id`),
   FULLTEXT KEY `ft_doc_fulltext` (`title`,`content_brief`,`content`) /*!50100 WITH PARSER `ngram` */ 
@@ -1431,6 +1435,7 @@ CREATE TABLE `workspace` (
   `notify_token` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Server酱 SendKey / PushPlus token（空=用全局）',
   `notify_last_at` datetime DEFAULT NULL COMMENT '上次推送尝试时间',
   `notify_last_status` varchar(160) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'success / failed:原因',
+  `release_access_scope` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'owner,admin,project_owner' COMMENT '可维护发布计划与发布记录的身份：owner,admin,project_owner,project_write',
   `owner_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '空间主用户ID',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',

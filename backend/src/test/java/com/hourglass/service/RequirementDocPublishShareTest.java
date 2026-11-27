@@ -14,6 +14,7 @@ import com.hourglass.mapper.TaskMapper;
 import com.hourglass.mapper.UserMapper;
 import com.hourglass.mapper.WorkspaceMapper;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.time.LocalDateTime;
 
@@ -188,7 +189,7 @@ class RequirementDocPublishShareTest {
         /* 发布/撤回属创建人保护（A 轻量档）：非负责人的项目可写者也不能发布，与改删同口径 */
         AppException ex = assertThrows(AppException.class, () -> service.publish(OTHER, WS, DOC_ID, false));
         assertEquals(403, ex.getCode());
-        assertEquals("仅文档负责人或空间管理员可编辑 / 删除", ex.getMessage());
+        assertEquals("仅文档负责人或空间管理员可删除 / 调整可见范围 / 发布", ex.getMessage());
         verify(docs, never()).updatePublished(anyString(), any());
     }
 
@@ -214,6 +215,21 @@ class RequirementDocPublishShareTest {
 
         verify(shares).upsert(any(ReqDocShare.class));
         assertEquals("TOKEN1", out.getToken());
+    }
+
+    @Test
+    void createShareStoresCustomDaysAndCopyPermission() {
+        RequirementDoc d = doc(true);
+        stubVisible(d, AUTHOR, "member");
+
+        service.createShare(AUTHOR, WS, DOC_ID, 0, false);
+
+        ArgumentCaptor<ReqDocShare> captor = ArgumentCaptor.forClass(ReqDocShare.class);
+        verify(shares).upsert(captor.capture());
+        ReqDocShare saved = captor.getValue();
+        assertFalse(saved.getAllowCopy(), "关闭复制权限要落库");
+        /* days 下限 1：传 0 时不能立刻过期 */
+        assertTrue(saved.getExpiresAt().isAfter(LocalDateTime.now().plusHours(12)));
     }
 
     @Test
@@ -310,6 +326,21 @@ class RequirementDocPublishShareTest {
         assertEquals("正文内容", resp.getContent());
         assertEquals("演示空间", resp.getWorkspaceName());
         assertNotNull(resp.getGeneratedAt());
+    }
+
+    @Test
+    void publicShareCarriesCopyPermission() {
+        ReqDocShare s = share(false);
+        s.setAllowCopy(false);
+        when(shares.selectByToken("TOKEN1")).thenReturn(s);
+        when(docs.selectById(DOC_ID)).thenReturn(doc(true));
+        Workspace ws = new Workspace();
+        ws.setName("演示空间");
+        when(workspaces.selectById(WS)).thenReturn(ws);
+
+        ReqDocShareResponse resp = service.publicShare("TOKEN1");
+
+        assertFalse(resp.isAllowCopy(), "公开页要按分享设置隐藏复制与打印");
     }
 
     @Test

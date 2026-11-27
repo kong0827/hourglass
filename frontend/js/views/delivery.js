@@ -1,4 +1,4 @@
-/* views/delivery · 一页式交付说明工作台
+/* views/delivery · 一页式交付报告工作台
    左侧纸张 + 右侧常驻控制区：后端一次取回事实，控制区只改「怎么投影」，不重新请求；
    人工层（交付对象 / 支持联系 / 验收补充 / 改写后的叙述 / 确认状态）防抖自动保存，带修订号 CAS。
    导出即锁定：任何格式的导出都先落一条不可变快照，再用冻结后的载荷产出文件，
@@ -83,7 +83,7 @@ function refreshFromHash() {
 
 function renderPicker() {
   host.innerHTML = '<div class="dl-head"><div>'
-    + '<div class="dl-title-row"><h2 class="dl-pick-title">选择要生成交付说明的版本</h2></div></div></div>'
+    + '<div class="dl-title-row"><h2 class="dl-pick-title">选择要生成交付报告的版本</h2></div></div></div>'
     + '<div id="dlPickerList">' + UI.skeletonRows(4) + "</div>";
   if (pickerRows) { paintPicker(); return; }
   API.get("/api/versions/cross-project").then(function (rows) {
@@ -114,7 +114,7 @@ function paintPicker() {
   if (!rows.length) {
     box.innerHTML = UI.emptyState({
       icon: "note", title: pickerQuery ? "没有匹配的版本" : "还没有版本",
-      text: pickerQuery ? "换个关键词，或清空搜索。" : "先在「版本」里为项目建版本并绑定工作项，这里就能生成交付说明。"
+      text: pickerQuery ? "换个关键词，或清空搜索。" : "先在「版本」里为项目建版本并绑定工作项，这里就能生成交付报告。"
     });
     return;
   }
@@ -149,7 +149,7 @@ function paintPicker() {
             + "<span>" + (versionReleased ? '<span class="dl-badge ok">版本已发布</span>' : '<span class="dl-badge warn">版本未发布</span>') + "</span>"
             + '<span class="tt"><b>' + assocLinkHTML("version", r.versionId, r.versionName, { req:pid }) + "</b><span>" + esc(sub) + "</span></span>"
             + '<span><button class="btn sm soft" type="button" data-dl-open="' + esc(r.versionId) + '">'
-            + icon("note", 13) + "生成说明</button></span></div>";
+            + icon("note", 13) + "生成报告</button></span></div>";
         }).join("") + "</div></div>";
     }).join("");
     return '<div class="dl-setgroup"><div class="dl-setgroup-head">'
@@ -186,7 +186,7 @@ function load(id, releaseId) {
     renderAll();
   }).catch(function (ex) {
     if (current !== loadSeq) return;
-    host.innerHTML = UI.errorState(ex.message || "交付说明加载失败");
+    host.innerHTML = UI.errorState(ex.message || "交付报告加载失败");
     var btn = host.querySelector("[data-empty-action]");
     if (btn) btn.addEventListener("click", function () { load(id, want); });
   });
@@ -197,6 +197,9 @@ function load(id, releaseId) {
 function renderAll() {
   if (!data) return;
   var o = opts(), g = DD.gates(data), isLocked = DD.locked(data);
+  /* 只读权限不靠点击后 toast：保存 / 导出 / 分享按钮直接禁用并写明原因 */
+  var noSnapshotRight = !data.canSnapshot && !isLocked;
+  var noShare = noSnapshotRight && !data.snapshotId;
   /* 页面标题已在顶栏，正文不再重复 h1；这里直接给版本与口径 chip */
   host.innerHTML = '<div class="dl-head"><div>'
     + '<div class="dl-title-row">'
@@ -214,10 +217,11 @@ function renderAll() {
     + '<button class="btn sm ghost" type="button" data-dl-act="pick">' + icon("layers", 13) + "切换版本</button>"
     + '<button class="btn sm ghost" type="button" data-dl-act="snapshots">' + icon("layers", 13) + "快照记录"
     + ((data.revisions || []).length ? " (" + data.revisions.length + ")" : "") + "</button>"
-    + '<button class="btn sm" type="button" data-dl-act="save"' + (isLocked || !data.canEdit ? " disabled" : "") + ">"
+    + '<button class="btn sm" type="button" data-dl-act="save"' + (isLocked || !data.canEdit ? " disabled" : "")
+    + (isLocked ? ' title="快照已锁定，不能保存草稿"' : !data.canEdit ? ' title="你对该项目只有查看权限，不能保存草稿"' : "") + ">"
     + icon("check", 13) + '保存草稿<span id="dlSaveState"></span></button>'
-    + '<button class="btn sm" type="button" data-dl-act="share">' + icon("share", 13) + "分享链接</button>"
-    + '<button class="btn sm primary" type="button" data-dl-act="export">' + icon("download", 13) + "导出说明</button>"
+    + '<button class="btn sm" type="button" data-dl-act="share"' + (noShare ? ' disabled title="你对该项目只有查看权限，不能生成分享链接"' : "") + ">" + icon("share", 13) + "分享链接</button>"
+    + '<button class="btn sm primary" type="button" data-dl-act="export"' + (noSnapshotRight ? ' disabled title="你对该项目只有查看权限，不能导出快照"' : "") + ">" + icon("download", 13) + "导出报告</button>"
     + "</div></div>"
     + '<div id="dlBanner"></div>'
     + '<div class="dl-work"><div class="dl-main">'
@@ -242,6 +246,10 @@ function bannerHTML() {
     kind = "lock"; ic = "lock"; title = "正在查看不可变快照 " + (data.docNo || "");
     desc = "内容已冻结，不随系统记录变化；控制区与文字编辑均已锁定。";
     acts = '<button class="btn sm" type="button" data-dl-act="back-draft">回到当前草稿</button>';
+  } else if (!data.canSnapshot) {
+    /* 与页面右上角禁用态同源：只读用户不再看到「可导出」的乐观提示 */
+    kind = "lock"; ic = "lock"; title = "只读查看";
+    desc = "你对该项目只有查看权限，可阅读但不能改写、导出或分享；需要时请联系项目负责人。";
   } else if (g.customerBlocked) {
     kind = "bad"; ic = "alertCircle"; title = "未确认成功的生产发布，客户版不可导出";
     desc = "实际交付以成功的生产发布记录为准，完成数量不代表已交付。可切到管理版 / 内部版先看内部草稿。";
@@ -261,7 +269,7 @@ function bannerHTML() {
   }
   /* 「不是生产发布」与「文字待确认」会同时成立：前一条横幅不能把后一条的下一步吞掉，
      否则管理版草稿被待确认闸门拦住，页面上却找不到确认入口。 */
-  if (!isLocked && !g.customerBlocked && g.pending.length && acts.indexOf("accept-all") < 0) {
+  if (!isLocked && data.canEdit && !g.customerBlocked && g.pending.length && acts.indexOf("accept-all") < 0) {
     acts += '<button class="btn sm" type="button" data-dl-act="accept-all">全部确认</button>'
       + '<button class="btn sm ghost" type="button" data-dl-act="goto-pending">逐项查看</button>';
     desc += "另有 " + g.pending.length + " 处对外表述待确认，核对后才能导出。";
@@ -437,8 +445,8 @@ function railHTML() {
       + esc(data.audience || "") + '" placeholder="如 某公司 · 清算业务部"' + dis + ">")
     + "</div>"
     + '<div class="dl-rgroup"><div class="dl-rg-lab">' + icon("board", 12) + "范围与明细</div>"
-    + switchRow("includeUnreleased", "含未发布项", "关掉只列本次已发布", o.includeUnreleased, readOnly)
-    + rfield("明细粒度", seg("gran", [["brief", "汇总"], ["module", "分组"], ["items", "逐条"]], o.granularity, "明细粒度"))
+    + rfield("内容分组", seg("group", [["demand", "按需求"], ["project", "按项目"], ["type", "按类型"]], o.groupBy, "内容分组"))
+    + switchRow("includeUnreleased", "附列未上线清单", "未完成、顺延与已完成未纳入", o.includeUnreleased, readOnly)
     + switchRow("showChanges", "变更说明", "基线对照与变更台账", o.showChanges, readOnly)
     + switchRow("showDemands", "需求兑现", "按需求看兑现率", o.showDemands, readOnly)
     + switchRow("showDefects", "缺陷与已知问题", "已修复与遗留清单", o.showDefects, readOnly)
@@ -486,8 +494,6 @@ function railHTML() {
     + '<div class="dl-rail-foot">'
     + '<button class="btn sm ghost" type="button" data-dl-act="reset"' + dis + ">重置默认</button>"
     + '<button class="btn sm ghost" type="button" data-dl-act="lean"' + dis + ">压到一页</button>"
-    + '<button class="btn sm" type="button" data-dl-act="save"' + dis + ">保存草稿</button>"
-    + '<button class="btn sm primary" type="button" data-dl-act="export">导出说明</button>'
     + "</div>"
     + '<div class="dl-rail-note">口径：已发布只取发布快照中「已发布」的项；通过率 = 通过 /（已执行 − 跳过）；'
     + "投入为计时 + 补记，不用于计费。任何一段没有记录就标「未记录」，不推断。</div>"
@@ -689,7 +695,7 @@ function onClick(e) {
   if (!btn || btn.disabled) return;
   var act = btn.dataset.dlAct;
   if (act === "tone") { applyOption("tone", btn.dataset.dlTone || btn.dataset.dlVal); return; }
-  if (act === "gran") { applyOption("granularity", btn.dataset.dlGran || btn.dataset.dlVal); return; }
+  if (act === "group") { applyOption("groupBy", btn.dataset.dlVal); return; }
   if (act === "risks") { risksExpanded = !risksExpanded; renderDoc(); return; }
   if (act === "density") { applyOption("density", btn.dataset.dlVal); return; }
   if (act === "evidence") { applyOption("evidence", Number(btn.dataset.dlVal)); return; }
@@ -847,7 +853,7 @@ function openSourcesOverview() {
   var rows = DD.sourcesOverview(data);
   modal(modalHead("数据来源总览", (data.projectName || "") + " · " + (data.versionName || "") + " · 全部为只读聚合")
     + '<div class="sheet-body"><div class="dl-caliber">生成过程只读：一次取回版本、承诺、发布、需求、测试、缺陷与工时，不写任何业务表；'
-    + '只有「导出说明」会落一条不可变快照。</div>'
+    + '只有「导出报告」会落一条不可变快照。</div>'
     + rows.map(function (x) {
       return '<div class="dl-srcrec"><span class="si">' + icon("layers", 12) + "</span>"
         + '<div class="sc"><b>' + esc(x.name) + "</b><span>" + esc(x.from) + "<br>" + esc(x.table) + "</span></div></div>";
@@ -866,7 +872,7 @@ function openExport() {
   if (!data.canSnapshot && !DD.locked(data)) { toast("你对该项目只有查看权限，不能导出快照", "warn"); return; }
   if (!DD.locked(data) && !g.canExport) { toast(g.exportBlock, "warn"); return; }
   exportFmt = "pdf";
-  var layer = modal(modalHead("导出交付说明", DD.locked(data) ? "当前已是不可变快照，导出不会再生成新快照。" : "导出即锁定：先冻结一份不可变快照，再产出文件。")
+  var layer = modal(modalHead("导出交付报告", DD.locked(data) ? "当前已是不可变快照，导出不会再生成新快照。" : "导出即锁定：先冻结一份不可变快照，再产出文件。")
     + '<div class="sheet-body"><div class="dl-fmt-tabs" role="group" aria-label="导出格式">'
     + '<button type="button" data-dl-fmt="pdf" class="on">' + icon("print", 13) + " PDF（A4）</button>"
     + '<button type="button" data-dl-fmt="md">' + icon("table", 13) + " Markdown</button>"
@@ -1007,7 +1013,7 @@ function openSnapshots() {
     var body = layer.querySelector("#dlSnapBody");
     if (!body) return;
     if (!rows || !rows.length) {
-      body.innerHTML = UI.emptyState({ icon: "layers", title: "还没有导出过快照", text: "点「导出说明」会落第一条不可变快照，并生成正式编号。" });
+      body.innerHTML = UI.emptyState({ icon: "layers", title: "还没有导出过快照", text: "点「导出报告」会落第一条不可变快照，并生成正式编号。" });
       return;
     }
     body.innerHTML = rows.map(function (x) {

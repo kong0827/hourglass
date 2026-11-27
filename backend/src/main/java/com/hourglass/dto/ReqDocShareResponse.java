@@ -19,4 +19,6 @@ public class ReqDocShareResponse {
     private String owner;
     private LocalDateTime updatedAt;
     private LocalDateTime generatedAt;
+    /** 是否允许复制与打印 */
+    private boolean allowCopy = true;
 }

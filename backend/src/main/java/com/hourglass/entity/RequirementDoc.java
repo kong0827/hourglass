@@ -39,6 +39,10 @@ public class RequirementDoc {
     private String ownerUserId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    /** 移入回收站时间；NULL = 正常文档 */
+    private LocalDateTime deletedAt;
+    /** 删除人账号 ID，回收站展示用 */
+    private String deletedBy;
     /** 指定可见成员账号 ID（visibility=members 时由服务层按需装载，不落库） */
     private transient java.util.List<String> memberIds;
 }

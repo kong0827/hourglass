@@ -66,6 +66,7 @@
 <link rel="modulepreload" href="js/core/fullscreen.js" />
 <link rel="modulepreload" href="js/core/gestures.js" />
 <link rel="modulepreload" href="js/core/group-dims.js" />
+<link rel="modulepreload" href="js/core/html-import.js" />
 <link rel="modulepreload" href="js/core/icons.js" />
 <link rel="modulepreload" href="js/core/img-fit.js" />
 <link rel="modulepreload" href="js/core/layout.js" />
@@ -193,9 +194,9 @@
       </div>
 
       <span class="nav-sec">交付</span>
-      <button class="nav-item" type="button" data-view="delivery" title="交付说明">
+      <button class="nav-item" type="button" data-view="delivery" title="交付报告">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.2"/><path d="m6.8 10.2 2.2 2.2 4.4-4.7"/></svg>
-        <span class="nl">交付说明</span>
+        <span class="nl">交付报告</span>
       </button>
       <div class="nav-group" data-nav-group="workitems">
         <button class="nav-item" type="button" data-view="workitems" title="工作项">
@@ -1223,8 +1224,8 @@
         <div id="releaseBody"></div>
       </section>
 
-      <!-- ===== 交付：一页式交付说明（从版本卡 / 发布记录下钻） ===== -->
-      <section class="view" id="view-delivery" aria-label="一页式交付说明">
+      <!-- ===== 交付：一页式交付报告（从版本卡 / 发布记录下钻） ===== -->
+      <section class="view" id="view-delivery" aria-label="一页式交付报告">
         <div class="view-page" id="deliveryBody"></div>
       </section>
 
@@ -1324,6 +1325,7 @@
                 <button class="btn sm ghost" type="button" id="rdViewsBtn" aria-haspopup="true" aria-expanded="false" title="文档视图：保存当前搜索、项目范围与展示方式">视图列表</button>
                 <div class="menu popover" id="rdViewsMenu" hidden></div>
               </span>
+              <button class="btn sm ghost" type="button" id="reqDocTrashBtn" aria-haspopup="dialog" title="文档回收站：删除的文档保留 30 天，可恢复或彻底删除">回收站</button>
               <button class="btn primary sm is-dup-action" type="button" id="reqDocNew">
                 <span data-icon="plus"></span>&nbsp;新建文档
               </button>
@@ -1389,6 +1391,9 @@
                   </button>
                 </div>
               </span>
+              <button class="btn sm ghost" type="button" id="reqDocCodeBtn" title="插入代码块（选中文字可直接包成代码）">
+                <span data-icon="codeBlock"></span>&nbsp;代码块
+              </button>
               <button class="btn sm ghost" type="button" id="reqDocTocToggle" title="显示/隐藏大纲">
                 <span data-icon="listUl"></span>&nbsp;大纲
               </button>
@@ -1400,16 +1405,19 @@
                   <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="4.6" cy="10" r="1.1" fill="currentColor" stroke="none"/><circle cx="10" cy="10" r="1.1" fill="currentColor" stroke="none"/><circle cx="15.4" cy="10" r="1.1" fill="currentColor" stroke="none"/></svg>
                 </button>
                 <div class="menu" id="reqDocMoreMenu" hidden>
+                  <button class="menu-item" type="button" id="reqDocNotify" title="给项目成员或指定成员发通知（需先发布）" hidden>
+                    <span data-icon="bell"></span>通知成员…
+                  </button>
                   <button class="menu-item" type="button" id="reqDocHistory" title="查看历史版本并恢复">
                     <span data-icon="clock"></span>历史版本
                   </button>
-                  <button class="menu-item" type="button" id="reqDocImport" title="导入 Word / Markdown / TXT / HTML 文件">
+                  <button class="menu-item" type="button" id="reqDocImport" title="导入 Word（旧版 .doc 仅保留文字）/ Markdown / TXT / HTML / Excel 文件">
                     <span data-icon="upload"></span>导入文件…
                   </button>
                   <button class="menu-item" type="button" id="reqDocExport" title="按当前格式导出 Markdown / HTML 文件">
                     <span data-icon="download"></span>导出 Markdown / HTML
                   </button>
-                  <button class="menu-item" type="button" id="reqDocExportWord" title="导出为 Word 文档（.docx），保留标题、表格与内嵌图片">
+                  <button class="menu-item" type="button" id="reqDocExportWord" title="导出为 Word 文档（.docx），保留标题大纲、表格与内嵌图片">
                     <span data-icon="docW"></span>导出 Word（.docx）
                   </button>
                   <button class="menu-item" type="button" id="reqDocCopy"><span data-icon="copy"></span>复制正文</button>
@@ -1490,7 +1498,7 @@
               <div class="att-drop" tabindex="0" role="button" aria-label="选择或拖入文件" id="reqDocAttachDrop">
                 <span class="att-drop-ico" data-icon="upload"></span>
                 <span class="att-drop-text"><b>点击选择</b>，或将文件拖到这里，也可粘贴截图</span>
-                <input type="file" id="reqDocAttachFile" class="att-drop-input" multiple accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.zip,.xlsx,.doc,.docx,.xls,.ppt,.pptx" tabindex="-1" aria-hidden="true">
+                <input type="file" id="reqDocAttachFile" class="att-drop-input" multiple accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.html,.htm,.zip,.xlsx,.doc,.docx,.xls,.ppt,.pptx" tabindex="-1" aria-hidden="true">
               </div>
             </div>
           </section>
@@ -1584,6 +1592,7 @@
                       <option value="univer">富文本</option>
                       <option value="sheet">表格（Excel）</option>
                     </select>
+                    <small id="newReqDocFormatHint">Markdown：轻量排版，支持导入 / 导出，适合技术方案与接口文档。</small>
                   </label>
                 </div>
                 <div class="nd-src-body" id="newReqDocTemplateBody" hidden>
@@ -1668,6 +1677,22 @@
             </div>
           </div>
         </div></div></div>
+
+        <!-- 文档回收站：删除的文档保留 30 天，可恢复或彻底删除 -->
+        <div class="modal-layer" id="dlgReqDocTrash" role="dialog" aria-modal="true" aria-labelledby="dlgReqDocTrashTitle">
+          <div class="sheet reqdoc-trash-sheet">
+            <div class="reqdoc-trash-head">
+              <h3 class="reqdoc-dlg-title" id="dlgReqDocTrashTitle">文档回收站</h3>
+              <button class="icon-btn sm" type="button" id="reqDocTrashX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button>
+            </div>
+            <p class="reqdoc-dlg-msg">删除的文档保留 30 天，到期自动清理；恢复后回到原项目与目录。普通成员只能看到自己删除或自己负责的文档。</p>
+            <div class="reqdoc-trash-list" id="reqDocTrashList"></div>
+            <div class="reqdoc-dlg-foot">
+              <button class="btn" type="button" id="reqDocTrashMore" hidden>加载更多</button>
+              <button class="btn" type="button" id="reqDocTrashClose">关闭</button>
+            </div>
+          </div>
+        </div>
 
         <!-- 关闭编辑页：未保存时三选一 -->
         <div class="modal-layer" id="dlgReqDocClose" role="dialog" aria-modal="true" aria-labelledby="dlgReqDocCloseTitle">
@@ -2200,9 +2225,9 @@
               <div class="field">
                 <label id="csVisLabel">可见范围</label>
                 <div class="cs-vis" id="csVis" role="radiogroup" aria-labelledby="csVisLabel">
-                  <label class="cs-vis-item"><input type="radio" name="csVis" value="team" checked /><span><b>团队共享</b><small>项目成员可见可用，可圈选进测试计划，进交付说明与发布证据。推荐。</small></span></label>
+                  <label class="cs-vis-item"><input type="radio" name="csVis" value="team" checked /><span><b>团队共享</b><small>项目成员可见可用，可圈选进测试计划，进交付报告与发布证据。推荐。</small></span></label>
                   <label class="cs-vis-item"><input type="radio" name="csVis" value="members" /><span><b>指定成员可见</b><small>创建人 + 名单内成员可见（最多 50 人），不进证据链；适合跨团队联调。</small></span></label>
-                  <label class="cs-vis-item"><input type="radio" name="csVis" value="personal" /><span><b>仅自己可见</b><small>只用于个人整理，不进证据链；要写进交付说明需先转为团队共享。</small></span></label>
+                  <label class="cs-vis-item"><input type="radio" name="csVis" value="personal" /><span><b>仅自己可见</b><small>只用于个人整理，不进证据链；要写进交付报告需先转为团队共享。</small></span></label>
                 </div>
                 <div class="cs-who" id="csWhoWrap" hidden></div>
                 <p class="foot-note cs-warn" id="csNarrowWarn" hidden><span data-icon="alert"></span>&nbsp;收窄团队共享分组的可见范围需由创建人操作，避免其他成员突然看不到。</p>
@@ -2220,7 +2245,7 @@
                 <label class="b-check" id="csInitLine"><input type="checkbox" id="csInit" /> 创建后按当前筛选加入 <b id="csInitN">0</b> 条用例</label>
                 <p class="foot-note" id="csInitHint"></p>
               </div>
-              <p class="foot-note cs-shield"><span data-icon="shield"></span><span>只有<b>团队共享</b>分组进交付说明与发布证据；证据只呈现结果分布，不改变发布阻断判定。</span></p>
+              <p class="foot-note cs-shield"><span data-icon="shield"></span><span>只有<b>团队共享</b>分组进交付报告与发布证据；证据只呈现结果分布，不改变发布阻断判定。</span></p>
               <div class="row row-gap">
                 <button class="btn primary" type="button" id="btnSaveCaseSet">保存分组</button>
               </div>
@@ -3304,6 +3329,7 @@
                   <button type="button" data-wf-tab="transitions" aria-pressed="false">状态流转</button>
                   <button type="button" data-wf-tab="priorities" aria-pressed="false">优先级 4</button>
                   <button type="button" data-wf-tab="categories" aria-pressed="false">分类 <span id="wfCategoriesCount">—</span></button>
+                  <button type="button" data-wf-tab="release" aria-pressed="false">发布权限</button>
                 </div>
                 <span class="spacer"></span>
                 <span class="tiny">改动立即生效，已存在的记录不重算</span>
@@ -3387,6 +3413,19 @@
                 <button class="btn sm" type="button" id="btnWsCatAdd">添加分类</button>
               </div>
               <p class="foot-note" id="wsCatHint" hidden>项目写成员可添加、改名与排序；删除分类仅空间主、管理员或项目负责人可操作。</p>
+              </div>
+
+              <div class="panel" data-wf-pane="release" id="set-release-access" hidden>
+              <p class="set-hint">勾选可以维护<b>发布计划、预览并记录实际发布</b>的身份。默认「空间主、管理员、项目负责人」；「项目负责人」与「项目可写成员」均需对该项目可写，勾选后者后所有对该项目可写的成员都能维护发布。保存时至少保留一项，查看者始终无权。</p>
+              <div class="cfg-list" id="releaseAccessList"></div>
+              <div class="set-actions">
+                <button class="btn primary" type="button" id="btnReleaseAccessSave">保存发布权限</button>
+                <span class="foot-note" id="releaseAccessHint"></span>
+              </div>
+              <div class="wf-sync-cards">
+                <div class="wf-sync"><b>只影响发布侧</b>发布计划、预览与记录实际发布（含重部署 / 回滚）</div>
+                <div class="wf-sync"><b>不受影响</b>新建 / 编辑版本、调整版本内容仍按项目写权限；排期、模块、人工补录、检查策略与推送通知仍限空间主、管理员或项目负责人</div>
+              </div>
               </div>
             </div>
 

@@ -289,20 +289,24 @@ class WorkActivityRecordingTest {
     }
 
     @Test
-    void deletingDocumentWritesTombstoneBeforeItsActivityIsCleared() {
+    void deletingDocumentMovesItToTrashAndKeepsActivityHistory() {
         RequirementDoc d = doc("D1", null);
         d.setTitle("待删文档");
-        when(taskMapper.selectIdsByReqDocForCascade(WS, "D1")).thenReturn(Arrays.asList("K1"));
+        when(docMapper.softDelete(WS, "D1", USER)).thenReturn(1);
 
         docService.delete(USER, WS, "D1");
 
+        /* 软删除：留墓碑、保留活动与评论/历史/附件，30 天内可恢复，彻底删除才清关联 */
         verify(deletionTrace).recordDelete(eq(WS), eq(USER), eq("requirement_doc_delete"),
                 eq("requirement_doc"), eq("D1"), eq("待删文档"),
-                contains("删除需求文档「待删文档」（项目 R1"));
-        verify(deletionTrace).logTaskCascade(WS, USER, Arrays.asList("K1"),
-                "关联需求文档「待删文档」已删除，自动解除关联");
-        verify(workActivityService).deleteByEntity(WS, WorkActivityService.REQUIREMENT_DOC, "D1");
-        verify(docMapper).delete("D1");
+                contains("移入回收站，30 天内可恢复"));
+        verify(docMapper).reparentChildren(WS, "D1", null);
+        verify(docMapper).softDelete(WS, "D1", USER);
+        verify(workActivityService).record(WS, WorkActivityService.REQUIREMENT_DOC, "D1", USER,
+                "delete", "将文档「待删文档」移入回收站");
+        verify(docMapper, never()).delete("D1");
+        verify(workActivityService, never()).deleteByEntity(anyString(), anyString(), anyString());
+        verify(deletionTrace, never()).logTaskCascade(anyString(), anyString(), any(), anyString());
     }
 
     @ParameterizedTest

@@ -228,8 +228,12 @@ public class DeliveryNoteService {
         }
 
         r.setBaseline(baseline(version, commitment, boundIds, byId, evidence, selected));
-        fillScope(r, version, bound, commitment, byId, publishedIds, publishedItems, minutes, modules, evidence);
-        fillDemands(r, workspaceId, versionId, bound, publishedIds, publishedItems, modules, evidence);
+        Map<String, Demand> demandMap = demandIndex(workspaceId, versionId, bound, publishedItems);
+        Map<String, String> projectNames = new LinkedHashMap<String, String>();
+        projectNames.put(reqId, r.getProjectName());
+        fillScope(r, version, bound, commitment, byId, publishedIds, publishedItems, minutes, modules, evidence,
+                demandMap, projectNames);
+        fillDemands(r, workspaceId, versionId, bound, publishedIds, publishedItems, modules, evidence, demandMap);
         fillChanges(r, workspaceId, versionId, version, selected, records);
         fillQuality(r, workspaceId, reqId, versionId);
         fillDefects(r, versionId, projectTasks, minutes, modules);
@@ -311,11 +315,40 @@ public class DeliveryNoteService {
         return b;
     }
 
+    /** 报告里参与归组的需求：本版本范围内 + 发布快照里出现过的（需求可能已改版本）。 */
+    private Map<String, Demand> demandIndex(String workspaceId, String versionId, List<Task> bound,
+                                            Map<String, VersionReleaseItem> publishedItems) {
+        Map<String, Demand> demands = new LinkedHashMap<String, Demand>();
+        for (Demand d : demandMapper.selectByVersion(workspaceId, versionId)) {
+            demands.put(d.getId(), d);
+        }
+        LinkedHashSet<String> missingIds = new LinkedHashSet<String>();
+        for (Task t : bound) {
+            if (t.getDemandId() != null && !demands.containsKey(t.getDemandId())) {
+                missingIds.add(t.getDemandId());
+            }
+        }
+        for (VersionReleaseItem item : publishedItems.values()) {
+            if (item.getDemandId() != null && !demands.containsKey(item.getDemandId())) {
+                missingIds.add(item.getDemandId());
+            }
+        }
+        for (String id : missingIds) {
+            Demand d = demandMapper.selectById(id);
+            if (d != null && workspaceId.equals(d.getWorkspaceId())) {
+                demands.put(id, d);
+            }
+        }
+        return demands;
+    }
+
     private void fillScope(DeliveryNoteResponse r, ProjectVersion version, List<Task> bound,
                            List<VersionCommitmentTask> commitment, Map<String, Task> byId,
                            Set<String> publishedIds, Map<String, VersionReleaseItem> publishedItems,
-                           Map<String, Integer> minutes, Map<String, String> modules, boolean evidence) {
+                           Map<String, Integer> minutes, Map<String, String> modules, boolean evidence,
+                           Map<String, Demand> demandMap, Map<String, String> projectNames) {
         String versionId = version.getId();
+        LocalDateTime publishedAt = r.getRelease() == null ? null : r.getRelease().getOccurredAt();
         List<DeliveryNoteResponse.ScopeRow> rows = new ArrayList<DeliveryNoteResponse.ScopeRow>();
         int released = 0;
         int done = 0;
@@ -332,6 +365,14 @@ public class DeliveryNoteService {
             row.setDemandId(t.getDemandId());
             row.setEstimateMinutes(nz(t.getEstimateMinutes()));
             row.setWorkMinutes(nz(minutes.get(t.getId())));
+            row.setCompletedAt(t.getCompletedAt());
+            row.setProjectId(t.getReqId() == null ? r.getProjectId() : t.getReqId());
+            row.setProjectName(projectName(projectNames, r.getProjectId(), r.getProjectName(), row.getProjectId()));
+            Demand demand = t.getDemandId() == null ? null : demandMap.get(t.getDemandId());
+            row.setKind(kindOf(demand == null ? null : demand.getItemKind()));
+            row.setKindName(kindName(row.getKind()));
+            boolean late = publishedAt != null && t.getCompletedAt() != null
+                    && t.getCompletedAt().isAfter(publishedAt);
             boolean isPublished = publishedIds.contains(t.getId());
             if (isPublished) {
                 released++;
@@ -339,13 +380,17 @@ public class DeliveryNoteService {
                 VersionReleaseItem item = publishedItems.get(t.getId());
                 row.setRef(itemLabel(t) + (item == null || item.getDemandTitle() == null ? "" : " · " + item.getDemandTitle()));
                 row.setDemandTitle(item == null ? null : item.getDemandTitle());
+                if (late) {
+                    row.setReason("完成时间晚于发布时刻");
+                }
             } else if (Consts.COL_DONE.equals(t.getBoardColumn())) {
                 row.setState(evidence ? "pending" : "done");
-                row.setRef(itemLabel(t) + " · 已完成，未纳入本次发布快照");
-                row.setReason("未纳入发布快照");
+                row.setRef(itemLabel(t) + (evidence ? " · 已完成，未纳入本次发布" : " · 已完成，尚未确认发布"));
+                row.setReason(evidence ? "已完成，未纳入本次发布" : "已完成，尚未确认发布");
             } else {
                 row.setState("pending");
                 row.setRef(itemLabel(t) + " · " + columnName(t.getBoardColumn()));
+                row.setReason("未完成 · " + columnName(t.getBoardColumn()));
             }
             if (Consts.COL_DONE.equals(t.getBoardColumn())) {
                 done++;
@@ -375,9 +420,15 @@ public class DeliveryNoteService {
             out.setDemandId(t.getDemandId());
             out.setEstimateMinutes(nz(row.getEstimateMinutes()));
             out.setWorkMinutes(nz(minutes.get(t.getId())));
+            out.setCompletedAt(t.getCompletedAt());
+            out.setProjectId(t.getReqId() == null ? r.getProjectId() : t.getReqId());
+            out.setProjectName(projectName(projectNames, r.getProjectId(), r.getProjectName(), out.getProjectId()));
+            Demand demand = t.getDemandId() == null ? null : demandMap.get(t.getDemandId());
+            out.setKind(kindOf(demand == null ? null : demand.getItemKind()));
+            out.setKindName(kindName(out.getKind()));
             out.setTargetVersionName(t.getVersionNames().isEmpty() ? "待规划" : String.join(" / ", t.getVersionNames()));
             out.setRef(itemLabel(t) + " · 改版本至 " + out.getTargetVersionName());
-            out.setReason("已移出本版本");
+            out.setReason("已移出本版本，去向 " + out.getTargetVersionName());
             rows.add(out);
         }
         r.setScope(rows);
@@ -389,34 +440,72 @@ public class DeliveryNoteService {
         c.setPending(c.getPlanned() - released - deferred);
         c.setDone(done);
         c.setDoing(doing);
+        int newCount = 0;
+        int improveCount = 0;
+        int fixCount = 0;
+        int otherCount = 0;
+        int unlinked = 0;
+        Map<String, DeliveryNoteResponse.ProjectRow> projects = new LinkedHashMap<String, DeliveryNoteResponse.ProjectRow>();
+        for (DeliveryNoteResponse.ScopeRow row : rows) {
+            DeliveryNoteResponse.ProjectRow p = projects.get(row.getProjectId());
+            if (p == null) {
+                p = new DeliveryNoteResponse.ProjectRow();
+                p.setId(row.getProjectId());
+                p.setName(row.getProjectName());
+                p.setReleasedCount(0);
+                p.setPendingCount(0);
+                p.setTaskCount(0);
+                projects.put(row.getProjectId(), p);
+            }
+            p.setTaskCount(p.getTaskCount() + 1);
+            if ("released".equals(row.getState())) {
+                p.setReleasedCount(p.getReleasedCount() + 1);
+            } else {
+                p.setPendingCount(p.getPendingCount() + 1);
+            }
+        }
+        for (DeliveryNoteResponse.ScopeRow row : rows) {
+            if (!"released".equals(row.getState())) {
+                continue;
+            }
+            String kind = row.getKind();
+            if (kind == null) {
+                unlinked++;
+            } else if ("new".equals(kind)) {
+                newCount++;
+            } else if ("improve".equals(kind)) {
+                improveCount++;
+            } else if ("fix".equals(kind)) {
+                fixCount++;
+            } else {
+                otherCount++;
+            }
+        }
+        c.setNewCount(newCount);
+        c.setImproveCount(improveCount);
+        c.setFixCount(fixCount);
+        c.setOtherCount(otherCount);
+        c.setUnlinkedCount(unlinked);
+        r.setProjects(new ArrayList<DeliveryNoteResponse.ProjectRow>(projects.values()));
         r.setCounts(c);
+    }
+
+    private String projectName(Map<String, String> cache, String fallbackId, String fallbackName, String reqId) {
+        if (reqId == null) {
+            return fallbackName;
+        }
+        if (cache.containsKey(reqId)) {
+            return cache.get(reqId);
+        }
+        Requirement project = reqMapper.selectById(reqId);
+        String name = project == null ? null : project.getName();
+        cache.put(reqId, name);
+        return name == null ? fallbackName : name;
     }
 
     private void fillDemands(DeliveryNoteResponse r, String workspaceId, String versionId, List<Task> bound,
                              Set<String> publishedIds, Map<String, VersionReleaseItem> publishedItems,
-                             Map<String, String> modules, boolean evidence) {
-        Map<String, Demand> demands = new LinkedHashMap<String, Demand>();
-        for (Demand d : demandMapper.selectByVersion(workspaceId, versionId)) {
-            demands.put(d.getId(), d);
-        }
-        /* 发布快照里出现过的需求也要在册：需求可能已改版本，但本次确实交付了它的一部分 */
-        List<String> missingIds = new ArrayList<String>();
-        for (Task t : bound) {
-            if (t.getDemandId() != null && !demands.containsKey(t.getDemandId())) {
-                missingIds.add(t.getDemandId());
-            }
-        }
-        for (VersionReleaseItem item : publishedItems.values()) {
-            if (item.getDemandId() != null && !demands.containsKey(item.getDemandId())) {
-                missingIds.add(item.getDemandId());
-            }
-        }
-        for (String id : new LinkedHashSet<String>(missingIds)) {
-            Demand d = demandMapper.selectById(id);
-            if (d != null && workspaceId.equals(d.getWorkspaceId())) {
-                demands.put(id, d);
-            }
-        }
+                             Map<String, String> modules, boolean evidence, Map<String, Demand> demands) {
         Map<String, int[]> perDemand = new LinkedHashMap<String, int[]>();
         for (Task t : bound) {
             if (t.getDemandId() == null) {
@@ -467,6 +556,8 @@ public class DeliveryNoteService {
             row.setReleasedCount(rel);
             row.setTargetVersionName(d.getVersionName());
             row.setDeliveredAt(d.getDeliveredAt());
+            row.setKind(kindOf(d.getItemKind()));
+            row.setKindName(kindName(row.getKind()));
             boolean moved = d.getVersionId() != null && !versionId.equals(d.getVersionId());
             if (total > 0 && rel == total) {
                 row.setState("fulfilled");
@@ -1250,7 +1341,7 @@ public class DeliveryNoteService {
         DeliveryNote current = noteMapper.selectByVersionForUpdate(workspaceId, versionId);
         long expected = current == null ? 0L : nz(current.getRevision());
         if (req.getRevision() != null && req.getRevision() != expected) {
-            throw new AppException(409, "交付说明已被他人修改，请刷新后重试");
+            throw new AppException(409, "交付报告已被他人修改，请刷新后重试");
         }
         DeliveryNote note = new DeliveryNote();
         note.setWorkspaceId(workspaceId);
@@ -1324,7 +1415,8 @@ public class DeliveryNoteService {
         o.put("tone", "customer");
         o.put("releaseId", "");
         o.put("includeUnreleased", true);
-        o.put("granularity", "module");
+        /* 内容清单分组：demand 按需求 / project 按项目 / type 按工作项类型 */
+        o.put("groupBy", "demand");
         o.put("showChanges", true);
         o.put("showEffort", false);
         o.put("effortDim", "module");
@@ -1960,7 +2052,7 @@ public class DeliveryNoteService {
     private DeliveryNoteSnapshot requireSnapshot(String workspaceId, String snapshotId) {
         DeliveryNoteSnapshot snapshot = noteMapper.selectSnapshotById(snapshotId);
         if (snapshot == null || !workspaceId.equals(snapshot.getWorkspaceId())) {
-            throw AppException.notFound("交付说明快照不存在：" + snapshotId);
+            throw AppException.notFound("交付报告快照不存在：" + snapshotId);
         }
         return snapshot;
     }
@@ -2051,7 +2143,7 @@ public class DeliveryNoteService {
         try {
             return json.writeValueAsString(value);
         } catch (Exception ex) {
-            throw new AppException(500, "交付说明内容序列化失败");
+            throw new AppException(500, "交付报告内容序列化失败");
         }
     }
 
@@ -2144,6 +2236,40 @@ public class DeliveryNoteService {
             return "史诗";
         }
         return "任务";
+    }
+
+    /** 需求性质 → 报告里的四类；空值不推断，返回 null。 */
+    private static String kindOf(String itemKind) {
+        String v = Texts.trimToNull(itemKind);
+        if (v == null) {
+            return null;
+        }
+        if ("新功能".equals(v)) {
+            return "new";
+        }
+        if ("体验优化".equals(v)) {
+            return "improve";
+        }
+        if ("缺陷".equals(v)) {
+            return "fix";
+        }
+        return "other";
+    }
+
+    private static String kindName(String kind) {
+        if ("new".equals(kind)) {
+            return "新增";
+        }
+        if ("improve".equals(kind)) {
+            return "优化";
+        }
+        if ("fix".equals(kind)) {
+            return "修复";
+        }
+        if ("other".equals(kind)) {
+            return "其他";
+        }
+        return null;
     }
 
     private static String columnName(String column) {

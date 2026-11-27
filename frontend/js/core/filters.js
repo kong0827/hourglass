@@ -87,13 +87,13 @@ function updateBrand(){
   var wsName = rt.currentWs ? rt.currentWs.name : "";
   var viewMeta = VIEWS[activeView] || {};
   /* 深页统一面包屑「空间 / 组 / 当前页」：组段可点回对应列表页，页面名由页面标题承载。
-     版本详情 / 项目驾驶舱 / 发布工作台 / 交付说明 / 文档历史五个深页共用一套格式 */
+     版本详情 / 项目驾驶舱 / 发布工作台 / 交付报告 / 文档历史五个深页共用一套格式 */
   var CRUMB_OF = {
     project:    { group:"项目", view:"projects",     page:"驾驶舱" },
     portfolio:  { group:"项目集", view:"portfolio",  page:"全部项目集" },
     version:    { group:"版本", view:"phase",        page:"详情" },
     release:    { group:"版本", view:"phase",        page:"发布工作台" },
-    delivery:   { group:"版本", view:"phase",        page:"交付说明" },
+    delivery:   { group:"版本", view:"phase",        page:"交付报告" },
     dochistory: { group:"文档", view:"requirements", page:"历史" }
   };
   var crumb = CRUMB_OF[activeView];

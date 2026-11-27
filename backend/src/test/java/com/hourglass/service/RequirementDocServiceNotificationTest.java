@@ -91,11 +91,13 @@ class RequirementDocServiceNotificationTest {
     void deleteByOtherUserNotifiesOwner() {
         when(docs.selectById("D1")).thenReturn(doc());
         when(access.canManage(WS, "U1")).thenReturn(true);
+        when(docs.softDelete(WS, "D1", "U1")).thenReturn(1);
 
         service.delete("U1", WS, "D1");
 
         verify(events).notifyLinked("U2", WS, UserNotificationPreferenceService.DEMAND_STATUS,
-                "文档「文档」已被删除", "需求文档已删除，关联任务已解绑", "doc", "D1", "R1");
+                "文档「文档」已移入回收站", "30 天内可在文档列表的回收站中恢复，过期后自动清理",
+                "doc", "D1", "R1");
     }
 
     private RequirementDoc doc() {

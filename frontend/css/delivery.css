@@ -1,5 +1,5 @@
 /* ==========================================================================
-   delivery.css · 一页式交付说明（工作台 + 接收人只读页）
+   delivery.css · 一页式交付报告（工作台 + 接收人只读页）
    纸张与控制区的所有类名带 dl- 前缀：主应用已占用 .sheet / .badge / .row / .metric，
    这里只复用 .btn / .input / .select / .textarea / .seg 等通用控件。
    ========================================================================== */
@@ -262,6 +262,37 @@ html[data-theme="dark"] .dl-export-wrap{
 .dl-setgroup-head .cnt{font-size:11px;color:var(--text-3);margin-left:auto;}
 .dl-modgroup-head{display:flex;align-items:center;gap:var(--space-2);margin-bottom:6px;}
 .dl-modgroup-head .cnt{font-size:11px;color:var(--text-3);}
+/* 交付内容清单：分组标题 + 三列行（工作项 / 性质 / 状态），打印时保持三列 */
+.dl-cgrp{margin-bottom:10px;}
+.dl-cgrp:last-child{margin-bottom:0;}
+.dl-cgrp-head{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:6px;}
+.dl-cgrp-head .gt{font-size:12px;font-weight:700;color:var(--text-1);}
+.dl-cgrp-head .gm{font-size:11px;color:var(--text-3);}
+.dl-cgrp-head .sp{flex:1 1 auto;}
+.dl-crow{display:grid;grid-template-columns:minmax(0,1fr) 62px 78px;gap:10px;align-items:center;
+  padding:var(--space-2) 11px;border-bottom:1px solid var(--border);font-size:12px;}
+.dl-crow:last-child{border-bottom:0;}
+.dl-crow:hover{background:var(--surface-hover);}
+.dl-crow .tt{min-width:0;}
+.dl-crow .tt b{display:block;font-weight:600;font-size:12px;line-height:1.45;}
+.dl-crow .tt span{display:block;font-size:11px;color:var(--text-3);margin-top:2px;font-family:var(--font-mono);overflow-wrap:anywhere;}
+.dl-crow .dl-badge{justify-self:start;}
+.dl-csub-h{display:flex;align-items:center;gap:8px;padding:6px 11px;background:var(--surface-sunken);
+  border-bottom:1px solid var(--border);font-size:11px;color:var(--text-2);font-weight:650;}
+.dl-csub-h .cnt{margin-left:auto;font-weight:450;color:var(--text-3);}
+.dl-off{border:1px solid var(--border);border-radius:var(--r-md);overflow:clip;background:var(--surface);}
+.dl-off-head{display:flex;align-items:center;gap:8px;padding:8px 11px;background:var(--surface-sunken);
+  border-bottom:1px solid var(--border);}
+.dl-off-head b{font-size:12px;font-weight:680;}
+.dl-off-head span{font-size:11px;color:var(--text-3);}
+.dl-off-row{display:flex;align-items:center;gap:9px;padding:8px 11px;border-bottom:1px solid var(--border);}
+.dl-off-row:last-child{border-bottom:0;}
+.dl-ot{font-size:11px;color:var(--text-3);flex:none;}
+.dl-om{flex:1 1 auto;min-width:0;}
+.dl-om b{display:block;font-size:12px;font-weight:600;line-height:1.45;}
+.dl-om span{display:block;font-size:11px;color:var(--text-3);margin-top:1px;font-family:var(--font-mono);overflow-wrap:anywhere;}
+.dl-off-row .dl-badge{flex:none;}
+.dl-off-row .r{flex:none;font-size:11px;color:var(--warning-fg);}
 .dl-more-row{display:flex;align-items:center;justify-content:center;padding:var(--space-2);background:var(--surface-sunken);border-top:1px solid var(--border);}
 .dl-more-row.plain{margin-top:9px;border:1px dashed var(--border);border-radius:var(--r-sm);background:none;}
 
@@ -523,6 +554,10 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
   .dl-row.head{display:none;}
   .dl-row .tt{grid-column:1/-1;}
   .dl-row.risk{grid-template-columns:minmax(0,1fr);}
+  .dl-crow{grid-template-columns:minmax(0,1fr) 78px;gap:6px;}
+  .dl-crow>span:nth-child(2){display:none;}
+  .dl-off-row{flex-wrap:wrap;}
+  .dl-off-row .r{margin-left:0;}
   .dl-banner{flex-wrap:wrap;}
   .dl-banner .ba{margin-left:0;width:100%;}
   .dl-banner .ba .btn{flex:1;}
@@ -560,7 +595,7 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
 #dlMeasure{position:fixed;left:-10000px;top:0;width:703px;visibility:hidden;pointer-events:none;}
 
 /* ============ 打印 / 存为 PDF ============ */
-/* 纸张宿主平时不显示；打印时接管整页。命名页面让 A4 只对交付说明生效，
+/* 纸张宿主平时不显示；打印时接管整页。命名页面让 A4 只对交付报告生效，
    甘特顶层的 @page A3 横向保持不变（delivery.css 在它之后加载，不能用全局 @page 抢）。 */
 #dlPrintHost{display:none;}
 @media print{

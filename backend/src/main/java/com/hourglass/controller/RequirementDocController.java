@@ -5,11 +5,13 @@ import com.hourglass.common.AppException;
 import com.hourglass.common.CurrentUser;
 import com.hourglass.dto.PageResult;
 import com.hourglass.dto.ReqDocActivityView;
+import com.hourglass.dto.ReqDocNotifyRequest;
 import com.hourglass.dto.ReqDocPublishRequest;
 import com.hourglass.dto.ReqDocRenameRequest;
 import com.hourglass.dto.ReqDocReorderRequest;
 import com.hourglass.dto.ReqDocRestoreRequest;
 import com.hourglass.dto.ReqDocSaveRequest;
+import com.hourglass.dto.ReqDocShareRequest;
 import com.hourglass.dto.ReqDocShareResponse;
 import com.hourglass.dto.ReqDocStatusRequest;
 import com.hourglass.dto.ReqDocView;
@@ -24,6 +26,7 @@ import com.hourglass.entity.Workspace;
 import com.hourglass.service.AttachmentService;
 import com.hourglass.service.HtmlDocxService;
 import com.hourglass.service.RequirementDocService;
+import com.hourglass.service.RequirementDocTrashService;
 import com.hourglass.service.WorkspaceService;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -65,13 +68,16 @@ public class RequirementDocController {
     private static final long EXPORT_IMG_MAX_BYTES = 20L * 1024 * 1024;
 
     private final RequirementDocService docService;
+    private final RequirementDocTrashService trashService;
     private final WorkspaceService workspaceService;
     private final HtmlDocxService htmlDocxService;
     private final AttachmentService attachmentService;
 
-    public RequirementDocController(RequirementDocService docService, WorkspaceService workspaceService,
+    public RequirementDocController(RequirementDocService docService, RequirementDocTrashService trashService,
+                                    WorkspaceService workspaceService,
                                     HtmlDocxService htmlDocxService, AttachmentService attachmentService) {
         this.docService = docService;
+        this.trashService = trashService;
         this.workspaceService = workspaceService;
         this.htmlDocxService = htmlDocxService;
         this.attachmentService = attachmentService;
@@ -340,6 +346,16 @@ public class RequirementDocController {
         return ApiResult.ok(docService.publish(userId, ws.getId(), id, published));
     }
 
+    /** 通知成员：发布后或更新后按范围提醒，只写通知，不改正文 */
+    @PostMapping("/api/req-docs/{id}/notify")
+    public ApiResult<Map<String, Object>> notify(@PathVariable String id,
+                                                 @Valid @RequestBody ReqDocNotifyRequest req,
+                                                 @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(docService.notifyMembers(userId, ws.getId(), id, req));
+    }
+
     /** 看板拖拽状态流转：轻量接口，只改状态，不携带正文也不走整篇乐观锁 */
     @PutMapping("/api/req-docs/{id}/status")
     public ApiResult<RequirementDoc> changeStatus(@PathVariable String id,
@@ -389,6 +405,37 @@ public class RequirementDocController {
         return ApiResult.ok(null);
     }
 
+    /* ---------------- 回收站 ---------------- */
+
+    /** 回收站：空间管理员看全部，普通成员只看自己删除或自己负责的文档 */
+    @GetMapping("/api/req-docs/trash")
+    public ApiResult<PageResult<RequirementDoc>> trash(@RequestParam(required = false) String workspace,
+                                                       @RequestParam(required = false) Integer offset,
+                                                       @RequestParam(required = false) Integer limit) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(trashService.trash(ws.getId(), userId,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
+    }
+
+    @PostMapping("/api/req-docs/{id}/trash/restore")
+    public ApiResult<RequirementDoc> restoreFromTrash(@PathVariable String id,
+                                                      @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(trashService.restore(userId, ws.getId(), id));
+    }
+
+    /** 彻底删除：不可恢复 */
+    @DeleteMapping("/api/req-docs/{id}/trash")
+    public ApiResult<Void> purge(@PathVariable String id,
+                                 @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        trashService.purge(userId, ws.getId(), id);
+        return ApiResult.ok(null);
+    }
+
     /* ---------------- 只读分享 ---------------- */
 
     /** 查看文档的分享链接（当前项目可写者；已过期按无链接处理） */
@@ -400,13 +447,15 @@ public class RequirementDocController {
         return ApiResult.ok(docService.shareInfo(userId, ws.getId(), id));
     }
 
-    /** 生成/重置分享链接（当前项目可写者；文档须已发布） */
+    /** 生成/重置分享链接（当前项目可写者；文档须已发布）。body 可选：days 有效期、allowCopy 复制打印 */
     @PostMapping("/api/req-docs/{id}/share")
     public ApiResult<ReqDocShare> createShare(@PathVariable String id,
-                                              @RequestParam(required = false) String workspace) {
+                                              @RequestParam(required = false) String workspace,
+                                              @RequestBody(required = false) ReqDocShareRequest req) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(docService.createShare(userId, ws.getId(), id));
+        return ApiResult.ok(docService.createShare(userId, ws.getId(), id,
+                req == null ? null : req.getDays(), req == null ? null : req.getAllowCopy()));
     }
 
     @DeleteMapping("/api/req-docs/{id}/share")

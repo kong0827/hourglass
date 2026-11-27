@@ -640,7 +640,7 @@ function syncTemplateHint(){
     ? "将补充 " + parts.join("；") + "。只补缺失项，不覆盖已有内容。"
     : (hit && hit.description) || "只创建项目本身，后续按需补充";
 }
-/* 场景模板建完后给一张 10 分钟路线：先看板，再落到交付说明，最后分享留痕。
+/* 场景模板建完后给一张 10 分钟路线：先看板，再落到交付报告，最后分享留痕。
    不替用户判断业务，只把「下一步点哪里」递到手里。 */
 function showSampleOnboarding(project, code){
   var tpl = (projectTemplates || []).filter(function(t){ return t.code === code; })[0];
@@ -656,12 +656,12 @@ function showSampleOnboarding(project, code){
     + '<button class="icon-btn sm" type="button" data-onb-close aria-label="关闭">' + icon("close", 15) + '</button></div>'
     + '<div class="sheet-body"><ol class="onb-steps">'
     + '<li><b>看板走一遍</b><span>打开看板，把一条卡片拖到下一列，熟悉状态流转与版本范围。</span></li>'
-    + '<li><b>生成第一份交付说明</b><span>打开交付说明，切到「管理版」，逐段确认后导出 PDF。事实由系统汇总，不用手写。</span></li>'
+    + '<li><b>生成第一份交付报告</b><span>打开交付报告，切到「管理版」，逐段确认后导出 PDF。事实由系统汇总，不用手写。</span></li>'
     + '<li><b>分享并留痕</b><span>导出后生成只读链接，可设访问密码、域名白名单与水印，打开记录会留痕。</span></li>'
     + '</ol><p class="foot-note">示例工作项都带「示例工作项」描述，可随时改名、归档或删除，不影响后续真实数据。</p></div>'
     + '<div class="sheet-foot"><button class="btn" type="button" data-onb-close>稍后再说</button>'
     + '<button class="btn" type="button" data-onb-board>打开看板</button>'
-    + '<button class="btn primary" type="button" data-onb-delivery>打开交付说明</button></div></div>';
+    + '<button class="btn primary" type="button" data-onb-delivery>打开交付报告</button></div></div>';
   layer.__uiOnClose = function(){ setTimeout(function(){ if(layer.parentNode) layer.parentNode.removeChild(layer); }, 0); };
   document.body.appendChild(layer);
   UI.openModal(layer);
@@ -683,8 +683,8 @@ function showSampleOnboarding(project, code){
         });
       }).catch(function(ex){
         btn.disabled = false;
-        btn.textContent = "打开交付说明";
-        toast(ex.message || "打开交付说明失败", "bad");
+        btn.textContent = "打开交付报告";
+        toast(ex.message || "打开交付报告失败", "bad");
       });
     }
   });

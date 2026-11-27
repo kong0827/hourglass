@@ -6,6 +6,7 @@
 
 import { icon } from "./icons.js";
 import { API } from "./api.js";
+import { decodeHtmlBytes } from "./html-import.js";
 
 var rootEl = null, headName = null, headMeta = null, bodyEl = null, toolsEl = null, zoomEl = null;
 var frameEl = null, pdfEl = null, imgEl = null, stageEl = null, textEl = null, statusEl = null;
@@ -19,13 +20,15 @@ var animTimer = null;
 
 var IMAGE_RE = /\.(jpe?g|png|gif|webp|bmp|svg)$/i;
 var PDF_RE = /\.pdf$/i;
+var HTML_RE = /\.html?$/i;
 var DOC_RE = /\.(md|markdown|txt|docx?)$/i;
 
-/** 附件的预览方式：image / pdf / doc / none（xlsx/xls 由 sheet-viewer 处理） */
+/** 附件的预览方式：image / pdf / html / doc / none（xlsx/xls 由 sheet-viewer 处理） */
 function kindOf(filename){
   var f = String(filename || "");
   if(IMAGE_RE.test(f)) return "image";
   if(PDF_RE.test(f)) return "pdf";
+  if(HTML_RE.test(f)) return "html";
   if(DOC_RE.test(f)) return "doc";
   return "none";
 }
@@ -316,6 +319,37 @@ function fetchText(url){
   });
 }
 
+function fetchBytes(url){
+  return fetch(url, { credentials: "same-origin" }).then(function(res){
+    if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }
+    if(!res.ok) throw new Error("下载附件失败（HTTP " + res.status + "）");
+    return res.arrayBuffer();
+  });
+}
+
+/* HTML 附件是不可信内容：外层 iframe 用 sandbox="allow-scripts"（不透明源），
+   脚本能跑出原型交互，但读不到应用页面、Cookie 与登录态；这里只去掉会自动跳转的 meta 与 base，
+   样式、脚本与图片原样保留。 */
+function htmlDocForPreview(html){
+  var text = String(html || "");
+  try{
+    var doc = new DOMParser().parseFromString(text, "text/html");
+    var bad = doc.querySelectorAll("meta[http-equiv], base");
+    for(var i = bad.length - 1; i >= 0; i -= 1){
+      if(bad[i].parentNode) bad[i].parentNode.removeChild(bad[i]);
+    }
+    return "<!DOCTYPE html>" + doc.documentElement.outerHTML;
+  }catch(e){
+    return text;
+  }
+}
+
+function showHtmlDocument(html){
+  frameEl.hidden = false;
+  frameEl.srcdoc = htmlDocForPreview(html);
+  setStatus(null);
+}
+
 function showMarkdown(src){
   ensureMarkdownLib().then(function(){
     /* 渲染结果走 DOMPurify：附件内容可能来自他人上传的文件 */
@@ -395,6 +429,16 @@ function openAttPreview(opts){
     headMeta.textContent = "PDF";
     setStatus(null);
     pdfEl.src = downloadUrl(att.id);
+  }else if(kind === "html"){
+    frameEl.hidden = false;
+    /* 原型 HTML 要跑自身脚本：只给 allow-scripts，不加 allow-same-origin */
+    frameEl.setAttribute("sandbox", "allow-scripts");
+    headMeta.textContent = "HTML";
+    fetchBytes(downloadUrl(att.id)).then(function(buf){
+      showHtmlDocument(decodeHtmlBytes(buf));
+    }).catch(function(ex){
+      setStatus(ex.message || "预览加载失败，可下载后本地打开");
+    });
   }else if(kind === "doc" && (ext === "md" || ext === "markdown")){
     textEl.hidden = false;
     headMeta.textContent = "Markdown";
@@ -410,6 +454,7 @@ function openAttPreview(opts){
     });
   }else if(kind === "doc"){
     frameEl.hidden = false;
+    frameEl.setAttribute("sandbox", "");
     headMeta.textContent = "Word 文档";
     showDocPreview(att);
   }else{

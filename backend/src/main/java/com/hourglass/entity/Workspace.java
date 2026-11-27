@@ -29,6 +29,8 @@ public class Workspace {
     private LocalDateTime notifyLastAt;
     /** success / failed:原因 */
     private String notifyLastStatus;
+    /** 可维护发布计划与发布记录的身份，逗号分隔：owner,admin,project_owner,project_write */
+    private String releaseAccessScope;
 
     /** 非表字段：当前用户在该空间的角色 owner/member */
     private String myRole;

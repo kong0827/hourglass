@@ -117,20 +117,23 @@ public class NotificationEventService {
                 null, refKind, refId, targetReqId, true, mailSuffix, null, null).ok;
     }
 
-    /** 事件偏好与通知中心类型分开：如版本发布沿用「需求与版本动态」偏好，但按「发布」分类展示。 */
-    public void notifyLinkedAs(String recipientUserId, String workspaceId, String eventType,
-                               String notificationType, String title, String body,
-                               String refKind, String refId, String targetReqId) {
-        notifyLinkedAs(recipientUserId, workspaceId, eventType, notificationType, title, body,
+    /**
+     * 事件偏好与通知中心类型分开：如版本发布沿用「需求与版本动态」偏好，但按「发布」分类展示。
+     * @return false 表示没有投递出任何渠道（个人偏好关闭或投递失败）
+     */
+    public boolean notifyLinkedAs(String recipientUserId, String workspaceId, String eventType,
+                                  String notificationType, String title, String body,
+                                  String refKind, String refId, String targetReqId) {
+        return notifyLinkedAs(recipientUserId, workspaceId, eventType, notificationType, title, body,
                 refKind, refId, targetReqId, null);
     }
 
     /** @param mailSuffix 只追加到邮件正文的深链文本；未配置 base-url 时调用方应传 null */
-    public void notifyLinkedAs(String recipientUserId, String workspaceId, String eventType,
-                               String notificationType, String title, String body,
-                               String refKind, String refId, String targetReqId, String mailSuffix) {
-        deliver(recipientUserId, workspaceId, eventType, notificationType, title, body,
-                null, refKind, refId, targetReqId, true, mailSuffix, null, null);
+    public boolean notifyLinkedAs(String recipientUserId, String workspaceId, String eventType,
+                                  String notificationType, String title, String body,
+                                  String refKind, String refId, String targetReqId, String mailSuffix) {
+        return deliver(recipientUserId, workspaceId, eventType, notificationType, title, body,
+                null, refKind, refId, targetReqId, true, mailSuffix, null, null).ok;
     }
 
     /**

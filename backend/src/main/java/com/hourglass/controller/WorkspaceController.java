@@ -12,6 +12,7 @@ import com.hourglass.dto.ProjectMemberRoleBatchRequest;
 import com.hourglass.dto.ProjectMemberRoleCopyRequest;
 import com.hourglass.dto.ProjectMemberRoleOverview;
 import com.hourglass.dto.ProjectMemberRoleRequest;
+import com.hourglass.dto.ReleaseAccessScopeDto;
 import com.hourglass.dto.WorkspaceCreateRequest;
 import com.hourglass.dto.WorkspaceUpdateRequest;
 import com.hourglass.entity.AppUser;
@@ -26,6 +27,7 @@ import com.hourglass.service.AuditService;
 import com.hourglass.service.NotificationEventService;
 import com.hourglass.service.ProjectAccessService;
 import com.hourglass.service.ProjectMemberRoleService;
+import com.hourglass.service.ReleaseAccessScopeService;
 import com.hourglass.service.WorkspaceService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -57,6 +59,7 @@ public class WorkspaceController {
     private final ActivityService activityService;
     private final NotificationEventService notificationEvents;
     private final AuditService audit;
+    private final ReleaseAccessScopeService releaseAccessScopes;
 
     public WorkspaceController(WorkspaceService workspaceService, UserMapper userMapper,
                                ProjectAccessService projectAccessService,
@@ -64,7 +67,8 @@ public class WorkspaceController {
                                RequirementMapper requirementMapper,
                                ActivityService activityService,
                                NotificationEventService notificationEvents,
-                               AuditService audit) {
+                               AuditService audit,
+                               ReleaseAccessScopeService releaseAccessScopes) {
         this.workspaceService = workspaceService;
         this.userMapper = userMapper;
         this.projectAccessService = projectAccessService;
@@ -73,6 +77,7 @@ public class WorkspaceController {
         this.activityService = activityService;
         this.notificationEvents = notificationEvents;
         this.audit = audit;
+        this.releaseAccessScopes = releaseAccessScopes;
     }
 
     /** 我参与的空间（个人空间排前） */
@@ -228,6 +233,24 @@ public class WorkspaceController {
                                                    @RequestBody MemberLabelOptions req) {
         workspaceService.updateMemberLabelOptions(CurrentUser.id(), id, req);
         return ApiResult.ok();
+    }
+
+    /** 发布维护权限（成员可读，用于解释「为什么我不能改计划」） */
+    @GetMapping("/api/workspaces/{id}/release-access")
+    public ApiResult<ReleaseAccessScopeDto> releaseAccess(@PathVariable String id) {
+        workspaceService.requireMember(CurrentUser.id(), id);
+        return ApiResult.ok(releaseAccessScopes.view(id));
+    }
+
+    /** 修改发布维护权限：仅空间主 / 管理员；只影响发布计划与发布记录，不影响版本维护 */
+    @PutMapping("/api/workspaces/{id}/release-access")
+    public ApiResult<ReleaseAccessScopeDto> updateReleaseAccess(@PathVariable String id,
+                                                               @RequestBody ReleaseAccessScopeDto req) {
+        String me = CurrentUser.id();
+        workspaceService.requireManager(me, id);
+        if (req == null) throw AppException.badRequest("请提交发布维护权限");
+        releaseAccessScopes.save(id, req.getSelected(), me);
+        return ApiResult.ok(releaseAccessScopes.view(id));
     }
 
     @PutMapping("/api/workspaces/{id}/projects/{projectId}/member-roles")
