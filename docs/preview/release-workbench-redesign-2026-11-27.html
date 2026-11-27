@@ -1,0 +1,1818 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>发布计划与记录重设计原型 · 沙漏 · 2026-11-27</title>
+<style>
+/* ==========================================================================
+   发布三视图重设计原型 · 2026-11-27
+   视图：发布计划（轻量） / 记录发布（单屏发布台 + 常驻动作条 + 差异驱动） / 发布记录（时间线 + 显式动作）
+   令牌与 frontend/css/tokens.css 对齐；暗色只覆盖基础令牌。
+   ========================================================================== */
+:root{
+  --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --surface-hover:#F2F4F7; --surface-active:#E9ECF1;
+  --tbl-head:#F9FAFB; --border:#E4E7EC; --border-strong:#D0D5DD;
+  --text:#101828; --text-2:#475467; --text-3:#667085; --text-inverse:#FFFFFF;
+  --primary:#2563EB; --primary-hover:#1D4ED8; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+  --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+  --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+  --danger:#F04438; --danger-soft:#FEF3F2; --danger-border:#FDA29B; --danger-fg:#B42318;
+  --info:#2E90FA; --info-soft:#EFF8FF; --info-border:#B2DDFF; --info-fg:#175CD3;
+  --plum:#7A5AF8; --plum-soft:#F4F3FF; --plum-border:#D9D6FE; --plum-fg:#5B3FD1;
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-xl:16px; --r-pill:999px;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-sm:0 2px 4px -2px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+  --shadow-md:0 4px 10px -2px rgba(16,24,40,.08),0 2px 4px -2px rgba(16,24,40,.05);
+  --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
+  --ring:0 0 0 3px rgba(37,99,235,.16);
+  --font:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",Arial,sans-serif;
+  --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  --dur:160ms; --ease:cubic-bezier(.2,.8,.2,1);
+}
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --bg-app:#0D1219; --surface:#151B24; --surface-sunken:#1A222D; --surface-hover:#1F2937; --surface-active:#26313F;
+  --tbl-head:#1A222D; --border:#25303D; --border-strong:#334153;
+  --text:#E7ECF3; --text-2:#A9B4C2; --text-3:#7B8798; --text-inverse:#0D1219;
+  --primary:#4C8DFF; --primary-hover:#6BA1FF; --primary-soft:#16243C; --primary-border:#2B4772; --primary-fg:#8FB4FF;
+  --success:#32D583; --success-soft:#0E2A1D; --success-border:#1F5C3E; --success-fg:#75E0A7;
+  --warning:#FDB022; --warning-soft:#2A2110; --warning-border:#5C4A1E; --warning-fg:#FEC84B;
+  --danger:#F97066; --danger-soft:#2B1615; --danger-border:#5C2A26; --danger-fg:#FDA29B;
+  --info:#53B1FD; --info-soft:#10202F; --info-border:#1F4468; --info-fg:#84CAFF;
+  --plum:#9B8AFB; --plum-soft:#1D1933; --plum-border:#3B3266; --plum-fg:#B9ACFC;
+  --shadow-xs:0 1px 2px rgba(0,0,0,.4);
+  --shadow-sm:0 2px 4px -2px rgba(0,0,0,.45),0 1px 2px rgba(0,0,0,.35);
+  --shadow-md:0 4px 10px -2px rgba(0,0,0,.5),0 2px 4px -2px rgba(0,0,0,.35);
+  --shadow-lg:0 12px 24px -6px rgba(0,0,0,.55),0 4px 8px -4px rgba(0,0,0,.35);
+  --ring:0 0 0 3px rgba(76,141,255,.28);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg-app);color:var(--text);font-family:var(--font);font-size:13px;line-height:1.55;-webkit-font-smoothing:antialiased;padding-bottom:76px;}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none;padding:0}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,a:focus-visible{outline:none;box-shadow:var(--ring);border-radius:var(--r-xs)}
+[hidden]{display:none!important}
+::selection{background:var(--primary-soft)}
+.mono{font-family:var(--mono);font-size:11.5px;letter-spacing:-.01em}
+.hint{font-size:11.5px;color:var(--text-3);line-height:17px;margin:0}
+.muted{color:var(--text-3)}
+.nowrap{white-space:nowrap}
+
+/* ---------- 外壳 ---------- */
+.topbar{position:sticky;top:0;z-index:30;height:56px;display:flex;align-items:center;gap:14px;padding:0 20px;background:var(--surface);border-bottom:1px solid var(--border);}
+.brand{display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:700;white-space:nowrap;}
+.brand .mk{width:24px;height:24px;border-radius:7px;background:linear-gradient(145deg,#3B82F6,#2563EB);display:grid;place-items:center;color:#fff;font-size:11px;font-weight:700;}
+.brand small{font-size:11px;font-weight:550;color:var(--text-3);}
+.sp{flex:1 1 auto}
+.seg{display:inline-flex;padding:2px;background:var(--surface-sunken);border:1px solid var(--border);border-radius:var(--r-sm);}
+.seg button{padding:5px 12px;border-radius:6px;font-size:12px;font-weight:550;color:var(--text-2);white-space:nowrap;}
+.seg button:hover{color:var(--text);}
+.seg button.on{background:var(--surface);color:var(--primary-fg);box-shadow:var(--shadow-xs);font-weight:650;}
+.icon-btn{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--text-2);border:1px solid var(--border);background:var(--surface);}
+.icon-btn:hover{background:var(--surface-hover);color:var(--text);}
+main{max-width:1180px;margin:0 auto;padding:20px 24px 24px;}
+.crumb{font-size:11.5px;color:var(--text-3);margin-bottom:7px;display:flex;align-items:center;gap:6px;}
+.crumb i{font-style:normal;color:var(--border-strong);}
+h1{font-size:19px;line-height:1.3;margin:0;font-weight:700;letter-spacing:-.01em;}
+h2{font-size:14px;margin:0;font-weight:650;}
+.vhead{display:flex;align-items:flex-start;gap:14px;margin-bottom:16px;flex-wrap:wrap;}
+.vhead p{margin:5px 0 0;font-size:12px;color:var(--text-3);max-width:760px;}
+.head-acts{display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end;}
+
+/* ---------- 基础控件 ---------- */
+.btn{height:30px;padding:0 12px;border-radius:var(--r-sm);border:1px solid var(--border-strong);background:var(--surface);color:var(--text);font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;transition:background var(--dur) var(--ease),border-color var(--dur) var(--ease);}
+.btn:hover{background:var(--surface-hover);}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;}
+.btn.primary:hover{background:var(--primary-hover);border-color:var(--primary-hover);}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--text-2);}
+.btn.ghost:hover{background:var(--surface-hover);color:var(--text);}
+.btn.sm{height:26px;padding:0 9px;font-size:11.5px;border-radius:7px;}
+.btn.link{border:0;background:none;padding:0;height:auto;color:var(--primary-fg);font-size:11.5px;font-weight:600;text-decoration:underline;text-underline-offset:2px;}
+.btn.danger{color:var(--danger-fg);border-color:var(--danger-border);background:var(--surface);}
+.btn.danger:hover{background:var(--danger-soft);}
+.inp,select.inp,textarea.inp{height:32px;padding:0 10px;border-radius:var(--r-sm);border:1px solid var(--border-strong);background:var(--surface);font-size:12.5px;width:100%;min-width:0;}
+textarea.inp{height:auto;padding:8px 10px;line-height:1.5;resize:vertical;}
+.inp::placeholder{color:var(--text-3);opacity:.75}
+.inp.is-attention{border-color:var(--warning);box-shadow:0 0 0 3px var(--warning-soft);}
+.chip{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 7px;border-radius:var(--r-pill);border:1px solid var(--border);background:var(--surface);color:var(--text-2);font-size:10.5px;font-weight:600;white-space:nowrap;}
+.chip .dot{width:6px;height:6px;border-radius:50%;display:inline-block;background:currentColor;}
+.chip.ok{background:var(--success-soft);border-color:var(--success-border);color:var(--success-fg);}
+.chip.warn{background:var(--warning-soft);border-color:var(--warning-border);color:var(--warning-fg);}
+.chip.bad{background:var(--danger-soft);border-color:var(--danger-border);color:var(--danger-fg);}
+.chip.pri{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
+.chip.info{background:var(--info-soft);border-color:var(--info-border);color:var(--info-fg);}
+.chip.plum{background:var(--plum-soft);border-color:var(--plum-border);color:var(--plum-fg);}
+.chip.gray{background:var(--surface-sunken);border-color:var(--border);color:var(--text-2);}
+.badge{display:inline-flex;align-items:center;height:19px;padding:0 6px;border-radius:5px;font-size:10.5px;font-weight:600;white-space:nowrap;flex:0 0 auto}
+.b-new{background:var(--success-soft);color:var(--success-fg)}
+.b-opt{background:var(--info-soft);color:var(--info-fg)}
+.b-fix{background:var(--plum-soft);color:var(--plum-fg)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);}
+
+/* ---------- 通用区块 ---------- */
+.sec{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);margin-bottom:12px;overflow:hidden;}
+.sec-h{display:flex;align-items:center;gap:9px;padding:11px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap;}
+.sec-h b{font-size:12.5px;font-weight:650;}
+.sec-h .n{width:18px;height:18px;border-radius:50%;background:var(--primary);color:#fff;font-size:10.5px;font-weight:700;display:grid;place-items:center;flex:0 0 auto;}
+.sec-h .right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+.sec-b{padding:13px 14px;}
+.sec-b + .sec-b{border-top:1px solid var(--border);}
+.grid{display:grid;gap:12px 14px;}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr));}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr));}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr));}
+.f{display:flex;flex-direction:column;gap:5px;min-width:0;}
+.f > label{font-size:11.5px;font-weight:650;color:var(--text-2);display:flex;align-items:center;gap:5px;}
+.f > label em{font-style:normal;color:var(--danger-fg);font-weight:700;}
+.f .tip{font-size:11px;color:var(--text-3);line-height:15px;}
+.f.wide{grid-column:1/-1;}
+
+/* ---------- 计划：头部摘要 ---------- */
+.plan-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;background:var(--surface-sunken);border-bottom:1px solid var(--border);}
+.plan-head .meta{font-size:11.5px;color:var(--text-2);}
+.plan-head .meta b{font-weight:650;color:var(--text);}
+.cond{display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px dashed var(--primary-border);border-radius:var(--r-md);background:var(--primary-soft);font-size:11.5px;color:var(--primary-fg);}
+
+/* ---------- 范围勾选器 ---------- */
+.tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+.tools .inp{width:auto;}
+.tools .q{flex:0 1 220px;}
+.count{font-size:11.5px;color:var(--text-2);margin-left:auto;display:flex;align-items:center;gap:6px;}
+.grp{border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;margin-bottom:8px;}
+.grp-h{display:flex;align-items:center;gap:8px;padding:7px 11px;background:var(--tbl-head);border-bottom:1px solid var(--border);font-size:11.5px;font-weight:650;color:var(--text-2);}
+.grp-h .right{margin-left:auto;display:flex;align-items:center;gap:8px;font-weight:400;}
+.row{display:flex;align-items:center;gap:9px;padding:8px 11px;border-bottom:1px solid var(--border);font-size:12.5px;min-width:0;}
+.row:last-child{border-bottom:0;}
+.row:hover{background:var(--surface-hover);}
+.row input[type=checkbox]{width:15px;height:15px;accent-color:var(--primary);flex:0 0 auto;margin:0;}
+.row .t{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.row .t a{color:var(--text);text-decoration:none;font-weight:550;}
+.row .t a:hover{color:var(--primary-fg);text-decoration:underline;}
+.row .sub{font-size:11px;color:var(--text-3);flex:0 0 auto;}
+.row.is-off{opacity:.55;}
+.row .flag{flex:0 0 auto}
+.scrollbox{max-height:320px;overflow:auto;padding:2px;}
+
+/* ---------- 发布台：来源条 ---------- */
+.srcbar{display:flex;align-items:center;gap:10px;padding:11px 14px;border:1px solid var(--primary-border);background:var(--primary-soft);border-radius:var(--r-lg);margin-bottom:12px;flex-wrap:wrap;}
+.srcbar .ic{width:24px;height:24px;border-radius:50%;background:var(--surface);border:1px solid var(--primary-border);display:grid;place-items:center;color:var(--primary-fg);font-size:12px;font-weight:700;flex:0 0 auto;}
+.srcbar b{font-size:12.5px;}
+.srcbar .meta{font-size:11.5px;color:var(--text-2);}
+.srcbar .right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+
+/* ---------- 差异表 ---------- */
+.diff{width:100%;border-collapse:separate;border-spacing:0;}
+.diff th{text-align:left;font-size:10.5px;font-weight:650;color:var(--text-3);letter-spacing:.03em;padding:7px 10px;background:var(--tbl-head);border-bottom:1px solid var(--border);white-space:nowrap;}
+.diff td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top;font-size:12px;}
+.diff tr:last-child td{border-bottom:0;}
+.diff .dim{font-weight:650;white-space:nowrap;}
+.diff .lv{width:3px;border-radius:2px;padding:0;}
+.diff tr.blk .lv{background:var(--danger);}
+.diff tr.nt .lv{background:var(--warning);}
+.diff .old{color:var(--text-3);}
+.diff .new{color:var(--text);font-weight:550;}
+.diff .fix{display:flex;flex-direction:column;gap:6px;min-width:230px;}
+.diff .fix textarea{min-height:34px;}
+.diff tr.blk{background:rgba(240,68,56,.03);}
+.okline{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:var(--r-md);background:var(--success-soft);border:1px solid var(--success-border);color:var(--success-fg);font-size:11.5px;font-weight:600;}
+.failbox{display:flex;flex-direction:column;gap:6px;padding:11px 12px;border:1px solid var(--danger-border);border-radius:var(--r-md);background:var(--danger-soft);}
+.failbox label{font-size:11.5px;font-weight:650;color:var(--danger-fg);}
+
+/* ---------- 常驻动作条 ---------- */
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:35;background:var(--surface);border-top:1px solid var(--border);box-shadow:0 -6px 16px -8px rgba(16,24,40,.18);}
+.bar-in{max-width:1180px;margin:0 auto;padding:10px 24px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.bar .st{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;}
+.bar .st .d{width:8px;height:8px;border-radius:50%;flex:0 0 auto;}
+.bar .st.idle .d{background:var(--text-3);}
+.bar .st.chk .d{background:var(--info);animation:pulse 1s var(--ease) infinite;}
+.bar .st.todo .d{background:var(--warning);}
+.bar .st.rdy .d{background:var(--success);}
+@keyframes pulse{50%{opacity:.25}}
+.bar .st .sub{font-weight:400;color:var(--text-3);font-size:11px;}
+.bar .acts{margin-left:auto;display:flex;align-items:center;gap:8px;}
+.bar .issues{width:100%;border-top:1px solid var(--border);margin-top:2px;padding-top:9px;display:flex;flex-direction:column;gap:6px;}
+.bar .issues .it{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text-2);}
+.bar .issues .it .go{margin-left:auto;}
+
+/* ---------- 时间线 ---------- */
+.tl{display:flex;flex-direction:column;}
+.tl-day{display:flex;align-items:center;gap:8px;padding:9px 2px 5px;font-size:11px;font-weight:650;color:var(--text-3);}
+.tl-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);margin-bottom:7px;cursor:pointer;transition:border-color var(--dur) var(--ease),box-shadow var(--dur) var(--ease);}
+.tl-row:hover{border-color:var(--primary-border);box-shadow:var(--shadow-sm);}
+.tl-row.on{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft);}
+.tl-row .time{font-size:11.5px;color:var(--text-2);width:46px;flex:0 0 auto;font-variant-numeric:tabular-nums;}
+.tl-row .body{flex:1 1 auto;min-width:0;}
+.tl-row .body .l1{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+.tl-row .body .l1 b{font-size:12.5px;font-weight:650;}
+.tl-row .body .l2{font-size:11px;color:var(--text-3);margin-top:3px;}
+.tl-row .acts{display:flex;gap:6px;flex:0 0 auto;opacity:0;transition:opacity var(--dur) var(--ease);}
+.tl-row:hover .acts,.tl-row.on .acts{opacity:1;}
+.det{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;align-items:start;}
+.kv{display:grid;grid-template-columns:88px minmax(0,1fr);gap:7px 10px;font-size:12px;}
+.kv dt{color:var(--text-3);font-size:11.5px;}
+.kv dd{margin:0;color:var(--text);overflow-wrap:anywhere}
+.snap{display:flex;flex-direction:column;gap:0;}
+.snap .row{border-bottom:1px solid var(--border);padding:7px 0;}
+
+/* ---------- 说明页 ---------- */
+.map{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;}
+.map th{text-align:left;font-size:11px;font-weight:650;color:var(--text-3);padding:8px 10px;background:var(--tbl-head);border-bottom:1px solid var(--border);letter-spacing:.03em;}
+.map td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top;}
+.map tr:last-child td{border-bottom:0;}
+.map td.bad{background:rgba(240,68,56,.04);}
+.map td.good{background:rgba(18,183,106,.05);}
+.map .no{font-weight:700;color:var(--text-3);width:26px;}
+.prin{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+.prin .p{padding:12px 14px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);}
+.prin .p b{display:block;font-size:12.5px;margin-bottom:4px;}
+.prin .p span{font-size:11.5px;color:var(--text-2);line-height:17px;}
+
+/* ---------- toast ---------- */
+.toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%) translateY(12px);z-index:60;background:rgba(16,24,40,.94);color:#fff;padding:10px 16px;border-radius:var(--r-md);font-size:12.5px;box-shadow:var(--shadow-lg);opacity:0;pointer-events:none;transition:opacity var(--dur) var(--ease),transform var(--dur) var(--ease);max-width:520px;text-align:center;}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0);}
+
+@media (max-width:960px){
+  .g4,.g3,.g2{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .det{grid-template-columns:minmax(0,1fr);}
+  .prin{grid-template-columns:minmax(0,1fr);}
+}
+/* ---------- 产品外壳：侧栏菜单（沿用 index.html 真实菜单树） ---------- */
+.app{display:flex;align-items:flex-start;min-height:calc(100vh - 56px);}
+.snav{width:212px;flex:0 0 212px;position:sticky;top:56px;align-self:stretch;max-height:calc(100vh - 56px);overflow:auto;
+  background:var(--surface);border-right:1px solid var(--border);padding:10px 8px 18px;display:flex;flex-direction:column;gap:2px;}
+.nav-sec{font-size:10.5px;font-weight:700;color:var(--text-3);letter-spacing:.06em;padding:11px 9px 4px;}
+.nav-item{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:var(--r-sm);font-size:12.5px;font-weight:550;color:var(--text-2);text-align:left;width:100%;}
+.nav-item:hover{background:var(--surface-hover);color:var(--text);}
+.nav-item.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:650;}
+.nav-item svg{width:15px;height:15px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;}
+.nav-item .nb{margin-left:auto;font-size:10.5px;font-weight:700;color:var(--primary-fg);background:var(--surface);border:1px solid var(--primary-border);border-radius:var(--r-pill);padding:0 5px;}
+.nav-sub{display:flex;flex-direction:column;gap:1px;padding:2px 0 3px 24px;}
+.nav-sub-item{display:flex;align-items:center;gap:6px;padding:5px 9px;font-size:11.5px;color:var(--text-3);text-align:left;width:100%;border-left:2px solid var(--border);border-radius:0 7px 7px 0;}
+.nav-sub-item:hover{background:var(--surface-hover);color:var(--text);}
+.nav-sub-item.on{background:var(--surface-sunken);color:var(--primary-fg);font-weight:650;border-left-color:var(--primary);}
+.snav-foot{margin-top:14px;padding:11px 9px 0;font-size:10.5px;color:var(--text-3);line-height:16px;border-top:1px solid var(--border);}
+.route{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px;border-radius:var(--r-pill);background:var(--surface-sunken);border:1px solid var(--border);color:var(--text-2);font-family:var(--mono);font-size:11px;white-space:nowrap;}
+
+/* ---------- 版本列表 / 计划清单：表格 ---------- */
+.vtbl{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;}
+.vtbl th{text-align:left;font-size:10.5px;font-weight:650;color:var(--text-3);padding:8px 10px;background:var(--tbl-head);border-bottom:1px solid var(--border);white-space:nowrap;letter-spacing:.03em;}
+.vtbl td{padding:10px;border-bottom:1px solid var(--border);vertical-align:middle;}
+.vtbl tr:last-child td{border-bottom:0;}
+.vtbl tbody tr:hover{background:var(--surface-hover);}
+.vtbl tr.sel{background:var(--primary-soft);}
+.vtbl .name{font-weight:650;color:var(--text);text-align:left;padding:0;background:none;font-size:12.5px;}
+.vtbl .name:hover{color:var(--primary-fg);text-decoration:underline;}
+.vtbl .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.vtbl .acts{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;opacity:.5;transition:opacity var(--dur) var(--ease);}
+.vtbl tr:hover .acts,.vtbl tr:focus-within .acts{opacity:1;}
+.vtbl input[type=checkbox]{width:15px;height:15px;accent-color:var(--primary);margin:0;}
+.prog{display:flex;align-items:center;gap:7px;min-width:110px;}
+.prog .bar-t{flex:1 1 auto;height:5px;border-radius:var(--r-pill);background:var(--surface-active);overflow:hidden;}
+.prog .bar-t i{display:block;height:100%;background:var(--success);border-radius:var(--r-pill);}
+.prog .bar-t i.part{background:var(--info);}
+.prog span{font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;white-space:nowrap;}
+
+/* ---------- 版本详情头 ---------- */
+.vdh{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:13px 15px 0;margin-bottom:14px;}
+.vdh-top{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+.vdh-top h1{font-size:17px;}
+.vback{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px;border-radius:var(--r-sm);border:1px solid var(--border-strong);background:var(--surface);font-size:11.5px;font-weight:600;color:var(--text-2);}
+.vback:hover{background:var(--surface-hover);color:var(--text);}
+.vdh-sub{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:11.5px;color:var(--text-3);margin-top:6px;}
+.vdh-sub button{color:var(--primary-fg);font-weight:600;text-decoration:underline;text-underline-offset:2px;}
+.vdot{color:var(--border-strong);}
+.vdh-note{display:flex;align-items:flex-start;gap:7px;margin-top:11px;padding:9px 11px;border-radius:var(--r-md);font-size:11.5px;line-height:17px;background:var(--info-soft);border:1px solid var(--info-border);color:var(--info-fg);}
+.vdh-note.is-success{background:var(--success-soft);border-color:var(--success-border);color:var(--success-fg);}
+.vdh-note.is-mute{background:var(--surface-sunken);border-color:var(--border);color:var(--text-2);}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:12px;}
+.kpi{text-align:left;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);display:flex;flex-direction:column;gap:1px;}
+.kpi:hover{border-color:var(--primary-border);background:var(--primary-soft);}
+.kpi .k{font-size:10.5px;color:var(--text-3);font-weight:650;letter-spacing:.03em;}
+.kpi b{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;}
+.kpi b small{font-size:11px;font-weight:600;color:var(--text-3);}
+.kpi .f2{font-size:10.5px;color:var(--text-3);}
+.kpi.ok b{color:var(--success-fg);}
+.kpi.warn b{color:var(--warning-fg);}
+.vtabs{display:flex;gap:2px;margin-top:13px;border-top:1px solid var(--border);padding-top:2px;overflow-x:auto;}
+.vtab{display:flex;align-items:center;gap:6px;padding:9px 12px;font-size:12.5px;font-weight:600;color:var(--text-3);border-bottom:2px solid transparent;white-space:nowrap;}
+.vtab:hover{color:var(--text);}
+.vtab.on{color:var(--primary-fg);border-bottom-color:var(--primary);}
+.vtab b{font-size:10.5px;font-weight:700;background:var(--surface-sunken);border-radius:var(--r-pill);padding:1px 6px;color:var(--text-2);}
+.vtab.on b{background:var(--primary-soft);color:var(--primary-fg);}
+.v-more{position:relative;}
+.v-more-menu{position:absolute;right:0;top:32px;z-index:20;min-width:196px;padding:5px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-lg);}
+.v-more-menu button{display:flex;align-items:center;gap:7px;width:100%;padding:7px 9px;border-radius:7px;font-size:12px;color:var(--text-2);text-align:left;}
+.v-more-menu button:hover{background:var(--surface-hover);color:var(--text);}
+.v-more-menu button.danger{color:var(--danger-fg);}
+.v-more-menu .ms{padding:6px 9px 3px;font-size:10.5px;font-weight:700;color:var(--text-3);letter-spacing:.05em;}
+
+/* ---------- 发布工作台内页签 ---------- */
+.rtabs{display:flex;align-items:center;gap:4px;margin-bottom:13px;padding:4px;background:var(--surface-sunken);border:1px solid var(--border);border-radius:var(--r-md);flex-wrap:wrap;}
+.rtabs button{padding:6px 13px;border-radius:7px;font-size:12px;font-weight:600;color:var(--text-2);}
+.rtabs button:hover{color:var(--text);}
+.rtabs button.on{background:var(--surface);color:var(--primary-fg);box-shadow:var(--shadow-xs);}
+.rtabs .tail{margin-left:auto;padding-right:6px;font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.verpick{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-2);}
+.verpick select{height:28px;width:auto;padding:0 8px;border-radius:7px;border:1px solid var(--border-strong);background:var(--surface);font-size:11.5px;}
+
+@media (max-width:1080px){
+  .snav{width:172px;flex:0 0 172px;}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+@media (max-width:860px){
+  .app{flex-direction:column;}
+  .snav{position:static;width:auto;flex:0 0 auto;max-height:none;border-right:0;border-bottom:1px solid var(--border);flex-direction:row;overflow-x:auto;gap:4px;padding:8px 10px;}
+  .nav-sec{display:none;}
+  .nav-item{white-space:nowrap;width:auto;}
+  .nav-item svg{display:none;}
+  .nav-sub{flex-direction:row;padding:0;}
+  .nav-sub-item{white-space:nowrap;border-left:0;border-radius:7px;}
+  .snav-foot{display:none;}
+}
+@media (max-width:640px){
+  .vtbl thead{display:none;}
+  .vtbl tbody tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 8px;padding:10px 4px;border-bottom:1px solid var(--border);}
+  .vtbl td{border:0;padding:2px 8px;}
+  .vtbl td.col-name{grid-column:1/-1;}
+  .vtbl td.acts-td{grid-column:1/-1;}
+  .vtbl td.acts-td .acts{justify-content:flex-start;opacity:1;}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+@media (max-width:640px){
+  main{padding:14px 12px 20px;}
+  .g4,.g3,.g2{grid-template-columns:minmax(0,1fr);}
+  .bar-in{padding:9px 12px;}
+  .topbar{padding:0 12px;gap:8px;}
+  .brand small{display:none;}
+  .row{flex-wrap:wrap;}
+  .row .t{flex:1 1 55%;}
+  .row .sub{flex:1 1 100%;margin-left:24px;font-size:10.5px;}
+  .diff thead{display:none;}
+  .diff td{display:block;border-bottom:0;}
+  .diff tr{display:block;border-bottom:1px solid var(--border);padding:8px 0;}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="mk">沙</span>沙漏 · 发布重设计原型<small>2026-11-27</small></div>
+  <span class="route" data-route title="当前对应的真实路由">#/phase?pmode=version</span>
+  <div class="sp"></div>
+  <span class="chip gray">单文件离线原型 · 数据为演示</span>
+  <button type="button" class="btn sm" data-view="notes">设计说明</button>
+  <button type="button" class="icon-btn" data-theme-toggle title="切换明暗主题" aria-label="切换明暗主题">◐</button>
+</div>
+
+<div class="app">
+
+<!-- ================= 侧栏：产品真实菜单树 ================= -->
+<aside class="snav" aria-label="主导航">
+  <span class="nav-sec">我的</span>
+  <button class="nav-item" type="button" data-nav="mine" data-route="#/mine" title="本次未重设计">
+    <svg viewBox="0 0 20 20"><path d="M10 2.8 12.4 8l5.6.5-4.2 3.7 1.2 5.5L10 14.9l-5 2.8 1.2-5.5L2 8.5 7.6 8Z"/></svg>
+    <span>我的工作</span>
+  </button>
+  <button class="nav-item" type="button" data-nav="review" data-route="#/review" title="本次未重设计">
+    <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.2"/><path d="M6.8 10.3 9 12.5l4.4-4.7"/></svg>
+    <span>周回顾</span>
+  </button>
+
+  <span class="nav-sec">规划</span>
+  <button class="nav-item" type="button" data-nav="demands" data-route="#/demands" title="本次未重设计">
+    <svg viewBox="0 0 20 20"><path d="M3.4 4.2h13.2v8.4l-3.2 3.2H3.4Z"/><path d="M13.4 15.8v-3.2h3.2"/><path d="M6.6 8h6.8M6.6 11.2h4.4"/></svg>
+    <span>需求池</span>
+  </button>
+  <button class="nav-item" type="button" data-nav="projects" data-route="#/projects" title="本次未重设计">
+    <svg viewBox="0 0 20 20"><path d="M2.8 6.2a1.8 1.8 0 0 1 1.8-1.8h3.2l1.8 2h6.8a1.8 1.8 0 0 1 1.8 1.8v7.4a1.8 1.8 0 0 1-1.8 1.8H4.6a1.8 1.8 0 0 1-1.8-1.8Z"/></svg>
+    <span>项目</span>
+  </button>
+  <div>
+    <button class="nav-item on" type="button" data-nav="versions" data-group="1" title="版本域：本次重设计范围">
+      <svg viewBox="0 0 20 20"><circle cx="4.4" cy="10" r="1.9"/><circle cx="10" cy="10" r="1.9"/><circle cx="15.6" cy="10" r="1.9"/><path d="M6.3 10h1.8M11.9 10h1.8"/></svg>
+      <span>版本</span><span class="nb">重设计</span>
+    </button>
+    <div class="nav-sub">
+      <button class="nav-sub-item on" type="button" data-nav="versions" data-route="#/phase">版本列表</button>
+      <button class="nav-sub-item" type="button" data-nav="plans" data-route="#/release">发布工作台<span class="chip ok" style="margin-left:6px;height:17px">2 就绪</span></button>
+    </div>
+  </div>
+
+  <span class="nav-sec">交付</span>
+  <button class="nav-item" type="button" data-nav="delivery" data-route="#/delivery">
+    <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.2"/><path d="m6.8 10.2 2.2 2.2 4.4-4.7"/></svg>
+    <span>交付报告</span>
+  </button>
+  <button class="nav-item" type="button" data-nav="workitems" data-route="#/board" title="本次未重设计">
+    <svg viewBox="0 0 20 20"><rect x="3" y="3.6" width="3.8" height="12.8" rx="1.4"/><rect x="8.2" y="3.6" width="3.8" height="8.6" rx="1.4"/><rect x="13.4" y="3.6" width="3.6" height="11" rx="1.4"/></svg>
+    <span>工作项</span>
+  </button>
+  <button class="nav-item" type="button" data-nav="requirements" data-route="#/requirements" title="本次未重设计">
+    <svg viewBox="0 0 20 20"><path d="M4 3.5h8l4 4v9H4Z"/><path d="M12 3.5v4h4M7 11h6M7 14h4"/></svg>
+    <span>文档</span>
+  </button>
+  <button class="nav-item" type="button" data-nav="testcases" data-route="#/testcases" title="本次未重设计">
+    <svg viewBox="0 0 20 20"><rect x="3.2" y="3.2" width="13.6" height="13.6" rx="2.4"/><path d="M6.6 6.2h6.8v2H6.6zM6.6 10.4h3.2M6.6 13.6h3.2"/><path d="M12.6 10.4l1.6 1.6 2-2.4"/></svg>
+    <span>测试</span>
+  </button>
+
+  <span class="nav-sec">分析</span>
+  <button class="nav-item" type="button" data-nav="insight" data-route="#/analysis" title="本次未重设计">
+    <svg viewBox="0 0 20 20"><path d="M3.2 15.6 7.4 9l3.4 3 5.6-8.4"/><path d="M2.6 17.4h14.8"/></svg>
+    <span>洞察</span>
+  </button>
+  <button class="nav-item" type="button" data-nav="settings" data-route="#/settings" title="本次未重设计">
+    <svg viewBox="0 0 20 20"><path d="M5.2 3.4v3.4M5.2 10.2v6.4M10 3.4v6M10 12.8v3.8M14.8 3.4v8.2M14.8 15v1.6"/><circle cx="5.2" cy="8.4" r="1.9"/><circle cx="10" cy="11" r="1.9"/><circle cx="14.8" cy="13.2" r="1.9"/></svg>
+    <span>设置</span>
+  </button>
+
+  <div class="snav-foot">菜单树与 <span class="mono">frontend/index.html</span> 一致；只有「版本」域重画，其余节点标出真实路由。</div>
+</aside>
+
+<main>
+
+<!-- ================= 视图 0：版本列表（#/phase） ================= -->
+<section data-pane="versions" hidden>
+  <div class="crumb">沙漏交付台 <i>/</i> 版本 <i>/</i> 版本列表</div>
+  <div class="vhead">
+    <div>
+      <h1>版本</h1>
+      <p>版本是发布的主语：每行直接回答「这版能不能发、发了几次、下一次计划是什么时候」，不用先进发布工作台再找版本。</p>
+    </div>
+    <div class="head-acts" data-ver-tools></div>
+  </div>
+  <div class="sec">
+    <div class="sec-h" data-ver-hd><b>版本清单</b><span class="right" data-ver-sum></span></div>
+    <div class="sec-b" style="padding:0;overflow:auto" data-ver-body></div>
+  </div>
+  <p class="hint" style="margin-top:10px">主按钮跟着版本状态变：进行中＝记录发布；已发布＝看发布记录；已关闭/取消＝只读，仅历史。</p>
+</section>
+
+<!-- ================= 视图 0b：版本详情（#/version?tab=） ================= -->
+<section data-pane="version" hidden>
+  <div class="crumb" data-vd-crumb>沙漏交付台 <i>/</i> 版本 <i>/</i> 双周迭代发布 v0.9.4</div>
+  <div data-vd></div>
+</section>
+
+<!-- ================= 视图 0c：发布工作台首页（#/release 无参数） ================= -->
+<section data-pane="plans" hidden>
+  <div class="crumb">沙漏交付台 <i>/</i> 版本 <i>/</i> 发布工作台</div>
+  <div class="vhead">
+    <div>
+      <h1>发布工作台</h1>
+      <p>菜单直达时先给「待办的发布计划」清单，按计划的真实生命周期排序：逾期 → 就绪 → 草稿。选一份进发布台，而不是先选版本。</p>
+    </div>
+    <div class="head-acts">
+      <select class="inp" style="width:130px" data-act="plans-owner" aria-label="负责人筛选"><option>我关注的</option><option>全部人</option><option>我负责的</option></select>
+      <select class="inp" style="width:120px" data-act="plans-env" aria-label="环境筛选"><option>全部环境</option><option>生产</option><option>预发布</option></select>
+      <button type="button" class="btn primary" data-act="new-plan">＋ 新建计划</button>
+    </div>
+  </div>
+  <div class="sec">
+    <div class="sec-b" style="padding:0;overflow:auto" data-plans-body></div>
+  </div>
+</section>
+
+<!-- ================= 视图 0d：交付报告衔接（#/delivery） ================= -->
+<section data-pane="delivery" hidden>
+  <div class="crumb">沙漏交付台 <i>/</i> 交付 <i>/</i> 交付报告</div>
+  <div class="vhead">
+    <div>
+      <h1>交付报告</h1>
+      <p>报告不在发布台里生成，只从「已成功的生产记录」一键带出：版本与发布记录选定后进入报告工作台（沿用 11-26 交付报告重设计稿）。</p>
+    </div>
+  </div>
+  <div class="sec">
+    <div class="sec-h"><b>从哪里进入</b></div>
+    <div class="sec-b" data-dl-body></div>
+  </div>
+</section>
+
+<!-- ================= 视图 1：发布计划 ================= -->
+<section data-pane="plan" hidden>
+  <div class="crumb" data-crumb-plan>沙漏交付台 <i>/</i> 版本 <i>/</i> 双周迭代发布 v0.9.4 <i>/</i> 发布工作台 <i>/</i> 发布计划</div>
+  <div class="rtabs" role="tablist" aria-label="发布工作台分区">
+    <button type="button" class="on" data-view="plan">发布计划</button>
+    <button type="button" data-view="record">记录发布</button>
+    <button type="button" data-view="history">发布记录</button>
+    <span class="tail">
+      <span class="verpick">版本 <select data-act="rtab-ver" aria-label="切换版本"></select></span>
+      <button type="button" class="btn sm ghost" data-view="versions">← 回版本列表</button>
+    </span>
+  </div>
+  <div class="vhead">
+    <div>
+      <h1>发布计划</h1>
+      <p>计划只回答"打算怎么发"。四个必填输入 + 一份工作项清单，其余全部折叠或继承。状态是动作，不是下拉框。</p>
+    </div>
+    <div class="head-acts">
+      <select class="inp" style="width:210px" aria-label="切换计划">
+        <option>RP-1127-03 · 就绪 · 12 项</option>
+        <option>RP-1120-02 · 已完成 · 9 项</option>
+        <option>＋ 新建独立计划</option>
+      </select>
+      <button type="button" class="btn" data-act="dup-plan">复制上一份</button>
+    </div>
+  </div>
+
+  <div class="plan-head">
+    <span class="chip ok" data-plan-chip><span class="dot"></span>就绪</span>
+    <span class="meta" data-plan-meta>编号 <b class="mono">RP-1127-03</b> · 修订 <b>4</b> · 生产 · 全量 · 计划 <b>2026-11-27 18:00</b> · 负责人 <b>孔祥劲</b> · 涉及 <b>1</b> 个版本 <b>2</b> 个项目</span>
+    <span class="right" style="margin-left:auto;display:flex;gap:8px">
+      <button type="button" class="btn sm" data-act="watch">关注此计划</button>
+      <button type="button" class="btn sm" data-act="notify">通知 6 人</button>
+    </span>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h"><span class="n">1</span><b>什么时候、谁负责、发到哪</b><span class="right"><span class="chip gray">4 项必填</span></span></div>
+    <div class="sec-b">
+      <div class="grid g4">
+        <div class="f">
+          <label for="p-when">计划发布时间 <em>*</em></label>
+          <input class="inp" id="p-when" type="datetime-local" value="2026-11-27T18:00">
+          <span class="tip">目标窗口，不代表实际发生时间</span>
+        </div>
+        <div class="f">
+          <label for="p-owner">计划负责人 <em>*</em></label>
+          <select class="inp" id="p-owner"><option>孔祥劲</option><option>李维</option><option>王昭</option></select>
+          <span class="tip">可与实际执行人不同</span>
+        </div>
+        <div class="f">
+          <label for="p-env">环境</label>
+          <select class="inp" id="p-env" data-act="plan-env"><option>生产</option><option>预发布</option><option>测试</option></select>
+          <span class="tip">实际不同会进差异表</span>
+        </div>
+        <div class="f">
+          <label for="p-cov">覆盖范围</label>
+          <select class="inp" id="p-cov" data-act="plan-cov"><option>全量</option><option>部分</option><option>覆盖未知</option></select>
+          <span class="tip">决定目标键是否必填</span>
+        </div>
+      </div>
+      <div class="cond" data-plan-target-row style="margin-top:12px">
+        <span>覆盖为「全量」，需要明确部署目标</span>
+        <input class="inp" data-plan-targets value="prod-shanghai-a" placeholder="回车分隔多个目标键" style="flex:1 1 260px;max-width:340px">
+        <span class="muted nowrap">覆盖选「未知」时此行自动隐藏</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h"><span class="n">2</span><b>这次要发哪些工作项</b>
+      <span class="right" data-plan-counts></span>
+    </div>
+    <div class="sec-b">
+      <div class="tools">
+        <input class="inp q" placeholder="搜索标题或编号" aria-label="搜索工作项">
+        <button type="button" class="btn sm" data-act="pick-done">全选已完成</button>
+        <button type="button" class="btn sm" data-act="pick-ver">按版本带入</button>
+        <button type="button" class="btn sm" data-act="pick-br">按分支带入</button>
+        <span class="count"><label class="nowrap" style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-2)"><input type="checkbox" checked style="accent-color:var(--primary)">默认预选已完成项</label></span>
+      </div>
+      <div class="scrollbox" data-plan-list></div>
+      <p class="hint" style="margin-top:8px">未完成项可以进计划（本来就是计划），但记录发布时会被列为差异并要求说明。</p>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h"><span class="n">3</span><b>补充说明（选填）</b></div>
+    <div class="sec-b">
+      <div class="grid g2">
+        <div class="f"><label for="p-note">计划说明</label><textarea class="inp" id="p-note" rows="2" placeholder="这次发布的背景、验收口径"></textarea></div>
+        <div class="f"><label for="p-risk">风险与回滚方案</label><textarea class="inp" id="p-risk" rows="2" placeholder="回滚命令、数据兼容处理、回滚后验证步骤"></textarea></div>
+      </div>
+      <details style="margin-top:10px">
+        <summary style="font-size:11.5px;color:var(--primary-fg);font-weight:600;cursor:pointer">跨版本 / 跨项目范围、关联分支、通知名单</summary>
+        <p class="hint" style="margin-top:7px">默认只发当前版本。需要一次计划覆盖多个版本时在这里勾选；分支与通知跟随范围自动带出。</p>
+      </details>
+    </div>
+  </div>
+
+  <div class="card" data-plan-foot style="padding:12px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"></div>
+</section>
+
+<!-- ================= 视图 2：记录发布 ================= -->
+<section data-pane="record">
+  <div class="crumb">沙漏交付台 <i>/</i> 版本 <i>/</i> <b data-crumb-ver style="font-weight:600;color:var(--text-2)">双周迭代发布 v0.9.4</b> <i>/</i> 发布工作台 <i>/</i> 记录发布</div>
+  <div class="rtabs" role="tablist" aria-label="发布工作台分区">
+    <button type="button" data-view="plan">发布计划</button>
+    <button type="button" class="on" data-view="record">记录发布</button>
+    <button type="button" data-view="history">发布记录</button>
+    <span class="tail">
+      <span class="verpick">版本 <select data-act="rtab-ver" aria-label="切换版本"></select></span>
+      <button type="button" class="btn sm ghost" data-view="versions">← 回版本列表</button>
+    </span>
+  </div>
+  <div class="vhead">
+    <div>
+      <h1>记录发布</h1>
+      <p>默认值来自就绪计划，你只需要确认"实际发了哪些、制品是什么、和计划哪里不一样"。预检随输入自动重算，不需要点预览。</p>
+    </div>
+    <div class="head-acts">
+      <span class="chip plum" data-ver-chip><span class="dot"></span>v0.9.4 · 进行中</span>
+      <span class="chip info" data-check-stamp>检查已同步</span>
+    </div>
+  </div>
+
+  <div class="cond" data-ver-lock hidden style="margin-bottom:12px;border-radius:var(--r-md);border-style:solid;border-color:var(--danger-border);background:var(--danger-soft);color:var(--danger-fg);flex-wrap:wrap"></div>
+
+  <div class="srcbar">
+    <span class="ic">RP</span>
+    <div>
+      <b data-src-title>按计划 RP-1127-03 记录</b>
+      <div class="meta" data-src-meta>生产 · 全量 · 计划 2026-11-27 18:00 · 计划 12 项（已完成 10）· 负责人 孔祥劲</div>
+    </div>
+    <span class="right">
+      <div class="seg" role="group" aria-label="发布来源">
+        <button type="button" data-act="src" data-src="plan" class="on">按计划</button>
+        <button type="button" data-act="src" data-src="self">自己勾选</button>
+        <button type="button" data-act="src" data-src="urgent">紧急记录</button>
+        <button type="button" data-act="src" data-src="rollback">回滚</button>
+      </div>
+    </span>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h"><span class="n">1</span><b>本次实际交付哪些工作项</b>
+      <span class="right">
+        <span class="chip gray" data-sel-count>已选 10 项</span>
+        <label class="nowrap" style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-2)"><input type="checkbox" data-act="only-diff" style="accent-color:var(--primary)">只看与计划不同</label>
+      </span>
+    </div>
+    <div class="sec-b">
+      <div class="tools">
+        <input class="inp q" placeholder="搜索标题或编号" data-act="scope-q" aria-label="搜索本次范围">
+        <button type="button" class="btn sm" data-act="scope-all-done">全选已完成</button>
+        <button type="button" class="btn sm" data-act="scope-plan">恢复计划范围</button>
+        <button type="button" class="btn sm" data-act="scope-clear">清空</button>
+        <span class="count muted">范围改动会实时重算差异，不需要重新预览</span>
+      </div>
+      <div class="scrollbox" data-scope-list></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h"><span class="n">2</span><b>发布事实</b><span class="right"><span class="chip gray">除制品外全部有默认值</span></span></div>
+    <div class="sec-b">
+      <div class="grid g4">
+        <div class="f">
+          <label for="r-when">实际发生时间 <em>*</em></label>
+          <input class="inp" id="r-when" type="datetime-local" data-r-when>
+          <span class="tip"><button type="button" class="btn link" data-act="now">用「现在」</button> · <span data-r-rel>刚刚</span></span>
+        </div>
+        <div class="f">
+          <label for="r-exec">实际执行人 <em>*</em></label>
+          <select class="inp" id="r-exec"><option>孔祥劲（我自己）</option><option>李维</option><option>王昭</option></select>
+          <span class="tip">独立于记录人，便于追溯</span>
+        </div>
+        <div class="f">
+          <label for="r-art">制品标识 <em>*</em></label>
+          <input class="inp mono" id="r-art" data-r-art value="hourglass-server.jar#8b44737" placeholder="粘贴构建号或 commit">
+          <span class="tip" data-r-art-tip>已识别为构建号 8b44737</span>
+        </div>
+        <div class="f">
+          <label for="r-result">实际结果</label>
+          <select class="inp" id="r-result" data-act="result"><option value="success">成功</option><option value="failed">失败</option></select>
+          <span class="tip">失败必须写清失败环节</span>
+        </div>
+      </div>
+      <div class="failbox" data-fail-box hidden style="margin-top:12px">
+        <label for="r-fail">失败环节与现象 <em style="font-style:normal;color:var(--danger-fg)">*</em></label>
+        <textarea class="inp" id="r-fail" rows="2" placeholder="例如：迁移脚本 127 在从库超时，主库已写入，服务未切流量"></textarea>
+        <span class="hint">失败记录不会让版本进入只读，也不会覆盖之前的成功事实。</span>
+      </div>
+      <details style="margin-top:12px" data-adv>
+        <summary style="font-size:11.5px;color:var(--primary-fg);font-weight:600;cursor:pointer">与计划不同的目标键、覆盖范围、制品校验码、说明 · <span class="muted" data-adv-sum>当前与计划一致</span></summary>
+        <div class="grid g4" style="margin-top:10px">
+          <div class="f"><label for="r-tgt">实际目标键</label><input class="inp" id="r-tgt" data-r-tgt value="prod-shanghai-a" placeholder="回车分隔"></div>
+          <div class="f"><label for="r-cov2">实际覆盖</label><select class="inp" id="r-cov2"><option>全量</option><option>部分</option><option>覆盖未知</option></select></div>
+          <div class="f"><label for="r-dig">SHA256（选填）</label><input class="inp mono" id="r-dig" placeholder="64 位十六进制，可留空"></div>
+          <div class="f"><label for="r-note">实际说明（选填）</label><input class="inp" id="r-note" placeholder="补充上下文"></div>
+        </div>
+        <p class="hint" style="margin-top:8px">commit id 是 40 位源码哈希，不要填在 SHA256；这里只放制品文件的完整 64 位哈希。</p>
+      </details>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h"><span class="n">3</span><b>和计划哪里不一样</b>
+      <span class="right"><span class="chip warn" data-diff-count>3 处待说明</span></span>
+    </div>
+    <div class="sec-b" data-diff-body></div>
+  </div>
+</section>
+
+<!-- ================= 视图 3：发布记录 ================= -->
+<section data-pane="history" hidden>
+  <div class="crumb">沙漏交付台 <i>/</i> 版本 <i>/</i> <b data-crumb-ver style="font-weight:600;color:var(--text-2)">双周迭代发布 v0.9.4</b> <i>/</i> 发布工作台 <i>/</i> 发布记录</div>
+  <div class="rtabs" role="tablist" aria-label="发布工作台分区">
+    <button type="button" data-view="plan">发布计划</button>
+    <button type="button" data-view="record">记录发布</button>
+    <button type="button" class="on" data-view="history">发布记录</button>
+    <span class="tail">
+      <span class="verpick">版本 <select data-act="rtab-ver" aria-label="切换版本"></select></span>
+      <button type="button" class="btn sm ghost" data-view="versions">← 回版本列表</button>
+    </span>
+  </div>
+  <div class="vhead">
+    <div>
+      <h1>发布记录</h1>
+      <p>回滚与重部署是记录上的动作，不再藏在「操作」下拉里。每条记录都能看到它引用了哪份计划、偏差了什么、发给了谁。</p>
+    </div>
+    <div class="head-acts">
+      <button type="button" class="btn primary" data-act="new-record">＋ 记录一次发布</button>
+    </div>
+  </div>
+
+  <div class="tools" style="margin-bottom:12px">
+    <div class="seg" role="group" aria-label="记录范围">
+      <button type="button" class="on" data-act="hist-scope" data-scope="ver">本版本</button>
+      <button type="button" data-act="hist-scope" data-scope="all">全部版本</button>
+    </div>
+    <input class="inp q" placeholder="搜索制品、编号或工作项" aria-label="搜索发布记录">
+    <select class="inp" style="width:110px"><option>全部环境</option><option>生产</option><option>预发布</option><option>测试</option></select>
+    <select class="inp" style="width:110px"><option>全部结果</option><option>已发布（生产成功）</option><option>失败</option><option>回滚</option></select>
+    <select class="inp" style="width:120px"><option>近 30 天</option><option>近 90 天</option><option>全部</option></select>
+    <span class="count muted" data-hist-count>本版本 4 次 · 服务端分页 · 每页 20</span>
+  </div>
+
+  <div class="det">
+    <div class="tl" data-tl></div>
+    <aside class="card" style="padding:13px 14px;position:sticky;top:72px" data-detail></aside>
+  </div>
+</section>
+
+<!-- ================= 视图 4：设计说明 ================= -->
+<section data-pane="notes" hidden>
+  <div class="crumb">原型说明 <i>/</i> 现状 → 重设计</div>
+  <div class="vhead"><div><h1>为什么这样改</h1><p>左侧问题全部来自现有代码可数的量，右侧是对应处理。三视图对应你确认的方向：计划轻量、发布台单屏、差异驱动。</p></div></div>
+
+  <div class="sec">
+    <div class="sec-h"><b>菜单与路由映射（原型视图 ↔ 现有页面）</b></div>
+    <div class="sec-b" style="overflow:auto">
+      <table class="map">
+        <thead><tr><th style="width:24%">真实入口</th><th style="width:20%">真实路由</th><th style="width:18%">原型视图</th><th>本次变化</th></tr></thead>
+        <tbody>
+          <tr><td>版本 → 版本列表</td><td class="mono">#/phase?pmode=version</td><td>版本列表</td><td class="good">版本行直接给「记录发布 / 发布计划与记录 / 详情」，主按钮跟版本状态变；不再需要先点进版本</td></tr>
+          <tr><td>跨项目视图 → 全部版本</td><td class="mono">#/phase?pmode=allversions</td><td>版本列表 · 全部版本</td><td class="good">勾选多个版本 → 预填一份新发布计划（沿用现有批量入口）</td></tr>
+          <tr><td>跨项目视图 → 发布日程</td><td class="mono">#/phase?pmode=schedule</td><td>版本列表 · 发布日程</td><td class="good">按计划时间排序，逾期置顶；行内直达「按计划记录」</td></tr>
+          <tr><td>版本卡 → 版本详情</td><td class="mono">#/version?id=&amp;tab=</td><td>版本详情</td><td class="good">页签收为 范围 / 需求 / 发布记录 / 操作记录；发布记录页签内嵌计划摘要 + 时间线，不必再跳页</td></tr>
+          <tr><td>版本 → 发布工作台</td><td class="mono">#/release</td><td>发布工作台 · 计划清单</td><td class="good">菜单直达时先列「待办计划」（逾期 → 就绪 → 草稿），而不是空白页</td></tr>
+          <tr><td>发布工作台 · 计划页签</td><td class="mono">#/release?id=&amp;tab=plan</td><td>发布计划</td><td class="good">4 必填 + 条件字段；状态改为「标记就绪」动作</td></tr>
+          <tr><td>发布工作台 · 实际页签</td><td class="mono">#/release?id=&amp;tab=actual</td><td>记录发布</td><td class="good">单屏发布台 + 常驻动作条 + 差异驱动；预检自动重算</td></tr>
+          <tr><td>发布工作台 · 历史页签</td><td class="mono">#/release?id=&amp;tab=history</td><td>发布记录</td><td class="good">回滚 / 重部署挂在记录行；快照与差异在右侧详情常驻</td></tr>
+          <tr><td>交付报告</td><td class="mono">#/delivery?versionId=&amp;releaseId=</td><td>交付报告（衔接说明）</td><td>只补「从哪条成功记录进入」的带出关系，报告页本体沿用 11-26 稿</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h"><b>完整动线自检（点右侧按钮直接跳到该步）</b></div>
+    <div class="sec-b">
+      <div class="tools" style="margin-bottom:6px">
+        <button type="button" class="btn sm" data-act="walk">▶ 自动跑一遍主流程</button>
+        <span class="hint" data-walk-st>从版本列表进入，经计划就绪 → 记录发布 → 提交 → 回滚，回到版本详情</span>
+      </div>
+      <table class="map">
+        <thead><tr><th style="width:5%">#</th><th style="width:42%">动线</th><th>这一步的可观察结果</th><th style="width:14%"></th></tr></thead>
+        <tbody>
+          <tr><td class="no">1</td><td>版本列表看到 v0.9.4 已过目标日 2 天、已完成 10/12、就绪计划 RP-1127-03</td><td>主按钮＝「记录发布」，次按钮＝「发布计划与记录」</td><td><button type="button" class="btn sm" data-act="go" data-goto="versions">去版本列表</button></td></tr>
+          <tr><td class="no">2</td><td>进版本详情 · 发布记录页签</td><td>计划摘要条 + 时间线 + 状态说明条（进行中：实际发布不改计划快照）</td><td><button type="button" class="btn sm" data-act="go" data-goto="version">去版本详情</button></td></tr>
+          <tr><td class="no">3</td><td>切到发布计划页签，把范围改成 11 项并标记就绪</td><td>缺项清单为空 → 出现「按这份计划记录发布」</td><td><button type="button" class="btn sm" data-act="go" data-goto="plan">去发布计划</button></td></tr>
+          <tr><td class="no">4</td><td>记录发布：默认带出计划范围，只勾差异</td><td>动作条显示「N 处待说明」，点提交自动定位第一条</td><td><button type="button" class="btn sm" data-act="go" data-goto="record">去记录发布</button></td></tr>
+          <tr><td class="no">5</td><td>逐条填原因，或点「用计划值」一键修正</td><td>填完该行转绿；差异清零后动作条变「可以记录了」</td><td><button type="button" class="btn sm" data-act="walk-fill">全部填示例原因</button></td></tr>
+          <tr><td class="no">6</td><td>提交</td><td>写入发布记录、版本进入只读、toast 给出更正路径</td><td><button type="button" class="btn sm" data-act="go" data-goto="history">去发布记录</button></td></tr>
+          <tr><td class="no">7</td><td>记录行点「回滚这次」</td><td>发布台进入回滚态，范围自动限定为原事件子集</td><td><button type="button" class="btn sm" data-act="go" data-goto="history">去记录行</button></td></tr>
+          <tr><td class="no">8</td><td>回到版本列表，对已发布的 v0.9.3 点「回滚最近一次」</td><td>版本上下文切到 v0.9.3，只读横幅 + 范围按 REL-1113-02 快照分组，不会让你新建一批范围</td><td><button type="button" class="btn sm" data-act="rb-last" data-v="v-93">直接回滚 v0.9.3</button></td></tr>
+          <tr><td class="no">9</td><td>发布记录页签切「全部版本」</td><td>时间线默认只看本版本；跨版本视图每行标出所属版本，可直达该版本</td><td><button type="button" class="btn sm" data-act="go" data-goto="history">去发布记录</button></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h"><b>痛点 → 处理对照</b></div>
+    <div class="sec-b" style="overflow:auto">
+      <table class="map">
+        <thead><tr><th class="no">#</th><th style="width:34%">现状（证据）</th><th style="width:34%">重设计后</th><th>取舍</th></tr></thead>
+        <tbody>
+          <tr><td class="no">1</td><td class="bad">一屏 23 字段 + 5 段说明文字；记录一次发布最少 7 个动作</td><td class="good">发布台 3 段：范围 / 事实（4 字段）/ 差异。计划页 4 必填 + 条件字段</td><td>把"数据模型字段"降级为默认值，只在差异时出现</td></tr>
+          <tr><td class="no">2</td><td class="bad">就绪卡写「5/5 可提交」，主按钮却是灰的（两套判定不同源）</td><td class="good">一条动作条一个状态：待说明 N 项 / 可以记录。按钮永远可点，缺口逐项定位</td><td>禁用按钮只隐藏问题，不解释问题</td></tr>
+          <tr><td class="no">3</td><td class="bad">失败原因藏在折叠的「高级与异常字段」，报错还要用户去展开</td><td class="good">结果切「失败」时失败框就地展开并标红必填</td><td>条件必填就地出现，符合填写动线</td></tr>
+          <tr><td class="no">4</td><td class="bad">预检需手点，任何改动即作废（15+ 处失效调用）→ 反复"改一下点一次预览"</td><td class="good">输入停止 400ms 自动重算，右上角显示"检查已同步 · 18:32"</td><td>预检从"动作"变成"状态"，去掉一次往返</td></tr>
+          <tr><td class="no">5</td><td class="bad">偏差原因一个 textarea 常驻最底部，红字在中部，结论在下部，视线三段折返</td><td class="good">逐条差异各带一个原因框，填完即绿；一致项折叠成一句</td><td>原因与差异同屏，无需理解"哪个原因对应哪件事"</td></tr>
+          <tr><td class="no">6</td><td class="bad">计划表单 0 个必填标记，但状态=就绪时强制 4 项</td><td class="good">必填标 <em style="font-style:normal;color:var(--danger-fg)">*</em>；状态改为「标记就绪」动作，未满足时给清单并定位</td><td>校验时机与用户意图对齐</td></tr>
+          <tr><td class="no">7</td><td class="bad">回滚是折叠区里 <span class="mono">操作=回滚</span> 的一个下拉值</td><td class="good">记录行上「回滚这次」按钮 → 发布台进入回滚态，范围/目标自动限定为原事件子集</td><td>危险操作显式化，且少一次手工核对</td></tr>
+          <tr><td class="no">8</td><td class="bad">主 CTA 在 300px 右栏，窄屏堆到表单下方，按钮跑出视口</td><td class="good">底部常驻动作条，全宽固定，任何宽度都在视野内</td><td>去掉右栏，同时消灭"找不到提交按钮"</td></tr>
+          <tr><td class="no">9</td><td class="bad">幂等键、查询原键、重试原完整请求、明确重置——四个内部概念直接给用户</td><td class="good">一条状态横幅："上一条请求状态未知，沙漏已保留，正在确认是否已记录" + 两个按钮</td><td>用户要的是"我这次到底发出去了没"</td></tr>
+          <tr><td class="no">10</td><td class="bad">范围勾选 300px 高、无分页，200 项要先点 4 个筛选才能批量选</td><td class="good">按状态分组 + 组头批量选 + 三个快捷动作（全选已完成 / 恢复计划范围 / 只看差异）</td><td>绝大多数场景是"发已完成的那批"</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h"><b>四条交互原则</b></div>
+    <div class="sec-b">
+      <div class="prin">
+        <div class="p"><b>智能默认</b><span>时间=现在、范围=计划内已完成、环境/覆盖/目标键=继承计划。用户只改动与事实不同的部分，而不是从零填 14 个框。</span></div>
+        <div class="p"><b>差异驱动</b><span>一致的东西不占用注意力：折叠成"其余 5 项与计划一致"。只有不一致才出现一行，并就地要一个原因。</span></div>
+        <div class="p"><b>状态常驻</b><span>底部动作条承载唯一的就绪结论与主按钮；顶部徽标承载唯一的检查时间。不再出现"这里说就绪、那里说不行"。</span></div>
+        <div class="p"><b>术语瘦身</b><span>幂等键、快照令牌、disposition、覆盖未知这类内部词退出界面，只保留业务侧真正会说的：计划、实际、差异、回滚。</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h"><b>落地边界（不改后端也能做）</b></div>
+    <div class="sec-b">
+      <ul style="margin:0;padding-left:18px;font-size:12px;line-height:22px;color:var(--text-2)">
+        <li>范围、事实、差异三段全部由现有 <span class="mono">/release-preview</span> 的返回字段驱动，无需新增接口；把"点按钮才调"改成防抖自动调即可。</li>
+        <li>逐条差异原因仍写入现有的 <span class="mono">deviationReason</span> 单字段：前端按维度分段拼接（<span class="mono">[环境] … [范围] …</span>），后端零改动，历史展示按同样规则拆回。</li>
+        <li>「标记就绪」复用现有 <span class="mono">status=ready</span> 保存路径，只是把校验时机从下拉切换改为按钮触发。</li>
+        <li>回滚入口复用 <span class="mono">operation=rollback + relatedReleaseId</span>，由记录行按钮预填，不再要求用户理解下拉组合。</li>
+        <li>需要后端配合的一项（可选）：差异原因按维度结构化存储，便于报表统计偏差分布；不做也能跑，只是统计要解析文本。</li>
+        <li>发布记录时间线默认只看本版本：VersionRelease 已带 versionIds，现有 <span class="mono">tab=history</span> 就是版本维度查询，「全部版本」只是去掉过滤条件。</li>
+        <li>已发布 / 终态版本进发布台不再提供「新建一批范围」，只提供登记回滚与重部署：与现有 <span class="mono">contentLocked</span> 判定一致，不新增状态。</li>
+        <li>在发布台内切版本 = 换主语：范围勾选、计划摘要、来源态一并重置为该版本默认，回滚快照只在它自己的版本上下文里生效，不会残留上一版本已勾的项。</li>
+        <li>原型数据边界：v0.9.4 展开了工作项与计划范围，v0.9.3 展开了发布快照项（供跨版本回滚演示），其余版本用占位与提示；真实页面按各版本范围加载，交互骨架不变。</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+</main>
+</div><!-- /.app -->
+
+<!-- ================= 常驻动作条（仅记录发布视图） ================= -->
+<div class="bar" data-bar>
+  <div class="bar-in">
+    <div class="st todo" data-bar-st><span class="d"></span><span data-bar-text>3 处差异待说明</span><span class="sub" data-bar-sub></span></div>
+    <button type="button" class="btn sm ghost" data-act="toggle-issues">查看缺项</button>
+    <span class="hint" data-bar-note>记录后版本进入只读；更正请走「回滚 / 重部署」，不会覆盖本次事实。</span>
+    <div class="acts">
+      <button type="button" class="btn" data-act="save-draft">存草稿</button>
+      <button type="button" class="btn primary" data-act="commit">记录发布</button>
+    </div>
+    <div class="issues" data-issues hidden></div>
+  </div>
+</div>
+
+<div class="toast" data-toast></div>
+
+<script>
+(function(){
+"use strict";
+function $(s,r){ return (r||document).querySelector(s); }
+function $$(s,r){ return Array.prototype.slice.call((r||document).querySelectorAll(s)); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+
+/* ---------- 演示数据 ---------- */
+var TODAY="2026-11-27";
+var COLS={todo:"待处理",doing:"进行中",review:"待验收",done:"已完成",canceled:"已取消"};
+var ITEMS=[
+  {id:"Xkt0301",t:"外接客户底表增加解绑时间字段",k:"需求",col:"done",done:"11-13 09:20",ow:"李维",plan:true},
+  {id:"Xkt0302",t:"客户信息台账引入版本概念",k:"需求",col:"done",done:"11-13 10:05",ow:"李维",plan:true},
+  {id:"Xkt0305",t:"发布记录列表补充制品标识列",k:"优化",col:"done",done:"11-14 15:40",ow:"王昭",plan:true},
+  {id:"Xkt0308",t:"交付报告导出 CSV 表头缺失",k:"缺陷",col:"done",done:"11-15 11:22",ow:"陈静",plan:true},
+  {id:"Xkt0311",t:"文档回收站与分享复制开关",k:"需求",col:"done",done:"11-18 09:10",ow:"孔祥劲",plan:true},
+  {id:"Xkt0314",t:"制品 SHA256 改为选填",k:"优化",col:"done",done:"11-19 14:30",ow:"王昭",plan:true},
+  {id:"Xkt0317",t:"发布维护权限空间级配置",k:"需求",col:"done",done:"11-20 16:02",ow:"孔祥劲",plan:true},
+  {id:"Xkt0320",t:"需求文档阅读页目录大纲",k:"需求",col:"done",done:"11-23 10:45",ow:"陈静",plan:true},
+  {id:"Xkt0322",t:"代码块复制按钮与折行开关",k:"优化",col:"done",done:"11-24 09:33",ow:"李维",plan:true},
+  {id:"Xkt0325",t:"流程引擎历史发布判定补录",k:"缺陷",col:"done",done:"11-26 17:20",ow:"王昭",plan:true},
+  {id:"Xkt0328",t:"业务线索登记独立入口",k:"需求",col:"review",done:"",ow:"陈静",plan:true},
+  {id:"Xkt0274",t:"版本范围调整后的通知重算",k:"缺陷",col:"doing",done:"",ow:"孔祥劲",plan:true},
+  {id:"Xkt0331",t:"分享页复制按钮在 Safari 无效",k:"缺陷",col:"done",done:"11-26 11:02",ow:"陈静",plan:false},
+  {id:"Xkt0288",t:"成员负载看板：容量按本人计时设置计算",k:"需求",col:"done",done:"11-12 16:20",ow:"孔祥劲",plan:false,ver:"v-93"},
+  {id:"Xkt0285",t:"甘特图上下分区与可拖拽分隔条",k:"需求",col:"done",done:"11-12 18:05",ow:"李维",plan:false,ver:"v-93"},
+  {id:"Xkt0281",t:"用例库全部项目三级树与右键就地维护",k:"需求",col:"done",done:"11-11 15:40",ow:"王昭",plan:false,ver:"v-93"},
+  {id:"Xkt0277",t:"项目列表自定义排序",k:"优化",col:"done",done:"11-11 10:12",ow:"陈静",plan:false,ver:"v-93"},
+  {id:"Xkt0273",t:"我的工作：行高基准与列宽双形态",k:"优化",col:"done",done:"11-10 14:22",ow:"李维",plan:false,ver:"v-93"},
+  {id:"Xkt0269",t:"状态配置与执行交付解耦",k:"需求",col:"done",done:"11-10 09:35",ow:"孔祥劲",plan:false,ver:"v-93"},
+  {id:"Xkt0266",t:"里程碑机制：项目级独立对象",k:"需求",col:"done",done:"11-09 17:50",ow:"王昭",plan:false,ver:"v-93"},
+  {id:"Xkt0262",t:"报表口径：无迭代对象用版本承载",k:"优化",col:"done",done:"11-09 11:15",ow:"陈静",plan:false,ver:"v-93"},
+  {id:"Xkt0258",t:"交付报告分组重设计与 CSV 导出",k:"需求",col:"done",done:"11-06 15:02",ow:"孔祥劲",plan:false,ver:"v-93"}
+];
+var byId={}; ITEMS.forEach(function(i){ i.ver=i.ver||"v-94"; byId[i.id]=i; });
+byId["Xkt0331"].ver="v-95";
+var PLAN={no:"RP-1127-03",env:"生产",cov:"全量",when:"2026-11-27 18:00",owner:"孔祥劲",targets:["prod-shanghai-a"],ids:ITEMS.filter(function(i){return i.plan;}).map(function(i){return i.id;})};
+var PLAN_VER="v-94"; /* 原型只展开这一个版本的工作项与计划范围 */
+var CHECKS=[
+  {lv:"blk",dim:"发布检查",old:"用例集「交付回归」有 2 条未通过",noAdopt:true,fix:"确认这两条与本批无关，或先修复"}
+];
+
+/* 发布记录挂在版本上：ver 字段对应 ProjectVersion，时间线默认只看本版本 */
+var HISTORY=[
+  {no:"REL-1127-01",ver:"v-94",day:"2026-11-27",time:"12:14",env:"生产",res:"success",op:"部署",art:"hourglass-server.jar#8b44737",n:10,exec:"孔祥劲",dev:2,plan:"RP-1120-02",items:["Xkt0301","Xkt0302","Xkt0305","Xkt0308","Xkt0311","Xkt0314","Xkt0317","Xkt0320","Xkt0322","Xkt0325"],notes:"生产全量部署，目标键 prod-shanghai-a。偏差：计划内 2 项未完成未纳入。"},
+  {no:"REL-1126-03",ver:"v-94",day:"2026-11-26",time:"20:05",env:"预发布",res:"failed",op:"部署",art:"hourglass-server.jar#1c0de99",n:4,exec:"李维",dev:0,plan:"RP-1126-02",items:["Xkt0317","Xkt0320","Xkt0322","Xkt0325"],notes:"迁移脚本 127 在预发布从库超时，主库已写入；服务未切流量。"},
+  {no:"REL-1126-02",ver:"v-94",day:"2026-11-26",time:"21:40",env:"预发布",res:"success",op:"重部署",art:"hourglass-server.jar#7a2f55c",n:4,exec:"李维",dev:1,plan:"RP-1126-02",items:["Xkt0317","Xkt0320","Xkt0322","Xkt0325"],notes:"引用 REL-1126-03 重试成功。"},
+  {no:"REL-1125-01",ver:"v-94",day:"2026-11-25",time:"09:12",env:"生产",res:"rollback",op:"回滚",art:"hourglass-server.jar#5e11b80",n:3,exec:"王昭",dev:0,plan:"—",items:["Xkt0308","Xkt0311","Xkt0314"],notes:"回滚 REL-1124-05：交付报告导出出现乱码，先撤这批。"},
+  {no:"REL-1121-01",ver:"v-100",day:"2026-11-21",time:"17:30",env:"预发布",res:"success",op:"部署",art:"hourglass-server.jar#92ce40a",n:5,exec:"李维",dev:0,plan:"RP-1128-01",items:["Xkt0301","Xkt0302","Xkt0299","Xkt0296","Xkt0293"],notes:"外接客户底表解绑时间先过预发布，生产窗口排在 11-28。"},
+  {no:"REL-1113-02",ver:"v-93",day:"2026-11-13",time:"20:41",env:"生产",res:"success",op:"部署",art:"hourglass-server.jar#4d70b18",n:9,exec:"孔祥劲",dev:0,plan:"RP-1113-01",items:["Xkt0288","Xkt0285","Xkt0281","Xkt0277","Xkt0273","Xkt0269","Xkt0266","Xkt0262","Xkt0258"],notes:"成员负载 / 甘特分区 / 用例三级树整批上生产，与计划一致。"},
+  {no:"REL-1113-01",ver:"v-93",day:"2026-11-13",time:"17:05",env:"预发布",res:"success",op:"部署",art:"hourglass-server.jar#6a1f7d3",n:9,exec:"孔祥劲",dev:0,plan:"RP-1113-01",items:["Xkt0288","Xkt0285","Xkt0281","Xkt0277","Xkt0273","Xkt0269","Xkt0266","Xkt0262","Xkt0258"],notes:"预发布验证通过，用例集「交付回归」全绿。"},
+  {no:"REL-1106-03",ver:"v-93",day:"2026-11-06",time:"15:22",env:"预发布",res:"failed",op:"部署",art:"hourglass-server.jar#0b83e52",n:6,exec:"王昭",dev:0,plan:"RP-1113-01",items:["Xkt0288","Xkt0285","Xkt0281","Xkt0277","Xkt0273","Xkt0269"],notes:"负载口径与工时表联查超时，回退这批改动后 11-13 重发。"},
+  {no:"REL-1024-01",ver:"v-92",day:"2026-10-24",time:"19:02",env:"生产",res:"success",op:"部署",art:"hourglass-server.jar#b5c17ee",n:10,exec:"孔祥劲",dev:1,plan:"RP-1024-01",items:["Xkt0241","Xkt0238","Xkt0234","Xkt0230","Xkt0226","Xkt0222","Xkt0218","Xkt0215","Xkt0211","Xkt0207"],notes:"需求池单板 + 工作页双形态上线，1 项遗留到 v0.9.3。"},
+  {no:"REL-1017-02",ver:"v-92",day:"2026-10-17",time:"16:40",env:"预发布",res:"success",op:"部署",art:"hourglass-server.jar#77ab904",n:8,exec:"李维",dev:0,plan:"RP-1024-01",items:["Xkt0241","Xkt0238","Xkt0234","Xkt0230","Xkt0226","Xkt0222","Xkt0218","Xkt0215"],notes:"预发布灰度 1 天无异常。"}
+];
+
+/* ---------- 版本 / 计划 / 详情页演示数据（对齐 ProjectVersion 字段） ---------- */
+var PROJS=["客户信息平台","外接客户平台","技术平台"];
+var VSTATUS={planned:["计划中","gray"],active:["进行中","info"],released:["已发布","ok"],closed:["已关闭","gray"],canceled:["已取消","bad"]};
+var VERSIONS=[
+ {id:"v-94",name:"双周迭代发布 v0.9.4",proj:"客户信息平台",status:"active",start:"2026-11-10",target:"2026-11-25",total:12,done:10,over:2,blocked:1,est:96,act:104,dev:-8,plan:"RP-1127-03",planState:"ready",planAt:"2026-11-27 18:00",relCount:4,lastRel:"REL-1127-01 · 生产 · 成功 · 11-27 12:14",rev:12,desc:"客户台账版本概念、发布记录制品列、文档回收站与分享开关、需求文档阅读体验等 12 项。"},
+ {id:"v-95",name:"双周迭代 v0.9.5",proj:"客户信息平台",status:"planned",start:"2026-11-28",target:"2026-12-11",total:9,done:1,over:0,blocked:0,est:72,act:6,dev:0,plan:"—",planState:"none",planAt:"",relCount:0,lastRel:"",rev:3,desc:"业务线索登记、跨版本范围重算、Safari 兼容修复后续项。"},
+ {id:"v-93",name:"双周迭代 v0.9.3",proj:"客户信息平台",status:"released",start:"2026-10-27",target:"2026-11-13",total:9,done:9,over:0,blocked:0,est:110,act:118,dev:7,plan:"RP-1113-01",planState:"completed",planAt:"2026-11-13 18:00",relCount:3,lastRel:"REL-1113-02 · 生产 · 成功 · 11-13 20:41",rev:21,desc:"成员负载、甘特分区、用例三级树。"},
+ {id:"v-92",name:"双周迭代 v0.9.2",proj:"客户信息平台",status:"closed",start:"2026-10-13",target:"2026-10-24",total:11,done:10,over:1,blocked:0,est:88,act:91,dev:3,plan:"RP-1024-01",planState:"completed",planAt:"2026-10-24 18:00",relCount:2,lastRel:"REL-1024-01 · 生产 · 成功 · 10-24 19:02",rev:18,desc:"需求池单板、工作页双形态。"},
+ {id:"v-100",name:"外接客户上线 v1.0",proj:"外接客户平台",status:"active",start:"2026-11-16",target:"2026-11-28",total:7,done:5,over:2,blocked:1,est:64,act:71,dev:11,plan:"RP-1128-01",planState:"ready",planAt:"2026-11-28 10:00",relCount:1,lastRel:"REL-1121-01 · 预发布 · 成功 · 11-21 17:30",rev:9,desc:"底表解绑时间、版本概念对接、客户台账导入。"},
+ {id:"v-06",name:"报表重构 v0.6",proj:"技术平台",status:"active",start:"2026-11-20",target:"2026-12-04",total:5,done:3,over:1,blocked:0,est:40,act:44,dev:10,plan:"RP-1126-04",planState:"draft",planAt:"2026-11-26 19:00",relCount:0,lastRel:"",rev:5,desc:"燃尽与速度图口径重构。"}
+];
+var PLANS=[
+ {no:"RP-1126-04",proj:"技术平台",ver:"报表重构 v0.6",verId:"v-06",at:"2026-11-26 19:00",env:"预发布",n:5,done:3,state:"draft",owner:"王昭",gap:"草稿未就绪，记录发布会被拦下"},
+ {no:"RP-1127-03",proj:"客户信息平台",ver:"双周迭代发布 v0.9.4",verId:"v-94",at:"2026-11-27 18:00",env:"生产",n:12,done:10,state:"ready",owner:"孔祥劲",gap:"今日 18:00 窗口"},
+ {no:"RP-1128-01",proj:"外接客户平台",ver:"外接客户上线 v1.0",verId:"v-100",at:"2026-11-28 10:00",env:"生产",n:7,done:5,state:"ready",owner:"李维",gap:"逾期 2 项 · 阻塞 1"},
+ {no:"RP-1120-02",proj:"客户信息平台",ver:"双周迭代 v0.9.3",verId:"v-93",at:"2026-11-20 18:00",env:"生产",n:9,done:9,state:"completed",owner:"孔祥劲",gap:"已完成 · 引用 REL-1127-01"}
+];
+var VDEMANDS=[
+ {id:"Xq2201",t:"客户信息台账支持按版本回溯",st:"已排期",task:"Xkt0302"},
+ {id:"Xq2208",t:"发布记录列表补制品标识与偏差列",st:"已排期",task:"Xkt0305"},
+ {id:"Xq2215",t:"文档分享页可复制正文",st:"已排期",task:"Xkt0322"},
+ {id:"Xq2231",t:"业务线索外部登记页",st:"已排期",task:"Xkt0328"},
+ {id:"Xq2240",t:"外接客户底表解绑时间",st:"跨版本",task:"—"}
+];
+var VLOGS=[
+ {at:"2026-11-27 12:14",op:"记录发布",who:"孔祥劲",obj:"REL-1127-01 · 生产 · 成功 · 10 项"},
+ {at:"2026-11-27 09:40",op:"调整范围",who:"孔祥劲",obj:"加入 Xkt0325（上线前归入）"},
+ {at:"2026-11-26 18:02",op:"编辑版本",who:"孔祥劲",obj:"目标日发布确认"},
+ {at:"2026-11-20 18:20",op:"记录发布",who:"李维",obj:"REL-1120-05 · 预发布 · 成功 · 9 项"},
+ {at:"2026-11-10 10:05",op:"开始开发",who:"孔祥劲",obj:"计划中 → 进行中"}
+];
+function verById(id){ return VERSIONS.filter(function(v){ return v.id===id; })[0] || VERSIONS[0]; }
+function latestProdIdx(vid){ for(var z=0;z<HISTORY.length;z++){ var h=HISTORY[z];
+  if(h.ver===vid&&h.res==="success"&&h.env==="生产"){ return z; } } return -1; }
+function verName(id){ return verById(id).name; }
+function vTag(v){ var m=VSTATUS[v.status]||[v.status,"gray"]; return '<span class="chip '+m[1]+'"><span class="dot"></span>'+m[0]+'</span>'; }
+function vLocked(v){ return v.status==="released"||v.status==="closed"||v.status==="canceled"; }
+function vOver(v){ return !vLocked(v)&&v.target<TODAY; }
+function daysPast(d){ return Math.round((new Date(TODAY)-new Date(d))/86400000); }
+function progHTML(v){ var p=v.total?Math.round(v.done*100/v.total):0;
+  return '<span class="prog"><span class="bar-t"><i class="'+(p>=100?"":"part")+'" style="width:'+p+'%"></i></span><span>'+v.done+'/'+v.total+' · '+p+'%</span></span>'; }
+function planChipHTML(v){
+  if(v.planState==="none") return '<span class="chip gray">无计划</span>';
+  if(v.planState==="ready") return '<span class="chip ok"><span class="dot"></span>就绪 '+v.plan+'</span>';
+  if(v.planState==="draft") return '<span class="chip warn"><span class="dot"></span>草稿 '+v.plan+'</span>';
+  return '<span class="chip gray">'+v.plan+' 已完成</span>';
+}
+function itemPub(id){ var ok=HISTORY.some(function(h){ return h.res==="success"&&h.env==="生产"&&h.items.indexOf(id)!==-1; }); return ok; }
+
+/* ---------- 渲染：版本列表 ---------- */
+function renderVerTools(){
+  var host=$("[data-ver-tools]"); if(!host) return;
+  var modes=[["version","按版本"],["allversions","全部版本"],["schedule","发布日程"]];
+  var opts=["__all__"].concat(PROJS).map(function(p){
+    return '<option'+(state.proj===p?" selected":"")+'>'+ (p==="__all__"?"全部项目":p) +'</option>'; }).join("");
+  host.innerHTML=(state.verMode==="version"?'<select class="inp" style="width:140px" data-act="ver-proj" aria-label="项目范围">'+opts+'</select>':"")
+    +'<div class="seg" role="group" aria-label="版本口径">'+modes.map(function(m){
+      return '<button type="button" data-act="ver-mode" data-mode="'+m[0]+'"'+(state.verMode===m[0]?' class="on"':'')+'>'+m[1]+'</button>'; }).join("")+'</div>'
+    +'<button type="button" class="btn primary" data-act="new-ver">＋ 新建版本</button>';
+}
+function renderVerList(){
+  renderVerTools();
+  var body=$("[data-ver-body]"), sum=$("[data-ver-sum]"), hd=$("[data-ver-hd] b"); if(!body) return;
+  var mode=state.verMode;
+  if(mode==="schedule"){
+    hd.textContent="发布日程";
+    var rows=PLANS.filter(function(p){ return p.state!=="completed"; });
+    sum.innerHTML='<span class="chip warn"><span class="dot"></span>'+rows.length+' 份未完成</span><span class="chip gray">按计划时间升序 · 服务端分页</span>';
+    body.innerHTML='<table class="vtbl"><thead><tr><th>计划时间</th><th>项目 · 版本</th><th>计划号</th><th class="num">范围</th><th>状态</th><th>备注</th><th style="text-align:right">操作</th></tr></thead><tbody>'
+      +rows.map(function(p){ var over=p.at<TODAY+" 00:00";
+        return '<tr><td class="nowrap"><b>'+p.at.replace(" "," ")+'</b>'+(over?' <span class="chip bad"><span class="dot"></span>已过窗口</span>':'')+'</td>'
+        +'<td>'+esc(p.proj)+' · <button type="button" class="name" data-act="ver-open" data-v="'+p.verId+'">'+esc(p.ver)+'</button></td>'
+        +'<td class="mono">'+p.no+'</td><td class="num">'+p.n+' 项 · 已完成 '+p.done+'</td>'
+        +'<td>'+(p.state==="ready"?'<span class="chip ok"><span class="dot"></span>就绪</span>':'<span class="chip warn"><span class="dot"></span>草稿</span>')+'</td>'
+        +'<td class="muted">'+esc(p.gap)+'</td>'
+        +'<td><div class="acts"><button type="button" class="btn sm" data-act="plan-edit" data-v="'+p.verId+'" data-no="'+p.no+'">改计划</button>'
+        +'<button type="button" class="btn sm '+(p.state==="ready"?"primary":"")+'" data-act="rec" data-v="'+p.verId+'">按计划记录</button></div></td></tr>'; }).join("")
+      +'</tbody></table>';
+    return;
+  }
+  var all=mode==="allversions";
+  var list=all?VERSIONS:VERSIONS.filter(function(v){ return state.proj==="__all__"||v.proj===state.proj; });
+  hd.textContent=all?"全部版本（跨项目）":(state.proj==="__all__"?"版本清单":"版本清单 · "+state.proj);
+  sum.innerHTML='<span class="chip gray">'+list.length+' 个版本</span><span class="chip info"><span class="dot"></span>'+list.filter(function(v){return v.status==="active";}).length+' 进行中</span>'
+    +'<span class="chip warn"><span class="dot"></span>'+list.filter(vOver).length+' 已过目标日</span>';
+  body.innerHTML=(all&&state.selVers.length?'<div class="cond" style="margin:10px;border-radius:var(--r-md)"><b>已选 '+state.selVers.length+' 个版本</b>'
+      +'<span>把勾选版本的已完成工作项合并预填为一份跨版本发布计划</span><span style="margin-left:auto;display:flex;gap:6px">'
+      +'<button type="button" class="btn sm primary" data-act="batch-plan">生成计划草稿</button>'
+      +'<button type="button" class="btn sm ghost" data-act="clear-vers">清空</button></span></div>':"")
+    +'<table class="vtbl"><thead><tr>'+(all?'<th style="width:34px"></th>':"")+'<th>版本</th><th>状态</th><th class="num">目标日</th>'
+    +(all?'<th>项目</th>':"")+'<th style="width:190px">范围进度</th><th>发布计划</th><th>最近发布</th><th style="text-align:right">操作</th></tr></thead><tbody>'
+    +list.map(function(v){
+      return '<tr class="'+(state.selVers.indexOf(v.id)!==-1?"sel":"")+'">'
+        +(all?'<td><input type="checkbox" data-act="ver-pick" data-v="'+v.id+'" '+(state.selVers.indexOf(v.id)!==-1?"checked":"")+' aria-label="选择 '+esc(v.name)+'"></td>':"")
+        +'<td class="col-name"><button type="button" class="name" data-act="ver-open" data-v="'+v.id+'" title="打开版本详情">'+esc(v.name)+'</button>'
+        +(v.desc?'<div class="muted" style="font-size:11px;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(v.desc)+'</div>':"")+'</td>'
+        +'<td>'+vTag(v)+(vLocked(v)&&v.status==="released"?' <span class="chip gray" title="已有成功生产发布">只读</span>':"")+'</td>'
+        +'<td class="num nowrap">'+v.target+(vOver(v)?' <span class="chip bad"><span class="dot"></span>逾期</span>':"")+'</td>'
+        +(all?'<td class="muted">'+esc(v.proj)+'</td>':"")
+        +'<td>'+progHTML(v)+'</td>'
+        +'<td>'+planChipHTML(v)+'</td>'
+        +'<td class="muted nowrap" style="font-size:11px">'+(v.lastRel?esc(v.lastRel):"—")+'</td>'
+        +'<td><div class="acts">'+verActs(v)+'</div></td></tr>'; }).join("")
+    +'</tbody></table>';
+}
+function verActs(v){
+  if(v.status==="active") return '<button type="button" class="btn sm" data-act="plan-edit" data-v="'+v.id+'">发布计划与记录</button>'
+    +'<button type="button" class="btn sm primary" data-act="rec" data-v="'+v.id+'">记录发布</button>';
+  if(v.status==="planned") return (v.planState==="none"
+      ?'<button type="button" class="btn sm primary" data-act="new-plan" data-v="'+v.id+'">新建发布计划</button>'
+      :'<button type="button" class="btn sm" data-act="plan-edit" data-v="'+v.id+'">改计划</button><button type="button" class="btn sm" data-act="rec" data-v="'+v.id+'">按计划记录</button>');
+  if(v.status==="released") return '<button type="button" class="btn sm" data-act="hist-open" data-v="'+v.id+'">看发布记录</button>'
+    +'<button type="button" class="btn sm ghost" data-act="rb-last" data-v="'+v.id+'">回滚最近一次</button>';
+  return '<button type="button" class="btn sm ghost" data-act="hist-open" data-v="'+v.id+'">看历史</button>';
+}
+
+/* ---------- 渲染：发布工作台首页（计划清单） ---------- */
+function renderPlans(){
+  var body=$("[data-plans-body]"); if(!body) return;
+  var rows=PLANS.slice().sort(function(a,b){ var w={over:0,ready:1,draft:2,completed:3};
+    return (w[a.state]||9)-(w[b.state]||9); });
+  body.innerHTML='<table class="vtbl"><thead><tr><th>计划号</th><th>项目 · 版本</th><th class="num">计划时间</th>'
+    +'<th>环境</th><th class="num">范围</th><th>状态</th><th style="text-align:right">操作</th></tr></thead><tbody>'
+    +rows.map(function(p){ var v=verById(p.verId);
+      return '<tr><td class="mono">'+p.no+(p.state==="ready"&&v.status==="active"?' <span class="badge b-new">可记录</span>':"")+'</td>'
+      +'<td>'+esc(p.proj)+' · <button type="button" class="name" data-act="ver-open" data-v="'+p.verId+'">'+esc(p.ver)+'</button></td>'
+      +'<td class="num nowrap">'+p.at+'</td><td>'+p.env+'</td><td class="num">'+p.n+' 项 / 已完成 '+p.done+'</td>'
+      +'<td>'+(p.state==="ready"?'<span class="chip ok"><span class="dot"></span>就绪</span>'
+        :p.state==="draft"?'<span class="chip warn"><span class="dot"></span>草稿</span>'
+        :'<span class="chip gray">已完成</span>')+'<div class="muted" style="font-size:10.5px">'+esc(p.gap)+'</div></td>'
+      +'<td><div class="acts"><button type="button" class="btn sm" data-act="plan-edit" data-v="'+p.verId+'">'+(p.state==="completed"?"看计划快照":"进计划")+'</button>'
+      +(p.state==="completed"
+        ?'<button type="button" class="btn sm" data-act="hist-open" data-v="'+p.verId+'">发布记录</button>'
+         +'<button type="button" class="btn sm ghost" data-act="rb-last" data-v="'+p.verId+'">登记回滚</button>'
+        :'<button type="button" class="btn sm '+(p.state==="ready"?"primary":"")+'" data-act="rec" data-v="'+p.verId+'">按计划记录</button>')+'</div></td></tr>'; }).join("")
+    +'</tbody></table>';
+}
+
+/* ---------- 渲染：版本详情 ---------- */
+function renderVd(){
+  var host=$("[data-vd]"); if(!host) return;
+  var v=verById(state.ver);
+  var lock=vLocked(v);
+  var crumb=$("[data-vd-crumb]");
+  if(crumb) crumb.innerHTML='沙漏交付台 <i>/</i> 版本 <i>/</i> '+esc(v.name);
+  var tabs=[["scope","范围",v.total],["demands","需求",VDEMANDS.length],["releases","发布记录",v.relCount],["log","操作记录",VLOGS.length]];
+  var menu='<button type="button" data-act="vtool" data-tool="plan">计划与历史</button>'
+    +'<button type="button" data-act="vtool" data-tool="delivery">交付报告</button>'
+    +'<button type="button" data-act="vtool" data-tool="branches">本版本分支</button>'
+    +'<button type="button" data-act="vtool" data-tool="hours">工时与构成</button>'
+    +'<span class="ms">生命周期</span>'
+    +(v.status==="planned"?'<button type="button" data-act="vtool" data-tool="start">开始开发</button>':"")
+    +'<button type="button" data-act="vtool" data-tool="close">关闭版本</button>'
+    +'<button type="button" class="danger" data-act="vtool" data-tool="cancel">取消版本</button>';
+  var acts=[];
+  if(!lock){ acts.push('<button type="button" class="btn sm" data-act="vtool" data-tool="edit">编辑</button>');
+    acts.push('<button type="button" class="btn sm" data-act="vtool" data-tool="tasks">管理范围</button>'); }
+  acts.push('<span class="v-more"><button type="button" class="btn sm" data-act="vmore" aria-haspopup="true" aria-expanded="false">更多 ▾</button>'
+    +'<div class="v-more-menu" data-vmore hidden role="menu">'+menu+'</div></span>');
+  acts.push(lock?'<button type="button" class="btn sm primary" data-act="hist-open" data-v="'+v.id+'">看发布记录</button>'
+    :'<button type="button" class="btn sm primary" data-act="rec" data-v="'+v.id+'">记录实际发布</button>');
+  var note=lock?(v.status==="released"
+      ?'已正式发布：范围与计划快照只读；如需更正，请在发布工作台登记回滚或重部署，不覆盖本次事实。'
+      :'已终态：不再接受编辑与新发布，工作项关联与历史保留。')
+    :'当前为'+(VSTATUS[v.status]||["—"])[0]+'：可以调整范围；实际发布时间与结果在发布工作台记录，不会改动计划快照。';
+  host.innerHTML='<header class="vdh">'
+    +'<div class="vdh-top"><button type="button" class="vback" data-act="vd-back">← 版本</button>'
+    +'<h1>'+esc(v.name)+'</h1>'+vTag(v)
+    +(lock?'<span class="chip gray">🔒 '+(v.status==="released"?"正式发布后只读":"已终态")+'</span>':"")
+    +'<span class="sp"></span>'
+    +'<label class="verpick">版本 <select data-act="vd-switch" aria-label="切换到同项目其他版本">'+VERSIONS.map(function(x){
+      return '<option value="'+x.id+'"'+(x.id===v.id?" selected":"")+'>'+esc(x.name)+'（'+(VSTATUS[x.status]||["—"])[0]+'）</option>'; }).join("")+'</select></label>'
+    +'</div>'
+    +'<div class="vd-sub"><button type="button" data-act="vtool" data-tool="project">'+esc(v.proj)+'</button><span class="vdot">·</span>'
+    +'<span>'+v.start+' ~ '+v.target+'</span>'+(vOver(v)?'<span class="chip bad"><span class="dot"></span>已过目标日 '+daysPast(v.target)+' 天</span>':"")+'<span class="vdot">·</span>'
+    +'<span>修订 '+v.rev+'</span>'
+    +(v.lastRel?'<span class="vdot">·</span><span>最近发布 '+esc(v.lastRel)+'</span>':"")+'</div>'
+    +'<p class="hint" style="margin-top:7px;max-width:820px">'+esc(v.desc)+'</p>'
+    +'<div class="head-acts" style="margin:11px 0 0">'+acts.join("")+'</div>'
+    +'<div class="vdh-note '+(lock?(v.status==="released"?"is-success":"is-mute"):"")+'"><span>'+(lock?"✓":"ⓘ")+'</span><span>'+note+'</span></div>'
+    +'<div class="kpis">'
+    +'<button type="button" class="kpi" data-act="vd-tab" data-tab="scope"><span class="k">范围</span><b>'+v.total+'<small> 项</small></b><span class="f2">需求 / 缺陷 / 任务混合</span></button>'
+    +'<button type="button" class="kpi ok" data-act="vd-tab" data-tab="scope"><span class="k">完成</span><b>'+v.done+'<small> / '+v.total+'</small></b><span class="f2">'+Math.round(v.done*100/v.total)+'% 已完成</span></button>'
+    +'<button type="button" class="kpi" data-act="vtool" data-tool="hours"><span class="k">预估 / 实际</span><b>'+v.est+'h</b><span class="f2">实际 '+v.act+'h · 偏差 '+(v.dev>0?"+":"")+v.dev+'%</span></button>'
+    +'<button type="button" class="kpi '+(v.over+v.blocked?"warn":"")+'" data-act="vd-tab" data-tab="scope"><span class="k">风险</span><b>'+(v.over+v.blocked)+'</b><span class="f2">'+v.over+' 逾期 · '+v.blocked+' 阻塞</span></button>'
+    +'</div>'
+    +'<nav class="vtabs" aria-label="版本详情分区">'+tabs.map(function(t){
+      return '<button type="button" class="vtab'+(state.vdTab===t[0]?" on":"")+'" data-act="vd-tab" data-tab="'+t[0]+'">'+t[1]+'<b>'+t[2]+'</b></button>'; }).join("")+'</nav>'
+    +'</header>'
+    +'<div data-vd-body>'+vdBodyHTML(v)+'</div>';
+}
+function vdBodyHTML(v){
+  if(state.vdTab==="scope"){
+    var its=ITEMS.filter(function(i){ return i.ver===v.id; });
+    return '<div class="sec"><div class="sec-h"><b>范围内的</b><span class="chip gray">'+its.length+' 项</span><span class="right">'
+      +(vLocked(v)?'<span class="chip gray">内容只读，调整范围请走新发布记录</span>':'<button type="button" class="btn sm" data-act="vtool" data-tool="tasks">管理范围</button>')+'</span></div>'
+      +'<div class="sec-b" style="padding:0;overflow:auto"><table class="vtbl"><thead><tr><th>工作项</th><th>状态</th><th class="num">生产发布</th><th>负责人</th></tr></thead><tbody>'
+      +(its.length?its.map(function(i){ return '<tr><td class="col-name">'+esc(i.t)+' <span class="muted mono">'+i.id+'</span></td>'
+        +'<td>'+COLS[i.col]+(i.done?' <span class="muted">· '+i.done+'</span>':"")+'</td>'
+        +'<td class="num">'+(itemPub(i.id)?'<span class="chip ok"><span class="dot"></span>已发布</span>':'<span class="chip gray">未发布</span>')+'</td>'
+        +'<td class="muted">'+i.ow+'</td></tr>'; }).join("")
+        :'<tr><td colspan="4" class="hint" style="padding:14px">该版本的工作项在原型数据里未展开，演示以 v0.9.4 为准。</td></tr>')
+      +'</tbody></table></div></div>';
+  }
+  if(state.vdTab==="demands"){
+    return '<div class="sec"><div class="sec-b" style="padding:0;overflow:auto"><table class="vtbl"><thead><tr><th>需求</th><th>排期</th><th>对应工作项</th></tr></thead><tbody>'
+      +VDEMANDS.map(function(d){ return '<tr><td class="col-name">'+esc(d.t)+' <span class="muted mono">'+d.id+'</span></td>'
+        +'<td>'+(d.st==="已排期"?'<span class="chip pri">已排期</span>':'<span class="chip warn">跨版本</span>')+'</td>'
+        +'<td class="muted mono">'+d.task+'</td></tr>'; }).join("")+'</tbody></table></div></div>';
+  }
+  if(state.vdTab==="log"){
+    return '<div class="sec"><div class="sec-b" style="padding:0;overflow:auto"><table class="vtbl"><thead><tr><th class="num">时间</th><th>操作</th><th>对象</th><th>操作人</th></tr></thead><tbody>'
+      +VLOGS.map(function(l){ return '<tr><td class="num muted nowrap">'+l.at+'</td><td><b>'+l.op+'</b></td><td class="muted">'+esc(l.obj)+'</td><td>'+l.who+'</td></tr>'; }).join("")
+      +'</tbody></table></div></div>';
+  }
+  /* releases：计划摘要 + 时间线 + 详情，同页可读，不再跳发布工作台才能看 */
+  return '<div class="srcbar" style="margin-bottom:12px"><span class="ic">RP</span>'
+    +'<div><b>'+(v.planState==="none"?"该版本还没有发布计划":"发布计划 "+v.plan+" · "+(v.planState==="ready"?"就绪":v.planState==="draft"?"草稿":"已完成"))+'</b>'
+    +'<div class="meta">'+(v.planState==="none"?"缺 4 项必填，先去计划页补齐":"生产 · 全量 · 计划 "+(v.planAt||"—")+" · "+v.total+" 项（已完成 "+v.done+"）· 负责人 孔祥劲")+'</div></div>'
+    +'<span class="right"><div class="seg"><button type="button" data-act="plan-edit" data-v="'+v.id+'">看计划</button>'
+    +(vLocked(v)?'<button type="button" class="on" data-act="hist-open" data-v="'+v.id+'">发布记录</button>'
+      :'<button type="button" class="on primary" data-act="rec" data-v="'+v.id+'">记录发布</button>')+'</div></span></div>'
+    +'<div class="det"><div><div class="tl" data-vd-tl></div></div>'
+    +'<aside class="card" style="padding:13px 14px;position:sticky;top:72px" data-vd-det></aside></div>';
+}
+
+/* ---------- 渲染：交付报告衔接 ---------- */
+function renderDl(){
+  var host=$("[data-dl-body]"); if(!host) return;
+  var ok=HISTORY.filter(function(h){ return h.res==="success"&&h.env==="生产"; });
+  host.innerHTML='<div class="grid g2">'
+    +'<div class="f"><label>版本</label><select class="inp" data-act="dl-ver">'+VERSIONS.map(function(v){
+      return '<option value="'+v.id+'"'+(v.id===state.ver?" selected":"")+'>'+esc(v.name)+'（'+(VSTATUS[v.status]||["—"])[0]+'）</option>'; }).join("")+'</select></div>'
+    +'<div class="f"><label>发布记录（只列生产成功的事实）</label><select class="inp" data-act="dl-rel">'+ok.map(function(h){
+      return '<option value="'+h.no+'">'+h.no+' · '+h.day+' '+h.time+' · '+h.n+' 项</option>'; }).join("")+'</select></div>'
+    +'</div>'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap">'
+    +'<button type="button" class="btn primary" data-act="dl-gen">生成交付报告</button>'
+    +'<span class="hint">报告正文、分组与导出沿用 <b>交付报告重设计 11-26</b> 原型；本次只确定「从哪条记录进入」。</span></div>'
+    +'<p class="hint" style="margin-top:10px">入口有 3 个，都带同一个 releaseId：发布记录行「交付报告」、版本详情 → 更多 → 交付报告、菜单「交付报告」默认取当前项目最近一次生产成功记录。</p>';
+}
+
+/* ---------- 状态 ---------- */
+var planStatus="ready";
+var planSel=ITEMS.filter(function(i){ return i.plan; }).map(function(i){ return i.id; });
+var state={
+  view:"versions",
+  ver:"v-94",
+  verMode:"version",
+  proj:"客户信息平台",
+  selVers:[],
+  vdTab:"releases",
+  histAll:false,
+  snap:[], snapNo:"", snapVer:"",
+  walkTimer:null,
+  src:"plan",
+  selected:defaultSelection("v-94"),
+  reasons:{},
+  onlyDiff:false,
+  q:"",
+  result:"success",
+  fail:"",
+  targets:"prod-shanghai-a",
+  when:nowStr(),
+  checking:false,
+  issuesOpen:false,
+  histSel:0
+};
+function nowStr(){ var d=new Date(); function p(n){ return (n<10?"0":"")+n; } return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+"T"+p(d.getHours())+":"+p(d.getMinutes()); }
+function nowHM(){ var d=new Date(); function p(n){ return (n<10?"0":"")+n; } return p(d.getHours())+":"+p(d.getMinutes()); }
+
+/* ---------- 差异计算（与现有 actualAnomalies 同维度，改为逐条） ---------- */
+function diffs(){
+  var out=[];
+  if(state.src==="urgent"){ out.push({key:"noPlan",lv:"blk",dim:"未关联计划",old:"无就绪计划",fix:"紧急记录必须说明为什么没有计划"}); }
+  if(state.src==="rollback"){ out.push({key:"rb",lv:"blk",dim:"回滚范围",old:state.snap.length?("引用 "+state.snapNo+"（"+state.snap.length+" 项 / prod-shanghai-a）"):"还没选定要回滚的那次发布",fix:"确认回滚后这批不再对外生效"+(state.snap.length?"，以及为什么只撤其中一部分":"，先从发布记录点「回滚这次」")}); }
+  if(state.src!=="rollback" && state.ver===PLAN_VER) PLAN.ids.forEach(function(id){ if(state.selected.indexOf(id)===-1 && byId[id].col==="done"){
+    out.push({key:"omit:"+id,lv:"nt",dim:"计划内本次不发",old:byId[id].t,fix:"为什么这次不带",adoptSel:{id:id,on:true},adoptLabel:"改回带上"}); } });
+  state.selected.forEach(function(id){ var it=snapItem(id);
+    if(it.col!=="done") out.push({key:"undone:"+id,lv:"blk",dim:"未完成但已发",old:it.t+"（"+COLS[it.col]+"）",fix:"为什么未完成也要发",adoptSel:{id:id,on:false},adoptLabel:"改回不发"});
+    if(state.src==="rollback"){ if(state.snap.indexOf(id)===-1) out.push({key:"extra:"+id,lv:"blk",dim:"快照之外",old:it.t,fix:"为什么回滚还要带上这一项",adoptSel:{id:id,on:false},adoptLabel:"改回不带"}); }
+    else if(state.src!=="urgent" && state.ver===PLAN_VER && PLAN.ids.indexOf(id)===-1) out.push({key:"extra:"+id,lv:"nt",dim:"计划外加入",old:it.t+(it.ver!==state.ver?"（属于 "+verName(it.ver)+"，跨版本带出）":""),fix:"为什么超出计划范围"+(it.ver!==state.ver?"，且为什么跨版本":"")+",是否影响下个版本",adoptSel:{id:id,on:false},adoptLabel:"改回不发"}); });
+  var tg=state.targets.split(/[\s,，]+/).filter(Boolean);
+  if(state.src!=="urgent" && tg.join("|")!==PLAN.targets.join("|")) out.push({key:"tgt",lv:"nt",dim:"目标键不同",old:PLAN.targets.join("、")+" → "+tg.join("、"),fix:"为什么目标不同",adoptTgt:true,adoptLabel:"改回计划值"});
+  CHECKS.forEach(function(c,i){ out.push({key:"chk"+i,lv:c.lv,dim:c.dim,old:c.old,fix:c.fix,noAdopt:c.noAdopt}); });
+  if(state.result==="failed") out.push({key:"fail",lv:"blk",dim:"本次失败",old:"结果=失败",fix:"失败环节与现象",jump:"#r-fail"});
+  return out;
+}
+function filled(d){ return String(d.jump ? state.fail : state.reasons[d.key] || "").trim(); }
+function missingReasons(ds){ return ds.filter(function(d){ return !filled(d); }); }
+function diffByKey(k){ return diffs().filter(function(d){ return d.key===k; })[0]; }
+function focusIssue(d){
+  if(!d) return false;
+  var el = d.jump ? $(d.jump) : $('[data-act="reason"][data-key="'+CSS.escape(d.key)+'"]');
+  if(!el) return false;
+  el.scrollIntoView({block:"center",behavior:"smooth"});
+  try{ el.focus({preventScroll:true}); }catch(ex){ el.focus(); }
+  el.classList.add("is-attention");
+  setTimeout(function(){ el.classList.remove("is-attention"); },1600);
+  return true;
+}
+
+/* ---------- 渲染：范围列表 ---------- */
+function rowHTML(it,on,mode){
+  var off=it.col!=="done";
+  var flag="";
+  if(mode==="record"){
+    if(off) flag='<span class="chip warn flag">未完成</span>';
+    else if(PLAN.ids.indexOf(it.id)===-1) flag='<span class="chip plum flag">计划外</span>';
+    else if(!on) flag='<span class="chip gray flag">计划内未选</span>';
+  }
+  return '<div class="row'+(on||mode==="plan"?"":" is-off")+'" data-row="'+it.id+'">'
+    +'<input type="checkbox" '+(on?"checked":"")+' data-act="'+(mode==="plan"?"plan-pick":"pick")+'" data-id="'+it.id+'" aria-label="选择 '+esc(it.t)+'">'
+    +'<span class="t"><a href="#" onclick="return false">'+esc(it.t)+'</a> <span class="muted mono">'+it.id+'</span></span>'
+    +'<span class="badge">'+badge(it.k)+'</span>'
+    +'<span class="sub">'+COLS[it.col]+(it.done?" · 完成 "+it.done:"")+' · '+it.ow+'</span>'
+    +flag+'</div>';
+}
+function badge(k){ var c=k==="缺陷"?"b-fix":k==="优化"?"b-opt":"b-new"; return '<span class="badge '+c+'">'+k+'</span>'; }
+function snapItem(id){ return byId[id] || {id:id,t:"历史发布快照项",k:"工作项",col:"done",done:"",ow:"—",ver:state.snapVer||state.ver,plan:false}; }
+function verDoneIds(vid){ return ITEMS.filter(function(i){ return i.ver===vid && i.col==="done"; }).map(function(i){ return i.id; }); }
+function defaultSelection(vid){
+  if(vid!==PLAN_VER) return verDoneIds(vid);
+  return PLAN.ids.filter(function(id){ return byId[id].col==="done" && id!=="Xkt0325"; }).concat(["Xkt0328","Xkt0331"]);
+}
+function renderScope(){
+  var host=$("[data-scope-list]"); if(!host) return;
+  var q=state.q.trim().toLowerCase();
+  var groups;
+  if(state.src==="rollback" && state.snap.length){
+    /* 回滚的范围只能来自被撤事件本身：不再按「计划内 / 计划外」切组 */
+    var inSnap=state.snap.map(snapItem).filter(function(it){ return !q || (it.t+it.id).toLowerCase().indexOf(q)!==-1; });
+    var extra=state.selected.filter(function(id){ return state.snap.indexOf(id)===-1; }).map(snapItem)
+      .filter(function(it){ return !q || (it.t+it.id).toLowerCase().indexOf(q)!==-1; });
+    groups=[
+      {k:"撤销 "+state.snapNo+" 的这批",lv:"plum",its:inSnap.filter(function(it){ return state.selected.indexOf(it.id)!==-1; })},
+      {k:"快照内但保留（不撤）",lv:"nt",its:inSnap.filter(function(it){ return state.selected.indexOf(it.id)===-1; })},
+      {k:"快照之外多勾的（需说明）",lv:"blk",its:extra}
+    ];
+  } else if(state.ver!==PLAN_VER){
+    var sel=state.selected.map(snapItem).filter(function(it){ return !q || (it.t+it.id).toLowerCase().indexOf(q)!==-1; });
+    groups=[{k:verName(state.ver)+" 本次勾选的 "+sel.length+" 项（原型只展开了 v0.9.4 的工作项清单）",lv:"plum",its:sel}];
+  } else {
+    var list=ITEMS.filter(function(it){ return it.ver===PLAN_VER && (!q || (it.t+it.id).toLowerCase().indexOf(q)!==-1); });
+    if(state.onlyDiff) list=list.filter(function(it){ return it.col!=="done" || state.selected.indexOf(it.id)===-1 || PLAN.ids.indexOf(it.id)===-1; });
+    groups=[
+    {k:"与计划一致且已完成",lv:"ok",its:list.filter(function(it){ return it.col==="done" && PLAN.ids.indexOf(it.id)!==-1 && state.selected.indexOf(it.id)!==-1; })},
+    {k:"计划内但本次不发",lv:"nt",its:list.filter(function(it){ return PLAN.ids.indexOf(it.id)!==-1 && state.selected.indexOf(it.id)===-1; })},
+    {k:"未完成（勾选会要求说明）",lv:"blk",its:list.filter(function(it){ return it.col!=="done"; })},
+    {k:"计划外",lv:"plum",its:list.filter(function(it){ return PLAN.ids.indexOf(it.id)===-1 && state.selected.indexOf(it.id)!==-1; })}
+    ];
+  }
+  host.innerHTML=groups.filter(function(g){ return g.its.length; }).map(function(g){
+    return '<div class="grp"><div class="grp-h"><span class="chip '+g.lv+'"><span class="dot"></span>'+g.k+'</span><span class="muted">'+g.its.length+' 项</span>'
+      +'<span class="right"><button type="button" class="btn link" data-act="grp" data-g="'+esc(g.k)+'">本组全选/取消</button></span></div>'
+      +g.its.map(function(it){ return rowHTML(it, state.selected.indexOf(it.id)!==-1, state.snap.length&&state.src==="rollback"?"snap":"record"); }).join("")+'</div>';
+  }).join("")||'<p class="hint">没有匹配的工作项。</p>';
+  $("[data-sel-count]").textContent="已选 "+state.selected.length+" 项";
+}
+function renderPlanList(){
+  var host=$("[data-plan-list]"); if(!host) return;
+  var done=ITEMS.filter(function(i){ return i.ver===PLAN_VER && i.col==="done"; }), undone=ITEMS.filter(function(i){ return i.ver===PLAN_VER && i.col!=="done"; });
+  host.innerHTML=(state.ver!==PLAN_VER?'<p class="hint" style="padding:12px 14px 0">原型只展开了 '+verName(PLAN_VER)+' 的范围清单；'+esc(verName(state.ver))+' 在真实页面按本版本工作项加载。</p>':"")
+    +[
+    {k:"已完成（默认进计划）",its:done},{k:"未完成（可进计划，记录发布时要说明）",its:undone}
+  ].map(function(g){ return '<div class="grp"><div class="grp-h"><b>'+g.k+'</b><span class="muted">'+g.its.length+' 项</span><span class="right"><button type="button" class="btn link" data-act="plan-grp">本组全选/取消</button></span></div>'
+    +g.its.map(function(it){ return rowHTML(it, planSel.indexOf(it.id)!==-1, "plan"); }).join("")+'</div>'; }).join("");
+  var dN=planSel.filter(function(id){ return byId[id].col==="done"; }).length;
+  var uN=planSel.length-dN;
+  $("[data-plan-counts]").innerHTML='<span class="chip ok"><span class="dot"></span>已完成 '+dN+'</span>'
+    +(uN?'<span class="chip warn"><span class="dot"></span>未完成 '+uN+'</span>':'')
+    +'<span class="chip gray">已选 '+planSel.length+'</span>';
+  renderPlanFoot();
+}
+/* 计划就绪校验：时机放在「标记就绪」这个动作上，而不是让下拉框自己解释 */
+function markPlanDirty(){ if(planStatus==="ready") planStatus="draft"; }
+function planGaps(){
+  var g=[];
+  if(!$("[data-pane=plan] #p-when").value) g.push({k:"when",t:"计划发布时间",sel:"#p-when"});
+  if(!$("[data-pane=plan] #p-owner").value) g.push({k:"owner",t:"计划负责人",sel:"#p-owner"});
+  if(!planSel.length) g.push({k:"tasks",t:"至少 1 项工作项",sel:"[data-plan-list]"});
+  if($("[data-pane=plan] #p-cov").value!=="覆盖未知" && !$("[data-plan-targets]").value.trim()) g.push({k:"tgt",t:"目标键（覆盖为全量 / 部分时必填）",sel:"[data-plan-targets]"});
+  return g;
+}
+function renderPlanFoot(){
+  var host=$("[data-plan-foot]"); if(!host) return;
+  var g=planGaps();
+  var chipCls=planStatus==="ready"?(g.length?"warn":"ok"):"gray";
+  var chipTx=planStatus==="ready"?(g.length?"就绪（有未保存改动）":"就绪"):"草稿";
+  $("[data-plan-chip]").outerHTML='<span class="chip '+chipCls+'" data-plan-chip><span class="dot"></span>'+chipTx+'</span>';
+  var tail='<span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">'
+    +'<button type="button" class="btn" data-act="plan-cancel">取消计划</button>'
+    +'<button type="button" class="btn" data-act="plan-save">'+(g.length||planStatus==="draft"?"保存草稿":"保存改动")+'</button>';
+  if(g.length){
+    host.innerHTML='<span class="chip bad"><span class="dot"></span>还差 '+g.length+' 项才能就绪</span>'
+      +'<div style="flex:1 1 100%;display:flex;flex-direction:column;gap:6px;margin-top:4px">'
+      +g.map(function(x){ return '<span class="it" style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text-2)"><span class="chip warn"><span class="dot"></span>必填</span>'+esc(x.t)
+        +'<button type="button" class="btn link" style="margin-left:auto" data-act="plan-jump" data-sel="'+esc(x.sel)+'">去填写</button></span>'; }).join("")+'</div>'
+      +tail+'<button type="button" class="btn primary" data-act="plan-ready">标记就绪</button></span>';
+  }else if(planStatus==="ready"){
+    host.innerHTML='<span class="chip ok" style="height:22px">✓ 校验通过</span>'
+      +'<span class="hint">这份计划已就绪，可以被实际发布记录引用；记录发布时会自动带出范围与目标键。</span>'
+      +tail+'<button type="button" class="btn primary" data-act="to-record">按这份计划记录发布 →</button></span>';
+  }else{
+    host.innerHTML='<span class="chip info"><span class="dot"></span>校验通过，尚未标记就绪</span>'
+      +'<span class="hint">草稿不会被实际发布记录引用；标记就绪后才会出现在「按计划记录」的选择里。</span>'
+      +tail+'<button type="button" class="btn primary" data-act="plan-ready">标记就绪</button></span>';
+  }
+}
+
+/* ---------- 渲染：差异表 ---------- */
+function renderDiff(){
+  var host=$("[data-diff-body]"); if(!host) return;
+  var ds=diffs();
+  var same=6;
+  if(!ds.length){ host.innerHTML='<div class="okline">✓ 本次事实与计划一致（其余 '+same+' 项维度无需说明）</div>'; }
+  else{
+    host.innerHTML='<table class="diff"><thead><tr><th class="lv"></th><th>维度</th><th>计划 / 依据</th><th>请说明（回车跳到下一条）</th><th style="width:96px"></th></tr></thead><tbody>'
+      +ds.map(function(d){ var has=!!filled(d);
+        var cell=d.jump
+          ? '<div class="fix"><button type="button" class="btn sm" data-act="jump" data-target="'+esc(d.jump)+'">去填写失败说明</button>'
+            +(has?'<span class="hint" style="color:var(--success-fg)">已填写</span>':'<span class="hint">阻断项：不填不能记录</span>')+'</div>'
+          : '<div class="fix"><textarea class="inp" rows="1" data-act="reason" data-key="'+esc(d.key)+'" placeholder="'+esc(d.fix)+'" aria-label="'+esc(d.dim)+'的原因">'+esc(state.reasons[d.key]||"")+'</textarea>'
+            +(has?'<span class="hint" style="color:var(--success-fg)">已记录，将随本次事实存档</span>':'<span class="hint">'+(d.lv==="blk"?"阻断项：不填不能记录":"建议填写：不填也能记录，但审计会缺依据")+'</span>')+'</div>';
+        return '<tr class="'+(d.lv==="blk"?"blk":"nt")+'" data-diff="'+esc(d.key)+'"><td class="lv"></td>'
+        +'<td class="dim">'+esc(d.dim)+'</td><td class="'+(d.lv==="blk"?"new":"old")+'">'+esc(d.old)+'</td>'
+        +'<td>'+cell+'</td>'
+        +'<td>'+(d.jump?'<button type="button" class="btn sm ghost" data-act="tofail">失败框</button>':d.noAdopt?'<span class="hint muted">需人工确认</span>':'<button type="button" class="btn sm ghost" data-act="adopt" data-key="'+esc(d.key)+'">'+esc(d.adoptLabel||"用计划值")+'</button>')+'</td></tr>'; }).join("")
+      +'</tbody></table>'
+      +'<p class="hint" style="margin-top:9px">一致项不占用注意力：其余 '+same+' 项维度（环境、覆盖、时间窗口等）与计划相同，已折叠。</p>';
+  }
+  var miss=missingReasons(ds);
+  var chip=$("[data-diff-count]");
+  chip.className="chip "+(miss.length?(ds.some(function(d){return d.lv==="blk";})?"bad":"warn"):"ok");
+  chip.innerHTML='<span class="dot"></span>'+(miss.length?miss.length+" 处待说明":"差异已全部说明");
+  renderBar(miss,ds);
+}
+function renderBar(miss,ds){
+  var st=$("[data-bar-st]"), tx=$("[data-bar-text]"), sub=$("[data-bar-sub]");
+  st.className="st "+(state.checking?"chk":miss.length?"todo":"rdy");
+  tx.textContent=state.checking?"正在核对本次事实":(miss.length?miss.length+" 处待说明":"可以记录了");
+  sub.textContent=state.checking?"":(miss.length?"点「记录发布」会自动定位第一条":"已核对 "+ds.length+" 项差异 · "+nowHM());
+  var box=$("[data-issues]");
+  box.hidden=!state.issuesOpen;
+  if(state.issuesOpen){
+    box.innerHTML=miss.length?miss.map(function(d){ return '<div class="it"><span class="chip '+(d.lv==="blk"?"bad":"warn")+'"><span class="dot"></span>'+(d.lv==="blk"?"阻断":"建议")+'</span>'+esc(d.dim)+'：'+esc(d.old)+'<span class="go"><button type="button" class="btn link" data-act="jump"'+(d.jump?' data-target="'+esc(d.jump)+'"':' data-key="'+esc(d.key)+'"')+'>'+esc(d.jump?"去填写":"去填写原因")+'</button></span></div>'; }).join("")
+      :'<div class="it"><span class="chip ok"><span class="dot"></span>无缺口</span>所有差异都已说明，可以直接记录。</div>';
+  }
+  $("[data-bar-note]").hidden=miss.length===0;
+}
+
+/* ---------- 渲染：时间线（发布记录页 / 版本详情发布记录页签共用） ---------- */
+function renderHist(){
+  var pane=$("[data-tl]"), vd=$("[data-vd-tl]");
+  if(!pane && !vd) return;
+  if(pane){ pane.innerHTML=tlHTML(state.histAll);
+    var c=$("[data-hist-count]"); if(c) c.textContent=(state.histAll?"全部版本 ":"本版本 ")+histRows(state.histAll).length+" 次 · 服务端分页 · 每页 20"; }
+  if(vd) vd.innerHTML=tlHTML(false);
+  var d=detailHTML();
+  if($("[data-detail]")) $("[data-detail]").innerHTML=d;
+  if($("[data-vd-det]")) $("[data-vd-det]").innerHTML=d;
+}
+function histRows(all){
+  return HISTORY.map(function(h,i){ return [h,i]; }).filter(function(p){ return all || p[0].ver===state.ver; });
+}
+function tlHTML(all){
+  var rows=histRows(all);
+  if(!rows.length) return '<p class="hint" style="padding:14px 2px">'+esc(verName(state.ver))+' 还没有发布记录：先在发布计划排一份计划，或直接记录一次实际发布。</p>';
+  var days={};
+  rows.forEach(function(p){ (days[p[0].day]=days[p[0].day]||[]).push(p); });
+  return Object.keys(days).map(function(d){
+    return '<div class="tl-day">'+d+'</div>'+days[d].map(function(pair){ var h=pair[0],i=pair[1];
+      var resC=h.res==="success"?"ok":h.res==="failed"?"bad":"plum";
+      return '<div class="tl-row'+(state.histSel===i?" on":"")+'" data-act="hist" data-i="'+i+'">'
+        +'<span class="time">'+h.time+'</span>'
+        +'<div class="body"><div class="l1"><span class="chip '+resC+'"><span class="dot"></span>'+resName(h)+'</span><b>'+h.env+' · '+h.op+'</b>'
+        +'<span class="chip gray">'+h.n+' 项</span>'+(h.dev?'<span class="chip warn"><span class="dot"></span>偏差 '+h.dev+'</span>':'<span class="chip ok"><span class="dot"></span>与计划一致</span>')
+        +'<span class="mono muted">'+esc(h.art)+'</span></div>'
+        +'<div class="l2">'+h.no+' · 执行人 '+h.exec+' · 计划 '+(h.plan||"—")
+        +(all?' · <button type="button" class="btn link" data-act="ver-open" data-v="'+h.ver+'">'+esc(verName(h.ver))+'</button>':"")+'</div></div>'
+        +'<span class="acts">'
+        +(h.res==="success"&&h.env==="生产"?'<button type="button" class="btn sm" data-act="rollback" data-i="'+i+'">回滚这次</button>':'')
+        +(h.res==="failed"?'<button type="button" class="btn sm" data-act="retry" data-i="'+i+'">重部署</button>':'')
+        +'</span></div>'; }).join("");
+  }).join("");
+}
+function resName(h){ return h.res==="success"?"成功":h.res==="failed"?"失败":"回滚"; }
+function detailHTML(){
+  var h=HISTORY[state.histSel]; if(!h) return '<p class="hint">选择一条记录查看详情。</p>';
+  return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap"><b style="font-size:13px">'+h.no+'</b><span class="chip '+(h.res==="success"?"ok":h.res==="failed"?"bad":"plum")+'">'+resName(h)+'</span></div>'
+    +'<dl class="kv"><dt>版本</dt><dd><button type="button" class="btn link" data-act="ver-open" data-v="'+h.ver+'">'+esc(verName(h.ver))+'</button></dd><dt>环境 / 操作</dt><dd>'+h.env+' · '+h.op+'</dd><dt>发生时间</dt><dd>'+h.day+' '+h.time+'</dd><dt>执行人</dt><dd>'+h.exec+'</dd>'
+    +'<dt>制品</dt><dd class="mono">'+esc(h.art)+'</dd><dt>引用计划</dt><dd>'+(h.plan||"—")+'</dd><dt>目标键</dt><dd class="mono">prod-shanghai-a</dd></dl>'
+    +'<div class="hint" style="margin:11px 0 6px;font-weight:650;color:var(--text-2)">本次快照 '+h.items.length+' 项</div>'
+    +'<div class="snap">'+h.items.map(function(id){ var it=byId[id]; return '<div class="row" style="font-size:11.5px"><span class="t">'+esc(it?it.t:id)+'</span><span class="sub muted">'+(it?COLS[it.col]:"—")+(it&&it.ver!==state.ver?" · 跨版本":"")+'</span></div>'; }).join("")+'</div>'
+    +'<div class="hint" style="margin:11px 0 4px;font-weight:650;color:var(--text-2)">差异与说明</div><p class="hint">'+esc(h.notes)+'</p>'
+    +'<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="report">交付报告</button><button type="button" class="btn sm" data-act="csv">导出快照 CSV</button></div>';
+}
+
+/* ---------- 视图切换 / 路由指示 / 版本上下文 ---------- */
+var ROUTE_OF={versions:"versions",version:"version",plans:"plans",plan:"release",record:"release",history:"release",delivery:"delivery",notes:"notes"};
+function routeText(v){
+  if(v==="versions") return "#/phase?pmode="+state.verMode;
+  if(v==="version") return "#/version?id="+state.ver+"&tab="+state.vdTab;
+  if(v==="plans") return "#/release";
+  if(v==="plan") return "#/release?id="+state.ver+"&tab=plan";
+  if(v==="record") return "#/release?id="+state.ver+"&tab=actual";
+  if(v==="history") return "#/release?id="+state.ver+"&tab=history";
+  if(v==="delivery") return "#/delivery?versionId="+state.ver;
+  return "原型说明";
+}
+function syncSrcBar(){
+  var t=$("[data-src-title]"), m=$("[data-src-meta]"); if(!t||!m) return;
+  var v=verById(state.ver);
+  var inRb=state.src==="rollback"&&state.snap.length>0;
+  var sa=$("[data-act=scope-all-done]"), sp=$("[data-act=scope-plan]");
+  if(sa) sa.textContent=inRb?"全选快照项":"全选已完成";
+  if(sp) sp.textContent=inRb?"恢复快照范围":"恢复计划范围";
+  if(state.src==="rollback"&&state.snap.length){ t.textContent="回滚 "+state.snapNo;
+    m.textContent="生产 · "+state.snap.length+" 项 · 目标键 prod-shanghai-a · 范围与目标只能是原事件的子集"; return; }
+  if(state.retryOf){ t.textContent="重部署 "+state.retryOf+" 的范围";
+    m.textContent=(state.retryEnv||"预发布")+" · "+state.selected.length+" 项 · 引用 "+state.retryOf+"（上次"+(state.retryRes||"失败")+"）· 制品请填新构建号"; return; }
+  if(state.src==="urgent"){ t.textContent="紧急记录（无计划）"; m.textContent="必须说明为什么没有计划；范围与目标键全部手工确认"; return; }
+  if(vLocked(v)){ t.textContent="该版本已"+(v.status==="released"?"发布 · 快照只读":"终态");
+    m.textContent="不能再新建一批范围；要更正请用「登记回滚」或「补一条失败记录」，两者都作为新事实挂在 "+v.name+" 上"; return; }
+  if(state.src==="self"){ t.textContent="自己勾选本次范围";
+    m.textContent="不引用计划；"+v.name+" 内容 "+v.total+" 项全部可选，范围差异不再与计划比对"; return; }  t.textContent="按计划 "+v.plan+" 记录";
+  m.textContent=v.planState==="none"?"该版本还没有发布计划：先建计划，或用「自己勾选」记录"
+    :("生产 · 全量 · 计划 "+(v.planAt||"—")+" · "+v.total+" 项（已完成 "+v.done+"）· 负责人 孔祥劲");
+}
+function syncVerCtx(){
+  var v=verById(state.ver);
+  $$("[data-act=rtab-ver]").forEach(function(s){
+    s.innerHTML=VERSIONS.map(function(x){ return '<option value="'+x.id+'"'+(x.id===v.id?" selected":"")+'>'+esc(x.name)+'</option>'; }).join("");
+  });
+  $$("[data-crumb-ver]").forEach(function(cv){ cv.textContent=v.name; });
+  var cp=$("[data-crumb-plan]"); if(cp) cp.innerHTML='沙漏交付台 <i>/</i> 版本 <i>/</i> '+esc(v.name)+' <i>/</i> 发布工作台 <i>/</i> 发布计划';
+  var vc=$("[data-ver-chip]");
+  if(vc){ var m=VSTATUS[v.status]||["—","gray"];
+    vc.className="chip "+(vLocked(v)?"gray":"plum");
+    vc.innerHTML='<span class="dot"></span>'+esc(v.name)+' · '+m[0]+(vLocked(v)?' · 只读':''); }
+  var lock=$("[data-ver-lock]");
+  if(lock){
+    if(vLocked(v)){
+      lock.hidden=false;
+      lock.innerHTML='<span class="chip bad"><span class="dot"></span>版本'+(v.status==="released"?"已发布":"已终态")+'</span>'
+        +'<span>范围与计划快照只读。仍可登记<b>回滚 / 重部署</b>，作为新的一条事实，不会覆盖成功记录。</span>'
+        +'<span style="margin-left:auto;display:flex;gap:6px"><button type="button" class="btn sm" data-act="src" data-src="rollback">登记回滚</button>'
+        +'<button type="button" class="btn sm" data-act="src" data-src="urgent">补一条失败记录</button></span>';
+    } else lock.hidden=true;
+  }
+  var nr=$("[data-act=new-record]");
+  if(nr){ nr.textContent=vLocked(v)?"＋ 登记回滚 / 重部署":"＋ 记录一次发布"; }
+  var pc=$("[data-plan-chip]"), pm=$("[data-plan-meta]");
+  var ps={ready:["ok","就绪"],draft:["warn","草稿"],completed:["gray","已完成"],none:["gray","无计划"]}[v.planState]||["gray","—"];
+  if(pc){ pc.className="chip "+ps[0]; pc.innerHTML='<span class="dot"></span>'+ps[1]; }
+  if(pm){ pm.innerHTML='编号 <b class="mono">'+v.plan+'</b> · '+esc(v.name)+' · 生产 · 全量 · 计划 <b>'+(v.planAt||"未定")+'</b> · 负责人 <b>孔祥劲</b> · 涉及 <b>1</b> 个版本'; }
+  syncSrcBar();
+  $("[data-route]").textContent=routeText(state.view);
+}
+function syncNav(){
+  var navKey=state.view==="delivery"?"delivery":"versions";
+  $$(".snav .nav-item").forEach(function(b){ b.classList.toggle("on", b.getAttribute("data-nav")===navKey); });
+  $$(".snav .nav-sub-item").forEach(function(b){
+    var n=b.getAttribute("data-nav");
+    b.classList.toggle("on", n==="versions" ? (state.view==="versions"||state.view==="version") : (state.view==="plans"||state.view==="plan"||state.view==="record"||state.view==="history"));
+  });
+}
+function setView(v){
+  if(v==="record"){
+    var lv=verById(state.ver);
+    if(state.src==="rollback" && state.snapVer!==lv.id){
+      state.src="plan"; state.snap=[]; state.snapNo=""; state.snapVer="";
+      state.selected=defaultSelection(lv.id);
+      $$("[data-act=src]").forEach(function(x){ x.classList.toggle("on", x.getAttribute("data-src")==="plan"); });
+    }
+    if(vLocked(lv) && state.src!=="rollback" && !state.retryOf){
+      var ix=latestProdIdx(lv.id); if(ix>-1){ doRollback(ix); return; }
+    }
+  }
+  state.view=v;
+  $$("[data-pane]").forEach(function(p){ p.hidden = p.getAttribute("data-pane")!==v; });
+  $("[data-bar]").style.display = v==="record"?"":"none";
+  document.body.style.paddingBottom = v==="record"?"76px":"0";
+  if(v==="versions") renderVerList();
+  if(v==="plans") renderPlans();
+  if(v==="version"){ renderVd(); if(state.vdTab==="releases") renderHist(); }
+  if(v==="delivery") renderDl();
+  if(v==="plan") renderPlanList();
+  if(v==="record"){ renderScope(); renderDiff(); }
+  if(v==="history") renderHist();
+  syncVerCtx(); syncNav();
+  try{ history.replaceState(null,"","#/"+(ROUTE_OF[v]||v)); }catch(e){ /* file:// 下可能受限 */ }
+  window.scrollTo(0,0);
+}
+function openVersion(id,tab){ state.ver=id; if(tab) state.vdTab=tab; setView("version"); }
+function openRecord(id){ state.ver=id; state.retryOf="";
+  if(state.src!=="rollback"){ state.selected=defaultSelection(id); }
+  setView("record");
+  if(state.src!=="rollback") toast("已带入 "+verName(id)+" 的就绪计划默认值"); }
+
+/* ---------- 实时预检模拟 ---------- */
+var timer=null;
+function scheduleCheck(){
+  state.checking=true; renderBar(missingReasons(diffs()),diffs());
+  clearTimeout(timer);
+  timer=setTimeout(function(){
+    state.checking=false;
+    $("[data-check-stamp]").textContent="检查已同步 · "+nowHM();
+    renderDiff();
+  },400);
+}
+
+/* ---------- toast ---------- */
+var tt=null;
+function toast(msg){ var el=$("[data-toast]"); el.textContent=msg; el.classList.add("on"); clearTimeout(tt); tt=setTimeout(function(){ el.classList.remove("on"); },2600); }
+
+/* ---------- 菜单跳转 ---------- */
+function navTo(b){
+  var key=b.getAttribute("data-nav"), r=b.getAttribute("data-route");
+  var label=b.textContent.trim().replace(/\s+/g," ");
+  if(key==="versions"){ if(b.classList.contains("nav-sub-item")) state.verMode=state.verMode||"version"; setView("versions"); return; }
+  if(key==="plans"){ setView("plans"); return; }
+  if(key==="delivery"){ setView("delivery"); return; }
+  toast("「"+label+"」不在本次重设计范围 · 真实路由 "+(r||"#/"+key)+"，菜单层级与现状一致");
+}
+
+/* ---------- 动线自动演示 ---------- */
+var WALK=[
+ {ms:600, cap:"① 版本列表：v0.9.4 进行中、就绪计划 RP-1127-03、逾期标记", fn:function(){ state.verMode="version"; state.proj="客户信息平台"; setView("versions"); }},
+ {ms:1500,cap:"② 版本详情 · 发布记录页签：计划摘要 + 时间线同屏", fn:function(){ openVersion("v-94","releases"); }},
+ {ms:1500,cap:"③ 发布计划：预选已完成项，缺项清单为空", fn:function(){ planSel=verDoneIds(PLAN_VER); setView("plan"); }},
+ {ms:1200,cap:"④ 标记就绪（校验时机在动作上）", fn:function(){ var g=planGaps(); if(!g.length){ planStatus="ready"; renderPlanFoot(); } }},
+ {ms:1400,cap:"⑤ 记录发布：默认带出计划范围，只追问差异", fn:function(){ openRecord("v-94"); }},
+ {ms:1400,cap:"⑥ 逐条差异补示例原因（或点「用计划值」一键修正）", fn:function(){ walkFill(); }},
+ {ms:1300,cap:"⑦ 提交：写入发布记录，版本转「已发布 · 只读」", fn:function(){ $("[data-act=commit]").click(); }},
+ {ms:1600,cap:"⑧ 回版本详情：状态说明条与页签计数已跟着变", fn:function(){ state.vdTab="releases"; openVersion("v-94","releases"); }},
+ {ms:1600,cap:"⑨ 记录行「回滚这次」→ 发布台进入回滚态，范围自动限定", fn:function(){ var i=HISTORY.findIndex(function(h){ return h.res==="success"&&h.env==="生产"; }); if(i>-1) doRollback(i); }},
+ {ms:1800,cap:"完成：整条动线未出现「找不到入口 / 不知道差在哪」的断点", fn:function(){ walkStop(); }}
+];
+function walkStop(){ if(state.walkTimer){ clearTimeout(state.walkTimer); state.walkTimer=null; } }
+function walk(i){
+  var st=i===undefined?0:i;
+  if(st>=WALK.length){ walkStop(); return; }
+  var step=WALK[st];
+  var cap=$("[data-walk-st]"); if(cap) cap.textContent=step.cap;
+  step.fn();
+  state.walkTimer=setTimeout(function(){ walk(st+1); }, step.ms);
+}
+var EXAMPLE={
+  omit:"该修复未随本批回归，改到下一批带出。",
+  undone:"前端开关已完成，后端接口延到下一版，本次只带 UI。",
+  extra:"影响客户演示，走本批热修，已单独验证 Safari 17。",
+  chk0:"两条未通过用例属外接客户模块，与本批无关，已由陈静确认。",
+  tgt:"目标键不变，仅补记窗口顺延。",
+  fail:"迁移脚本 127 在从库超时，主库已写入，服务未切流量。",
+  noPlan:"线上 Safari 复制失效，客户演示在即，先记录后补计划。",
+  rb:"确认回滚后这 3 项不再对外生效，数据无需回补。"
+};
+function walkFill(){
+  var n=0;
+  missingReasons(diffs()).forEach(function(d){
+    var key=d.key.indexOf(":")>-1?d.key.split(":")[0]:d.key;
+    if(d.jump){ state.fail=EXAMPLE.fail; var fb=$("#r-fail"); if(fb) fb.value=EXAMPLE.fail; $("[data-fail-box]").hidden=false; }
+    else state.reasons[d.key]=EXAMPLE[key]||EXAMPLE.omit;
+    n++;
+  });
+  renderDiff(); scheduleCheck();
+  toast(n?("已为 "+n+" 处差异填入示例原因（也可逐条点「用计划值」修正）"):"当前没有待说明差异");
+}
+function doRollback(i){
+  var h=HISTORY[i]; if(!h) return;
+  state.histSel=i; state.src="rollback"; state.retryOf=""; state.ver=h.ver||state.ver;
+  state.snap=h.items.slice(); state.snapNo=h.no; state.snapVer=h.ver||state.ver;
+  $$("[data-act=src]").forEach(function(x){ x.classList.toggle("on", x.getAttribute("data-src")==="rollback"); });
+  state.selected=h.items.slice();
+  setView("record"); renderScope(); renderDiff(); syncVerCtx();
+  toast("已进入回滚态：范围自动限定为 "+h.no+" 的 "+h.n+" 项");
+}
+
+/* ---------- 事件 ---------- */
+document.addEventListener("click",function(e){
+  var nb=e.target.closest("[data-nav]"); if(nb){ navTo(nb); return; }
+  if(!e.target.closest(".v-more")){ var mm=$("[data-vmore]"); if(mm&&!mm.hidden){ mm.hidden=true;
+    var mb=$("[data-act=vmore]"); if(mb) mb.setAttribute("aria-expanded","false"); } }
+  var vb=e.target.closest("[data-view]"); if(vb){ setView(vb.getAttribute("data-view")); return; }
+  var th=e.target.closest("[data-theme-toggle]");
+  if(th){ var r=document.documentElement; r.setAttribute("data-theme", r.getAttribute("data-theme")==="dark"?"light":"dark"); return; }
+
+  var cb=e.target.closest('input[type=checkbox][data-act="pick"]');
+  if(cb){ var id=cb.getAttribute("data-id"); var i=state.selected.indexOf(id);
+    if(cb.checked && i===-1) state.selected.push(id); if(!cb.checked && i!==-1) state.selected.splice(i,1);
+    renderScope(); renderDiff(); scheduleCheck(); return; }
+  var pcb=e.target.closest('input[type=checkbox][data-act="plan-pick"]');
+  if(pcb){ var pid=pcb.getAttribute("data-id"); var k=planSel.indexOf(pid);
+    if(pcb.checked && k===-1) planSel.push(pid); if(!pcb.checked && k!==-1) planSel.splice(k,1);
+    markPlanDirty(); renderPlanList(); return; }
+  var vcb=e.target.closest('input[type=checkbox][data-act="ver-pick"]');
+  if(vcb){ var vid=vcb.getAttribute("data-v"); var q=state.selVers.indexOf(vid);
+    if(q===-1) state.selVers.push(vid); else state.selVers.splice(q,1);
+    renderVerList(); return; }
+
+  var b=e.target.closest("[data-act]"); if(!b) return;
+  var act=b.getAttribute("data-act");
+
+  /* ----- 版本域：列表 / 详情 / 菜单 ----- */
+  if(act==="ver-mode"){ state.verMode=b.getAttribute("data-mode"); state.selVers=[]; setView("versions"); return; }
+  if(act==="new-ver"){ toast("新建版本：名称 / 项目 / 目标日 / 负责人，保存后落「计划中」，再建发布计划"); return; }
+  if(act==="ver-open"){ openVersion(b.getAttribute("data-v"),"scope"); return; }
+  if(act==="plan-edit"){ state.ver=b.getAttribute("data-v")||state.ver; setView("plan"); toast("已进入 "+verName(state.ver)+" 的发布计划"); return; }
+  if(act==="rec"){ openRecord(b.getAttribute("data-v")||state.ver); return; }
+  if(act==="hist-open"){ state.ver=b.getAttribute("data-v")||state.ver; setView("history"); return; }
+  if(act==="rb-last"){ var vid=b.getAttribute("data-v")||state.ver, idx=latestProdIdx(vid);
+    if(idx>-1) doRollback(idx); else toast(verName(vid)+" 没有成功的生产发布记录，无从回滚"); return; }
+  if(act==="clear-vers"){ state.selVers=[]; renderVerList(); return; }
+  if(act==="batch-plan"){ toast("已按 "+state.selVers.length+" 个版本的已完成项生成计划草稿 RP-1127-04"); state.selVers=[]; renderVerList(); return; }
+  if(act==="vd-tab"){ state.vdTab=b.getAttribute("data-tab"); renderVd(); if(state.vdTab==="releases") renderHist(); syncVerCtx(); return; }
+  if(act==="vd-back"){ setView("versions"); return; }
+  if(act==="vmore"){ var menu=$("[data-vmore]"); if(!menu) return;
+    menu.hidden=!menu.hidden; b.setAttribute("aria-expanded", menu.hidden?"false":"true"); return; }
+  if(act==="vtool"){ var tool=b.getAttribute("data-tool"); var vv=verById(state.ver);
+    var mm2=$("[data-vmore]"); if(mm2) mm2.hidden=true;
+    if(tool==="plan"){ setView("plan"); return; }
+    if(tool==="delivery"){ setView("delivery"); return; }
+    if(tool==="start"){ vv.status="active"; VLOGS.unshift({at:TODAY+" "+nowHM(),op:"开始开发",who:"孔祥劲",obj:"计划中 → 进行中"});
+      renderVd(); syncVerCtx(); toast("版本已转「进行中」：范围可调整，主按钮换成记录发布"); return; }
+    if(tool==="close"||tool==="cancel"){ toast((tool==="close"?"关闭":"取消")+"版本需要填写理由并通知 6 位关注人；历史与关联保留"); return; }
+    toast("沿用现有页面：「"+({edit:"编辑版本",tasks:"管理范围",hours:"工时与构成",branches:"本版本分支",project:"项目驾驶舱",delivery:"交付报告",plan:"计划与历史",start:"开始开发",close:"关闭版本",cancel:"取消版本"})[tool]+"」，本次只重画发布相关链路");
+    return;
+  }
+  if(act==="new-plan"){ state.ver=b.getAttribute("data-v")||state.ver; planStatus="draft"; setView("plan"); toast("空白计划：4 项必填 + 范围清单"); return; }
+  if(act==="plans-open"){ return; }
+  if(act==="dl-gen"){ toast("已按所选生产记录生成报告草稿，跳转 #/delivery?versionId="+state.ver); return; }
+  if(act==="go"){ var g2=b.getAttribute("data-goto"); if(g2==="version") state.vdTab="releases"; setView(g2); return; }
+  if(act==="walk-fill"){ walkFill(); return; }
+  if(act==="walk"){ if(state.walkTimer){ walkStop(); $("[data-walk-st]").textContent="演示已停止，可手动逐步点上面各步的跳转按钮"; }
+    else { $("[data-walk-st]").textContent="准备开始…"; walk(0); } return; }
+  if(act==="rtab-ver"){ return; }
+
+  if(act==="src"){
+    state.src=b.getAttribute("data-src"); state.retryOf="";
+    $$("[data-act=src]").forEach(function(x){ x.classList.toggle("on", x===b); });
+    state.snap=[]; state.snapNo=""; state.snapVer="";
+    if(state.src==="plan"||state.src==="self"){ state.selected=state.ver===PLAN_VER?PLAN.ids.filter(function(id){ return byId[id].col==="done"; }):verDoneIds(state.ver); }
+    if(state.src==="rollback"){
+      var idx=latestProdIdx(state.ver);
+      if(idx>-1){ doRollback(idx); return; }
+      toast(verName(state.ver)+" 还没有成功的生产发布记录，没有可回滚的事实");
+    }
+    syncSrcBar(); renderScope(); renderDiff(); scheduleCheck(); return;
+  }
+  if(act==="only-diff"){ state.onlyDiff=b.checked; renderScope(); return; }
+  if(act==="scope-q"){ return; }
+  if(act==="scope-all-done"){ state.selected=(state.src==="rollback"&&state.snap.length)?state.snap.slice()
+      :verDoneIds(state.ver);
+    renderScope(); renderDiff(); scheduleCheck(); toast("已全选 "+state.selected.length+" 项"); return; }
+  if(act==="scope-plan"){ state.selected=(state.src==="rollback"&&state.snap.length)?state.snap.slice()
+      :(state.ver===PLAN_VER?PLAN.ids.filter(function(id){ return byId[id].col==="done"; }):verDoneIds(state.ver));
+    renderScope(); renderDiff(); scheduleCheck(); toast("已恢复 "+(state.snapNo||PLAN.no)+" 的范围"); return; }
+  if(act==="scope-clear"){ state.selected=[]; renderScope(); renderDiff(); scheduleCheck(); return; }
+  if(act==="grp"){ var label=b.closest(".grp-h").querySelector(".chip").textContent.trim();
+    var ids=$$("[data-row]", b.closest(".grp")).map(function(r){ return r.getAttribute("data-row"); });
+    var all=ids.every(function(x){ return state.selected.indexOf(x)!==-1; });
+    ids.forEach(function(x){ var k=state.selected.indexOf(x); if(all&&k!==-1) state.selected.splice(k,1); if(!all&&k===-1) state.selected.push(x); });
+    renderScope(); renderDiff(); scheduleCheck(); toast(all?"已取消该组 "+ids.length+" 项":"已选择该组 "+ids.length+" 项"); return; }
+  if(act==="now"){ $("[data-r-when]").value=nowStr(); state.when=$("[data-r-when]").value; $("[data-r-rel]").textContent="刚刚"; scheduleCheck(); return; }
+  if(act==="result"){ state.result=b.value; $("[data-fail-box]").hidden=b.value!=="failed"; renderDiff(); scheduleCheck(); return; }
+  if(act==="adopt"){
+    var dk=b.getAttribute("data-key"), d=diffByKey(dk);
+    if(d && d.adoptSel){ var pos=state.selected.indexOf(d.adoptSel.id);
+      if(d.adoptSel.on && pos===-1) state.selected.push(d.adoptSel.id);
+      if(!d.adoptSel.on && pos!==-1) state.selected.splice(pos,1);
+      renderScope(); renderDiff(); scheduleCheck(); toast("已按计划范围修正，可继续核对其它差异"); return; }
+    if(d && d.adoptTgt){ state.targets=PLAN.targets.join(" "); $("[data-r-tgt]").value=state.targets;
+      renderDiff(); scheduleCheck(); toast("目标键已改回计划值 "+PLAN.targets.join("、")); return; }
+    state.reasons[dk]="按计划值执行，本次不偏离。"; renderDiff(); scheduleCheck(); toast("已按计划值补齐说明，可再修改"); return;
+  }
+  if(act==="jump"){ focusIssue(b.getAttribute("data-target") ? {jump:b.getAttribute("data-target")} : diffByKey(b.getAttribute("data-key"))); return; }
+  if(act==="tofail"){ var fb=$("#r-fail"); if(fb){ fb.scrollIntoView({block:"center",behavior:"smooth"}); fb.focus({preventScroll:true}); } return; }
+  if(act==="toggle-issues"){ state.issuesOpen=!state.issuesOpen; b.textContent=state.issuesOpen?"收起缺项":"查看缺项"; renderBar(missingReasons(diffs()),diffs()); return; }
+  if(act==="save-draft"){ toast("已保存到本机草稿；下次打开发布台自动恢复"); return; }
+  if(act==="commit"){
+    var ds=diffs(), miss=missingReasons(ds);
+    if(miss.length){ state.issuesOpen=true; $("[data-act=toggle-issues]").textContent="收起缺项"; renderBar(miss,ds);
+      if(!focusIssue(miss[0])) toast("请先在上方填写失败环节与现象");
+      toast("还有 "+miss.length+" 处需要说明"); return; }
+    var n=state.selected.length;
+    var v=verById(state.ver);
+    var seq=HISTORY.filter(function(h){ return h.day===TODAY; }).length+1;
+    var rno="REL-"+TODAY.slice(5).replace("-","")+"-"+(seq<10?"0"+seq:seq);
+    var res=state.result==="failed"?"failed":(state.src==="rollback"?"rollback":"success");
+    var resTxt=res==="success"?"成功":res==="failed"?"失败":"回滚";
+    HISTORY.unshift({no:rno,ver:v.id,day:TODAY,time:nowHM(),env:"生产",res:res,op:state.src==="rollback"?"回滚":"部署",
+      art:$("[data-r-art]").value||"—",n:n,exec:"孔祥劲",dev:ds.length,plan:state.src==="plan"?"RP-1127-03":"—",items:state.selected.slice(),
+      notes:Object.keys(state.reasons).map(function(k){ return "["+k+"] "+state.reasons[k]; }).join(" ")});
+    VLOGS.unshift({at:TODAY+" "+nowHM(),op:"记录发布",who:"孔祥劲",obj:rno+" · 生产 · "+resTxt+" · "+n+" 项"});
+    state.histSel=0;
+    v.relCount++; v.lastRel=rno+" · 生产 · "+resTxt+" · "+TODAY.slice(5)+" "+nowHM();
+    if(res==="success"){ v.status="released"; v.planState="completed"; v.done=Math.max(v.done,state.selected.filter(function(id){ return byId[id].col==="done"; }).length);
+      var pp=PLANS.filter(function(p){ return p.no===v.plan; })[0]; if(pp){ pp.state="completed"; pp.gap="已完成 · 引用 "+rno; } }
+    state.reasons={}; state.fail=""; state.issuesOpen=false;
+    toast(res==="success"?"已记录：生产 · "+n+" 项 · "+v.name+" 转「已发布 · 只读」。更正请走「回滚 / 重部署」"
+      :res==="rollback"?"回滚已登记为新事实，原成功记录保留可追溯"
+      :"失败记录已登记：版本状态与计划快照不变，修正后可直接重部署");
+    setView("history"); return;
+  }
+  if(act==="hist"){ state.histSel=+b.getAttribute("data-i"); renderHist(); return; }
+  if(act==="hist-scope"){ state.histAll=b.getAttribute("data-scope")==="all";
+    $$("[data-act=hist-scope]").forEach(function(x){ x.classList.toggle("on", x===b); });
+    renderHist(); return; }
+  if(act==="rollback"){ doRollback(+b.getAttribute("data-i")); return; }
+  if(act==="retry"){ var r=HISTORY[+b.getAttribute("data-i")];
+    state.src="self"; state.retryOf=r.no; state.retryEnv=r.env; state.retryRes=r.res==="failed"?"失败":"未成功";
+    state.ver=r.ver||state.ver; state.snap=[]; state.snapNo=""; state.selected=r.items.slice();
+    $$("[data-act=src]").forEach(function(x){ x.classList.toggle("on", x.getAttribute("data-src")==="self"); });
+    setView("record"); toast("已带入 "+r.no+" 的范围重部署：结果默认成功，制品填新构建号"); return; }
+  if(act==="report"||act==="csv"){ toast(act==="report"?"打开交付报告（沿用现有报告页）":"导出快照 CSV"); return; }
+  if(act==="new-record"){ setView("record"); return; }
+  if(act==="to-record"){ setView("record"); return; }
+  if(act==="plan-cov"){ var sel=b.value; $("[data-plan-target-row]").hidden = sel==="覆盖未知";
+    $("[data-plan-target-row] span").firstChild.textContent = sel==="全量"?"覆盖为「全量」，需要明确部署目标":"覆盖为「部分」，需要明确部署目标"; return; }
+  if(act==="plan-env"){ return; }
+  if(act==="plan-save"){ toast("草稿已保存；未就绪的计划不会被实际发布记录引用"); return; }
+  if(act==="plan-cancel"){ toast("取消已就绪计划需要理由：会通知 6 位关注人"); return; }
+  if(act==="plan-ready"){
+    var g=planGaps();
+    if(g.length){ renderPlanFoot();
+      var j=$('[data-act="plan-jump"][data-sel="'+CSS.escape(g[0].sel)+'"]');
+      if(j){ j.closest(".card").scrollIntoView({block:"center",behavior:"smooth"});
+        var el=$(g[0].sel); if(el){ el.classList.add("is-attention"); setTimeout(function(){ el.classList.remove("is-attention"); },1600); } }
+      toast("还差 "+g.length+" 项才能就绪"); return; }
+    planStatus="ready"; renderPlanFoot(); toast("计划 RP-1127-03 已就绪，可被实际发布记录引用"); return;
+  }
+  if(act==="plan-jump"){ var target=$(b.getAttribute("data-sel"));
+    if(target){ target.scrollIntoView({block:"center",behavior:"smooth"}); target.focus({preventScroll:true});
+      target.classList.add("is-attention"); setTimeout(function(){ target.classList.remove("is-attention"); },1600); } return; }
+  if(act==="watch"){ b.textContent=b.textContent==="关注此计划"?"已关注 ✓":"关注此计划"; return; }
+  if(act==="notify"){ toast("已把计划范围推送给 6 位负责人（沿用现有通知面板）"); return; }
+  if(act==="dup-plan"){ toast("已复制 RP-1120-02 的范围与目标键，生成新草稿"); return; }
+  if(act==="pick-done"){ planSel=verDoneIds(PLAN_VER); markPlanDirty(); renderPlanList(); toast("已把 10 项已完成工作项预选进计划"); return; }
+  if(act==="pick-ver"||act==="pick-br"){ toast(act==="pick-ver"?"按版本带入：勾选该版本全部工作项":"按分支带入：勾选该分支关联的工作项"); return; }
+  if(act==="plan-grp"){ var pids=$$("[data-row]", b.closest(".grp")).map(function(r){ return r.getAttribute("data-row"); });
+    var allp=pids.every(function(x){ return planSel.indexOf(x)!==-1; });
+    pids.forEach(function(x){ var q=planSel.indexOf(x); if(allp&&q!==-1) planSel.splice(q,1); if(!allp&&q===-1) planSel.push(x); });
+    markPlanDirty(); renderPlanList(); toast(allp?"已取消该组 "+pids.length+" 项":"已把该组 "+pids.length+" 项加入计划"); return; }
+});
+
+document.addEventListener("input",function(e){
+  var t=e.target;
+  if(t.getAttribute("data-act")==="reason"){ state.reasons[t.getAttribute("data-key")]=t.value; renderDiff(); return; }
+  if(t.id==="r-fail"){ state.fail=t.value; renderDiff(); return; }
+  if(t.getAttribute("data-act")==="scope-q"){ state.q=t.value; renderScope(); return; }
+  if(t===document.querySelector("[data-r-tgt]")){ state.targets=t.value; renderDiff(); scheduleCheck(); return; }
+  if(t===document.querySelector("[data-r-art]")){ var v=t.value.trim();
+    var m=v.match(/#([0-9a-f]{7,40})$/i);
+    $("[data-r-art-tip]").textContent = m ? (m[1].length===40?"已识别为 commit "+m[1]+"（SHA256 留空即可）":"已识别为构建号 "+m[1]) : "写成 制品名#构建号 或 制品名#commit";
+    scheduleCheck(); return; }
+  if(t===document.querySelector("[data-r-when]")){ state.when=t.value; $("[data-r-rel]").textContent="距计划 "+rel(t.value); scheduleCheck(); return; }
+  if(t.id==="p-when"||t.id==="p-owner"||t.getAttribute("data-plan-targets")){ markPlanDirty(); renderPlanFoot(); return; }
+});
+document.addEventListener("change",function(e){
+  var t=e.target;
+  if(t.getAttribute("data-act")==="ver-proj"){ state.proj=t.value; renderVerList(); return; }
+  if(t.getAttribute("data-act")==="vd-switch"){ state.ver=t.value; renderVd(); if(state.vdTab==="releases") renderHist(); syncVerCtx(); return; }
+  if(t.getAttribute("data-act")==="rtab-ver"){ state.ver=t.value;
+    if(state.view==="record"){ openRecord(state.ver); toast("已切到 "+verName(state.ver)+"：范围与计划默认值随之更换"); return; }
+    syncVerCtx(); renderScope(); renderDiff(); toast("已切到 "+verName(state.ver)+"：范围与计划默认值随之更换"); return; }
+  if(t.getAttribute("data-act")==="dl-ver"){ state.ver=t.value; renderDl(); syncVerCtx(); return; }
+  if(t.id==="r-result"){ state.result=t.value; $("[data-fail-box]").hidden=t.value!=="failed"; renderDiff(); scheduleCheck(); return; }
+  if(t.id==="p-cov"){ $("[data-plan-target-row]").hidden = t.value==="覆盖未知"; markPlanDirty(); renderPlanFoot(); return; }
+});
+document.addEventListener("keydown",function(e){
+  if(e.target.getAttribute("data-act")==="reason" && e.key==="Enter" && !e.shiftKey){
+    e.preventDefault();
+    var all=$$('[data-act="reason"]'), i=all.indexOf(e.target);
+    if(i>-1 && i<all.length-1) all[i+1].focus(); else if(state.result==="failed") $("[data-act=commit]").focus();
+    return;
+  }
+  if((e.ctrlKey||e.metaKey) && e.key==="Enter"){ e.preventDefault(); $("[data-act=commit]").click(); }
+});
+function rel(v){
+  if(!v) return "—";
+  var d=new Date(v), p=new Date(PLAN.when.replace(" ","T"));
+  if(isNaN(d.getTime())) return "—";
+  var mins=Math.round((d-p)/60000), ahead=mins<0;
+  var a=Math.abs(mins), hh=Math.floor(a/60), mm=a%60;
+  return (ahead?"提前 ":"滞后 ")+(hh?hh+" 小时 ":"")+mm+" 分钟";
+}
+
+/* ---------- 初始化 ---------- */
+$("[data-r-when]").value=state.when;
+renderPlanList(); renderScope(); renderDiff(); renderHist();
+$$("[data-act=src]").forEach(function(x){ x.classList.toggle("on", x.getAttribute("data-src")===state.src); });
+setView("versions");
+})();
+</script>
+</body>
+</html>
