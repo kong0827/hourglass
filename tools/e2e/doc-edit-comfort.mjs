@@ -1,8 +1,10 @@
-/* 文档编辑体验批次：粘贴纯文本开关 + 打印剥离划线高亮 E2E
+/* 文档编辑体验批次：粘贴纯文本开关 + 打印剥离划线高亮 + 标签页标题/图片懒加载/md 快捷键 E2E
    覆盖：
      A 粘贴纯文本：开关切换并持久化；开启后富文本粘贴只留纯文本（换行转 <br>、HTML 转义）；
         关闭后恢复富文本粘贴；截图（剪贴板文件）不受影响的路径不拦默认行为。
      B 打印：正文里的划线评论高亮（mark.rrd-hl）不进入打印件；打印样式含标题避孤儿/换行保护/外链补 URL。
+     C 标签页标题跟随文档（阅读/编辑/关闭三态还原）、阅读图片 loading="lazy"、
+        Markdown 编辑 Ctrl+B/Ctrl+I 包裹记号。
    数据：E2Ews01 + E2Eu01（本批自建账号体系，见 doc-favorite-dup-section.mjs），按 doc_id 精确清理。
    运行前需 8081 预览 + 8080 后端在线（deploy/local/stack.sh）。 */
 import { spawn, spawnSync } from "node:child_process";
@@ -110,7 +112,7 @@ const shot = async name => {
   console.log("  SHOT " + out);
 };
 
-const created = { html: null };
+const created = { html: null, md: null };
 const testDocIds = () => {
   const rows = sqlRaw(`SELECT id FROM requirement_doc WHERE workspace_id='${WS}' AND title LIKE '${T_PREFIX}%'`);
   return (rows.stdout || "").trim().split("\n").filter(Boolean);
@@ -213,15 +215,20 @@ try{
   };
 
   await login(LOGIN_USER, PASS);
-  await section("[准备] 创建 HTML 样本文档", async () => {
-    const id = await evaluate(`(async () => {
+  await section("[准备] 创建样本文档", async () => {
+    const ids = await evaluate(`(async () => {
       const { API } = await import("./js/core/api.js");
-      const d = await API.post("/api/req-docs", { title: "${T_PREFIX}-粘贴样本",
+      const h = await API.post("/api/req-docs", { title: "${T_PREFIX}-粘贴样本",
         content: "<p>E2E 粘贴样本正文</p>", format: "html", docType: "other", status: "draft", visibility: "team" });
-      return d.id;
+      /* data URI 图片不走网络（避免 404 干扰网络断言），懒加载断言只关心 img 属性 */
+      const m = await API.post("/api/req-docs", { title: "${T_PREFIX}-快捷键样本",
+        content: "# 标题\\n\\n快捷键样本正文\\n\\n![示意图](data:image/gif;base64,R0lGODlhAQABAAAAACw=)\\n",
+        format: "markdown", docType: "other", status: "draft", visibility: "team" });
+      return { html: h.id, md: m.id };
     })()`);
-    created.html = id;
-    assert(!!id, "样本文档已创建");
+    created.html = ids.html;
+    created.md = ids.md;
+    assert(!!created.html && !!created.md, "两篇样本文档已创建");
   });
 
   const openEditor = async () => {
@@ -329,6 +336,58 @@ try{
     assert(html.indexOf("break-inside:avoid") !== -1, "打印样式含 pre/tr 换行保护");
     assert(html.indexOf('a[href^="http"]::after') !== -1, "打印样式含外链补 URL");
     assert(html.indexOf("E2E 粘贴样本正文") !== -1, "正文进入打印件");
+  });
+
+  await section("[C] 标签页标题 / 图片懒加载 / md 快捷键", async () => {
+    const titleNow = () => evaluate(`document.title.replace(/^\\(\\d+\\+?\\)\\s*/, "")`);
+    /* 阅读态：标题跟随文档名 */
+    await evaluate(`import("./js/views/requirements.js").then(m => m.openReqDocSection(${JSON.stringify(created.md)}, -1)); true`);
+    await waitFor(`!!document.querySelector("#reqDocReaderBody img")`, "阅读器正文（含图）就绪", 15000);
+    assert((await titleNow()).indexOf("快捷键样本 · 沙漏") !== -1, "阅读态标题跟随文档名");
+    /* 懒加载：正文图片带 loading="lazy" */
+    const lazy = await evaluate(`(() => {
+      const imgs = document.querySelectorAll("#reqDocReaderBody img");
+      return { total: imgs.length, lazy: document.querySelectorAll('#reqDocReaderBody img[loading="lazy"]').length };
+    })()`);
+    assert(lazy.total >= 1 && lazy.lazy === lazy.total, "阅读正文图片全部 loading=lazy（" + lazy.lazy + "/" + lazy.total + "）");
+
+    /* 切回目录态：标题还原为视图标题 */
+    await evaluate(`(() => { const b = document.querySelector('#reqDocListPage [data-rdmode="tree"]'); if(b) b.click(); return true; })()`);
+    await sleep(400);
+    assert((await titleNow()) === "文档 · 沙漏", "离开阅读态标题还原视图标题");
+
+    /* 编辑态：标题跟随 + 快捷键包裹记号 */
+    await evaluate(`import("./js/views/requirements.js").then(m => m.openReqDocAndJump(${JSON.stringify(created.md)}))`);
+    await waitFor(`!document.getElementById("reqDocEditPage").hidden && (document.getElementById("reqDocMdCanvas") || {}).value
+      && document.getElementById("reqDocMdCanvas").value.indexOf("快捷键样本正文") !== -1`, "markdown 编辑器就绪", 20000);
+    assert((await titleNow()).indexOf("快捷键样本 · 沙漏") !== -1, "编辑态标题跟随文档名");
+    const wrapB = await evaluate(`(() => {
+      const ta = document.getElementById("reqDocMdCanvas");
+      ta.focus();
+      const s = ta.value.indexOf("快捷键");
+      ta.setSelectionRange(s, s + 3);
+      ta.dispatchEvent(new KeyboardEvent("keydown", { key: "b", ctrlKey: true, bubbles: true, cancelable: true }));
+      return { value: ta.value, selStart: ta.selectionStart, selEnd: ta.selectionEnd };
+    })()`);
+    assert(wrapB.value.indexOf("**快捷键**样本正文") !== -1, "Ctrl+B 选中文字包裹 ** 记号");
+    assert(wrapB.selEnd - wrapB.selStart === 3 && wrapB.value.slice(wrapB.selStart, wrapB.selEnd) === "快捷键",
+      "加粗后选区落在记号内侧的文字上");
+    const wrapI = await evaluate(`(() => {
+      const ta = document.getElementById("reqDocMdCanvas");
+      const s = ta.value.indexOf("样本正文");
+      ta.setSelectionRange(s, s + 2);
+      ta.dispatchEvent(new KeyboardEvent("keydown", { key: "i", metaKey: true, bubbles: true, cancelable: true }));
+      return ta.value;
+    })()`);
+    assert(wrapI.indexOf("*样本*正文") !== -1, "⌘+I 选中文字包裹 * 记号");
+    await shot("md-shortcut");
+
+    /* 关闭编辑页（有未保存修改 → 丢弃）后标题还原 */
+    await evaluate(`import("./js/views/requirements.js").then(m => m.tryCloseReqDocEditor()); true`);
+    await sleep(400);
+    await evaluate(`(() => { const b = document.getElementById("dlgReqDocCloseDiscard"); if(b && !b.hidden) b.click(); return true; })()`);
+    await waitFor(`document.getElementById("reqDocEditPage").hidden`, "编辑页已关闭", 10000);
+    assert((await titleNow()) === "文档 · 沙漏", "关闭编辑页后标题还原视图标题");
   });
 
   /* 收尾：删样本文档并回读基线 */

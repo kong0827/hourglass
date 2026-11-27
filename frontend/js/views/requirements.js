@@ -6,7 +6,7 @@ import { icon } from "../core/icons.js";
 import { attachmentChipHTML, openAttachment, downloadUrl, bindFileDrop, uploadAttachment, validateFiles, reportRejected } from "../core/attach-kit.js";
 import { openAttPreview } from "../core/att-preview.js";
 import { shrinkImageFile, fitInsertedImage, notifyResizeHint } from "../core/img-fit.js";
-import { activeView, showView } from "../core/router.js";
+import { activeView, showView, VIEWS } from "../core/router.js";
 import { isMobile } from "../core/layout.js";
 import { canEditDoc, canEditDocBody, canEditReq, currentRole, projectOptionsHTML, reqNameById, roleReadOnly, rt, state } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
@@ -27,6 +27,7 @@ import { htmlToSnapshot, parseSnapshot, snapshotHeadings, snapshotToHtml, snapsh
 import { openSheetView, sheetSnapshotText, sheetSnapshotToHtml } from "../core/sheet-editor.js";
 import { blankSnapshot, excelToSnapshot, ensureExcelJs, snapshotToExcel } from "../core/xlsx-fidelity.js";
 import { normalizeImportedHtml, decodeHtmlBytes } from "../core/html-import.js";
+import { syncDocTitle } from "../core/notifications.js";
 
 var reqDocList = [];
 var reqDocDirty = false;
@@ -1238,6 +1239,20 @@ function setReqDocMode(mode){
   showEl($("reqDocFeed"), reqDocMode === "feed");
   showEl($("reqDocMine"), reqDocMode === "mine");
   renderReqDocMode();
+  syncRrdDocTitle();
+}
+/* 标签页标题跟随当前文档（阅读或编辑），多标签页可区分；离开文档域还原视图标题。
+   未读角标前缀由 notifications 的 syncDocTitle 维护，改完基标题必须经它刷一次 */
+function syncRrdDocTitle(){
+  if(activeView !== "requirements") return;
+  var t = "";
+  if(isReqDocEditorOpen()) t = (editingMeta && editingMeta.title) || "";
+  else if(reqDocMode === "read" && splitDocId){
+    var d = (rrdDocDetail && rrdDocDetail.id === splitDocId) ? rrdDocDetail : reqDocById(splitDocId);
+    t = (d && d.title) || "";
+  }
+  document.title = (t ? t + " · " : VIEWS.requirements.title + " · ") + "沙漏";
+  syncDocTitle();
 }
 function renderReqDocMode(){
   syncReqDocFilterUI();
@@ -1754,6 +1769,7 @@ function renderReqDocSplit(){
       '<div class="rs-proj-body">' + body + '</div>' +
     '</div>';
   }).join("");
+  syncRrdDocTitle();
 }
 function loadReqDocSplitDoc(id){
   /* 切到另一篇前，先把当前这篇的阅读位置记下来 */
@@ -2616,6 +2632,7 @@ function renderReqDocReader(doc){
   rrdTocQuery = "";
   disposeReqSheetReader();
   rrdDocDetail = doc;
+  syncRrdDocTitle();
   rrdFindHits = [];
   rrdFindIdx = -1;
   rrdFindQuery = "";
@@ -5246,6 +5263,7 @@ function openReqDocEditor(id){
     refreshReqDocPublishBtn();
     refreshReqDocShareBtn();
     syncReqDocPageHead();
+    syncRrdDocTitle();
     setTocVisible(tocVisiblePref());
     if($("reqDocCrumb")) $("reqDocCrumb").textContent = reqDocProjectName(doc.reqId) + " / " + (doc.title || "未命名文档");
     activityUI.loadInto($("reqDocActivityList"), "/api/req-docs/" + encodeURIComponent(doc.id) + "/activities");
@@ -5269,6 +5287,7 @@ function closeReqDocEditor(){
   if($("reqDocEditPage")) $("reqDocEditPage").hidden = true;
   if($("reqDocListPage")) $("reqDocListPage").hidden = false;
   editingDocId = null;
+  syncRrdDocTitle();
   if(reqDocCommentMention) reqDocCommentMention.reset();
   reqDirtyReset();
   renderReqDocMode();
@@ -5727,10 +5746,26 @@ function rdaBindEditorSelection(){
   attempt(10);
 }
 
+/* Ctrl/⌘+B 加粗、Ctrl/⌘+I 斜体：选中文字包裹记号；无选区时插入一对并把光标放进中间。
+   setRangeText 走原生撤销栈；手动 dispatch input 触发脏标记与预览刷新 */
+function rdaMdWrapMark(ta, mark){
+  var s = ta.selectionStart, e = ta.selectionEnd;
+  var sel = ta.value.slice(s, e);
+  ta.setRangeText(mark + sel + mark, s, e, "end");
+  ta.setSelectionRange(s + mark.length, s + mark.length + (sel ? sel.length : 0));
+  ta.dispatchEvent(new Event("input", { bubbles: true }));
+}
 function rdaBindMdSelection(){
   var ta = $("reqDocMdCanvas");
   if(!ta || ta.dataset.rdaBound) return;
   ta.dataset.rdaBound = "1";
+  ta.addEventListener("keydown", function(e){
+    if(!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
+    var mark = e.key === "b" || e.key === "B" ? "**" : (e.key === "i" || e.key === "I" ? "*" : "");
+    if(!mark) return;
+    e.preventDefault();
+    rdaMdWrapMark(ta, mark);
+  });
   ta.addEventListener("mouseup", function(e){
     setTimeout(function(){ rdaCaptureMd(ta, e.clientX, e.clientY); }, 0);
   });
@@ -7801,6 +7836,7 @@ function saveReqDoc(opts){
     if($("reqDocCrumb")) $("reqDocCrumb").textContent = reqDocProjectName(doc.reqId) + " / " + (doc.title || "未命名文档");
     refreshReqDocPublishBtn();
     syncReqDocPageHead();
+    syncRrdDocTitle();
     if(silent){
       /* 关闭链路的保存：成功后直接关闭，发布与否由关闭弹窗上的按钮决定 */
     }else if(editingMeta.publishedAt){
