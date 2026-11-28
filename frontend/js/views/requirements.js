@@ -11,6 +11,7 @@ import { isMobile } from "../core/layout.js";
 import { canEditDoc, canEditDocBody, canEditReq, currentRole, projectOptionsHTML, reqNameById, roleReadOnly, rt, state } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, syncAssocRead, syncAssocViewBtns } from "../core/task-drawer.js";
+import { recordRecentVisit } from "../core/recent-visits.js";
 import { createMentionPicker } from "../core/mention-picker.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { AIProgress, aiApplyFailText, aiErrorText as aiErrMsg, aiUsageText } from "../core/ai-progress.js";
@@ -1314,6 +1315,13 @@ function recordReqDocRecent(doc){
   var arr = readReqRecent().filter(function(r){ return r && r.id !== doc.id; });
   arr.unshift({ id: doc.id, title: doc.title || "未命名文档", ts: Date.now() });
   writeReqRecent(arr);
+  /* 文档也进全局「最近访问」：与工作项共用一份，搜索空态一眼回到刚才读的文档 */
+  recordRecentVisit({
+    type: "doc", id: doc.id,
+    title: doc.title || "未命名文档",
+    meta: reqDocProjectName(doc.reqId) || "文档",
+    reqId: doc.reqId || ""
+  });
   if(reqDocMode === "mine") renderReqDocMine();
 }
 /* 列表未加载时不裁（避免把还没拉到的文档误删）；加载后清掉已删除 / 已不可见的条目 */

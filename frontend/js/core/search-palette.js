@@ -6,6 +6,7 @@ import { COLUMNS } from "../lib/format.js";
 import { showView } from "./router.js";
 import { reqSetId, rt, setNameById } from "./state.js";
 import { openTaskById } from "./task-actions.js";
+import { clearRecentVisits, recentVisits, recordRecentVisit } from "./recent-visits.js";
 import { tryCloseTaskDrawer } from "./task-drawer.js";
 import { UI, esc, toast } from "./ui.js";
 
@@ -337,6 +338,19 @@ function snippetHTML(snippet, q){
 
 function idleHTML(){
   var html = "";
+  var visits = recentVisits();
+  if(visits.length){
+    html += '<div class="palette-recent-head"><span>最近访问</span>'
+      + '<button type="button" class="palette-clear" data-visit-clear>清除</button></div>';
+    visits.forEach(function(v, i){
+      var vm = TYPE_META[v.type] || { label: "访问", icon: "•" };
+      html += '<button class="palette-item palette-visit" type="button" data-visit="' + i + '">'
+        + '<span class="palette-ic" aria-hidden="true">' + vm.icon + '</span>'
+        + '<span class="palette-body"><span class="palette-title">' + esc(v.title) + '</span>'
+        + '<span class="palette-meta">' + esc(v.meta || vm.label) + '</span></span>'
+        + '</button>';
+    });
+  }
   if(recent.length){
     html += '<div class="palette-recent-head"><span>最近搜索</span>'
       + '<button type="button" class="palette-clear" data-recent-clear>清除</button></div>';
@@ -508,9 +522,21 @@ function close(){
   if(m) UI.closeModal(m);
 }
 
+/* 从搜索打开的实体也记最近访问：标题优先用文档本身，章节命中不覆盖文档名 */
+function rememberVisit(h){
+  var m = TYPE_META[h.type] || { label: "访问" };
+  recordRecentVisit({
+    type: h.type, id: h.id,
+    title: h.title || h.section || m.label,
+    meta: metaText(h) || m.label,
+    reqId: h.reqId || "",
+    head: h.head == null ? null : h.head
+  });
+}
 function openHit(h){
   if(!h) return;
   remember(inputEl ? inputEl.value : "", h);
+  rememberVisit(h);
   close();
   if(h.type === "task"){
     openTaskById(h.id);
@@ -544,6 +570,12 @@ function openHit(h){
       import("../views/testcases.js").then(function(mod){ mod.openCaseInProject(h.reqId, h.id); });
     });
   }
+}
+
+function openVisit(i){
+  var v = recentVisits()[i];
+  if(!v) return;
+  openHit({ type: v.type, id: v.id, title: v.title, meta: v.meta, reqId: v.reqId, head: v.head });
 }
 
 function useRecent(i){
@@ -612,6 +644,15 @@ function init(){
     if(e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); close(); }
   });
   resultsEl.addEventListener("click", function(e){
+    var vc = e.target.closest("[data-visit-clear]");
+    if(vc){
+      clearRecentVisits();
+      renderIdle();
+      try{ inputEl.focus(); }catch(err){ /* noop */ }
+      return;
+    }
+    var vi = e.target.closest("[data-visit]");
+    if(vi){ openVisit(Number(vi.getAttribute("data-visit"))); return; }
     var rc = e.target.closest("[data-recent-clear]");
     if(rc){
       recent = [];
