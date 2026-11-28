@@ -52,6 +52,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="apple-mobile-web-app-title" content="沙漏" />
 <!-- modulepreload:start（由 tools/gen-modulepreload.js 生成，勿手改） -->
+<link rel="modulepreload" href="js/core/ai-field.js" />
 <link rel="modulepreload" href="js/core/api.js" />
 <link rel="modulepreload" href="js/core/app.js" />
 <link rel="modulepreload" href="js/core/assistant.js" />
@@ -79,11 +80,13 @@
 <link rel="modulepreload" href="js/core/notifications.js" />
 <link rel="modulepreload" href="js/core/priorities.js" />
 <link rel="modulepreload" href="js/core/realtime.js" />
+<link rel="modulepreload" href="js/core/release-ai.js" />
 <link rel="modulepreload" href="js/core/router.js" />
 <link rel="modulepreload" href="js/core/search-palette.js" />
 <link rel="modulepreload" href="js/core/select-picker.js" />
 <link rel="modulepreload" href="js/core/shell.js" />
 <link rel="modulepreload" href="js/core/shortcuts.js" />
+<link rel="modulepreload" href="js/core/similar-hints.js" />
 <link rel="modulepreload" href="js/core/state.js" />
 <link rel="modulepreload" href="js/core/task-actions.js" />
 <link rel="modulepreload" href="js/core/task-drawer.js" />
@@ -189,7 +192,7 @@
         <button class="nav-exp" type="button" data-nav-exp="phase" aria-label="展开版本" aria-expanded="false"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5 6 8l3-3.5"/></svg></button>
         <div class="nav-sub">
           <button class="nav-sub-item" type="button" data-view="phase">版本列表</button>
-          <button class="nav-sub-item" type="button" data-view="release">发布工作台</button>
+          <button class="nav-sub-item" type="button" data-view="release">发布计划</button>
         </div>
       </div>
 
@@ -1129,23 +1132,24 @@
                 <button type="button" data-pmode="phase" aria-pressed="false">首版 / 迭代分析</button>
               </div>
               <div class="scope-wrap" id="phaseScopeWrap">
-                <button class="btn sm" type="button" id="phaseScopeBtn" aria-haspopup="true" aria-expanded="false" title="跨项目的版本清单、发布日程与投入总览">
+                <button class="btn sm" type="button" id="phaseScopeBtn" aria-haspopup="true" aria-expanded="false" title="跨项目的版本清单、发布计划与投入总览">
                   <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10 2.8 7 3.6-7 3.6-7-3.6 7-3.6Z"/><path d="m3.4 10.2 6.6 3.4 6.6-3.4"/><path d="m3.4 13.8 6.6 3.4 6.6-3.4"/></svg>
-                  <span id="phaseScopeLabel">跨项目视图</span>
+                  <span id="phaseScopeLabel">范围</span>
                   <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5 6 8l3-3.5"/></svg>
                 </button>
                 <div class="menu scope-menu" id="phaseScopeMenu" hidden role="menu" aria-label="跨项目视图">
                   <button class="scope-item" type="button" role="menuitem" data-pmode="allversions">
                     <span class="si-ic" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5.5h14M3 10h14M3 14.5h14"/></svg></span>
-                    <span class="si-tx"><b>全部版本</b><span>跨项目版本清单，可勾选预填新的发布计划</span></span>
+                    <span class="si-tx"><b>全部项目</b><span>跨项目版本清单，可勾选预填新的发布计划</span></span>
                   </button>
-                  <button class="scope-item" type="button" role="menuitem" data-pmode="schedule">
+                  <div id="phaseScopeSets"></div>
+                  <button class="scope-item" type="button" role="menuitem" data-open-plans>
                     <span class="si-ic" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="14" height="12.5" rx="2"/><path d="M6.5 3v3M13.5 3v3M3 8.5h14"/></svg></span>
-                    <span class="si-tx"><b>发布日程</b><span>跨项目未完成发布计划，按计划时间排序</span></span>
+                    <span class="si-tx"><b>发布计划</b><span>跨项目统一排期与就绪检查（左侧「发布计划」菜单同一列表）</span></span>
                   </button>
                   <button class="scope-item" type="button" role="menuitem" data-pmode="overview">
                     <span class="si-ic" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5A2 2 0 0 1 5 4.5h3l1.5 2H15a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></span>
-                    <span class="si-tx"><b>全部项目</b><span>项目级的首版 / 迭代投入与风险总览</span></span>
+                    <span class="si-tx"><b>投入总览</b><span>项目级的首版 / 迭代投入与风险总览</span></span>
                   </button>
                   <div class="scope-sep" aria-hidden="true"></div>
                   <button class="scope-back" type="button" role="menuitem" data-scope-back>返回单项目<span id="phaseScopeBackName"></span></button>
@@ -1173,7 +1177,7 @@
           </div>
           <div class="scope-strip" id="phaseScopeStrip" hidden>
             <span class="tag tag-info">跨项目视图</span>
-            <b id="phaseScopeName">全部版本</b>
+            <b id="phaseScopeName">全部项目</b>
             <span id="phaseScopeDesc">跨项目汇总，不改变单项目版本口径</span>
             <button class="link" type="button" id="phaseScopeBack">返回单项目 →</button>
           </div>
@@ -1214,13 +1218,13 @@
         </div></div></div>
       </section>
 
-      <!-- ===== 版本详情子页（从版本卡 / 全部版本 / 发布日程 / 驾驶舱穿透） ===== -->
+      <!-- ===== 版本详情子页（从版本卡 / 全部版本 / 发布计划 / 驾驶舱穿透） ===== -->
       <section class="view" id="view-version" aria-label="版本详情">
         <div id="versionBody"></div>
       </section>
 
       <!-- ===== 发布工作台子页（计划 / 实际 / 历史 / 内容；#/release?id=&reqId=&tab=） ===== -->
-      <section class="view" id="view-release" aria-label="发布计划工作台">
+      <section class="view" id="view-release" aria-label="发布计划">
         <div id="releaseBody"></div>
       </section>
 
@@ -1426,7 +1430,7 @@
                   <button class="menu-item" type="button" id="reqDocHistory" title="查看历史版本并恢复">
                     <span data-icon="clock"></span>历史版本
                   </button>
-                  <button class="menu-item" type="button" id="reqDocImport" title="导入 Word（旧版 .doc 仅保留文字）/ Markdown / TXT / HTML / Excel 文件">
+                  <button class="menu-item" type="button" id="reqDocImport" title="导入 Word / Markdown / TXT / HTML / Excel 文件；Word 与 HTML 转静态富文本（旧版 .doc 仅保留文字）">
                     <span data-icon="upload"></span>导入文件…
                   </button>
                   <button class="menu-item" type="button" id="reqDocExport" title="按当前格式导出 Markdown / HTML 文件">
@@ -1513,7 +1517,7 @@
             <div class="att-kit compact" id="reqDocAttachKit" style="margin-top:8px">
               <div class="att-drop" tabindex="0" role="button" aria-label="选择或拖入文件" id="reqDocAttachDrop">
                 <span class="att-drop-ico" data-icon="upload"></span>
-                <span class="att-drop-text"><b>点击选择</b>，或将文件拖到这里，也可粘贴截图</span>
+                <span class="att-drop-text"><b>点击选择</b>，或将文件拖到这里，也可粘贴截图（zip 仅可下载）</span>
                 <input type="file" id="reqDocAttachFile" class="att-drop-input" multiple accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.html,.htm,.zip,.xlsx,.doc,.docx,.xls,.ppt,.pptx" tabindex="-1" aria-hidden="true">
               </div>
             </div>
@@ -1623,7 +1627,7 @@
                   <label class="doc-pick">
                     <span>选择文件</span>
                     <input id="newReqDocFile" type="file" accept=".docx,.doc,.md,.markdown,.txt,.html,.htm,.xlsx">
-                    <small>支持 Word / Markdown / TXT / HTML / Excel(.xlsx)，导入前可预览</small>
+                    <small>支持 Word / Markdown / TXT / HTML / Excel(.xlsx)；Word 与 HTML 转为静态富文本，脚本、外链样式与相对路径资源不导入</small>
                   </label>
                   <div class="doc-import-inline" id="newReqDocPreview" hidden>
                     <div class="doc-import-inline-bar">
@@ -2059,7 +2063,7 @@
                   </span>
                 </div>
               </div>
-              <div class="tc-list" id="tcList"></div>
+              <div class="tc-list" id="tcList" tabindex="0" role="listbox" aria-label="用例列表，上下键移动、回车打开详情"></div>
             </div>
           </div>
         </div>
@@ -2075,7 +2079,7 @@
                 <h3 id="caseFormTitle">新建用例</h3>
                 <p class="cf-ctx" id="caseFormCtx" hidden></p>
               </div>
-              <span class="case-edit-acts"><button class="icon-btn sm" type="button" id="dlgCaseX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></span>
+              <span class="case-edit-acts"><button class="icon-btn sm drawer-full-btn" type="button" data-drawer-full="case" aria-pressed="false" aria-label="放大为全屏" title="放大为全屏"><svg class="ic-expand" width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg><svg class="ic-contract" width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.4H3.4V9"/><path d="M3.4 3.4 9 9"/><path d="M11 16.6h5.6V11"/><path d="M16.6 16.6 11 11"/></svg></button><button class="icon-btn sm" type="button" id="dlgCaseX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></span>
             </div>
             <div class="cf-form">
               <div class="cf-errsum" id="caseErrSum" role="alert" hidden>

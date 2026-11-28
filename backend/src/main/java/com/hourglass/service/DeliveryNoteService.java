@@ -17,6 +17,7 @@ import com.hourglass.dto.TestPlanView;
 import com.hourglass.entity.AppUser;
 import com.hourglass.entity.Category;
 import com.hourglass.entity.DeliveryNote;
+import com.hourglass.entity.DeliveryNotePlan;
 import com.hourglass.entity.DeliveryNoteShare;
 import com.hourglass.entity.DeliveryNoteShareVisit;
 import com.hourglass.entity.DeliveryNoteSnapshot;
@@ -146,6 +147,613 @@ public class DeliveryNoteService {
         resp.setCanSnapshot(resp.getCanEdit());
         resp.setCanShare(isDeliveryEvidence(selected) && !"internal".equals(toneOf(resp.getOptions())));
         return resp;
+    }
+
+    /* ==================== 计划维度聚合 ==================== */
+
+    /**
+     * 计划维度交付说明：一份计划覆盖的版本各成一章，事实切片逐版本保留，
+     * 不做跨版本合数（质量/缺陷/需求按版本可重复），只在顶部给可安全相加的承诺、项目与工时总量。
+     */
+    public DeliveryNoteResponse aggregatePlan(String workspaceId, String userId, String planId) {
+        VersionReleasePlan plan = requirePlan(workspaceId, planId);
+        List<PlanVersionRow> rows = planVersionRows(workspaceId, planId);
+        assertPlanView(workspaceId, userId, rows);
+        DeliveryNotePlan note = noteMapper.selectPlanByPlan(workspaceId, planId);
+        DeliveryNoteResponse resp = buildPlan(workspaceId, userId, plan, rows, note);
+        boolean canWrite = canWritePlan(workspaceId, userId, rows);
+        resp.setCanEdit(canWrite);
+        resp.setCanSnapshot(canWrite);
+        resp.setCanShare(canWrite && planEvidence(resp)
+                && !"internal".equals(toneOf(resp.getOptions())));
+        return resp;
+    }
+
+    /** 事实聚合：计划章节与顶层汇总共用；不含任何权限判断 */
+    private DeliveryNoteResponse buildPlan(String workspaceId, String userId, VersionReleasePlan plan,
+                                           List<PlanVersionRow> rows, DeliveryNotePlan note) {
+        DeliveryNoteResponse r = new DeliveryNoteResponse();
+        r.setScopeType("plan");
+        r.setScopeId(plan.getId());
+        r.setScopeName(planScopeName(plan, rows));
+        r.setVersionName(r.getScopeName());
+        String soleProject = soleProjectId(rows);
+        Requirement project = soleProject == null ? null : reqMapper.selectById(soleProject);
+        r.setProjectId(soleProject);
+        r.setProjectName(project != null ? project.getName()
+                : rows.size() > 1 ? "跨 " + projectCount(rows) + " 个项目" : "未归属项目");
+        r.setOwnerName(resolvePlanOwner(plan, userId));
+        r.setGeneratedAt(LocalDateTime.now());
+        r.setLocked(false);
+
+        Map<String, Object> options = defaultOptions();
+        String audience = null;
+        String support = null;
+        String acceptanceNote = null;
+        if (note != null) {
+            options.putAll(readMap(note.getOptions()));
+            r.setNarratives(readStringMap(note.getNarratives()));
+            r.setConfirmed(readList(note.getConfirmed()));
+            r.setRevision(note.getRevision());
+            audience = note.getAudience();
+            support = note.getSupportContact();
+            acceptanceNote = note.getAcceptance();
+        }
+        r.setOptions(options);
+        r.setAudience(audience);
+        r.setSupportContact(support);
+        r.setAcceptanceNote(acceptanceNote);
+
+        r.setPlan(planInfo(plan, rows));
+
+        Map<String, DeliveryNoteResponse.DefectRow> openById = new LinkedHashMap<String, DeliveryNoteResponse.DefectRow>();
+        Map<String, DeliveryNoteResponse.DefectRow> fixedById = new LinkedHashMap<String, DeliveryNoteResponse.DefectRow>();
+        Map<String, Integer> effortByModule = new LinkedHashMap<String, Integer>();
+        Map<String, Integer> effortByMember = new LinkedHashMap<String, Integer>();
+        int workMinutes = 0, estimateMinutes = 0, chapterMissingEffort = 0;
+        int qualityPlans = 0, qualityCases = 0, qualityExecuted = 0, qualityPassed = 0;
+        int qualityFailed = 0, qualityBlocked = 0, qualitySkipped = 0, qualityMissing = 0;
+        int evidenceCount = 0, verifiedChapters = 0, partialChapters = 0, pendingSignOff = 0;
+        Set<String> basis = new LinkedHashSet<String>();
+        Set<String> conditions = new LinkedHashSet<String>();
+        LocalDate periodStart = null, periodEnd = null;
+
+        for (PlanVersionRow row : rows) {
+            ProjectVersion version = requireVersion(workspaceId, row.getVersionId());
+            List<VersionRelease> planRecords = new ArrayList<VersionRelease>();
+            for (VersionRelease record : releaseMapper.selectRecords(workspaceId, version.getId())) {
+                if (plan.getId().equals(record.getPlanId())) {
+                    planRecords.add(record);
+                }
+            }
+            VersionRelease selected = pickRelease(planRecords, null);
+            DeliveryNoteResponse doc = build(workspaceId, userId, version, null, planRecords, selected);
+
+            DeliveryNoteResponse.PlanVersionChapter chapter = new DeliveryNoteResponse.PlanVersionChapter();
+            chapter.setVersionId(version.getId());
+            chapter.setVersionName(version.getName());
+            chapter.setReqId(version.getReqId());
+            chapter.setProjectName(row.getProjectName());
+            chapter.setVersionStatus(version.getStatus());
+            chapter.setTargetDate(version.getTargetDate());
+            chapter.setReleased(selected != null);
+            chapter.setEvidenceKind(doc.getEvidenceKind());
+            chapter.setRelease(doc.getRelease());
+            chapter.setCounts(doc.getCounts());
+            chapter.setQuality(doc.getQuality());
+            chapter.setDefects(doc.getDefects());
+            chapter.setEffort(doc.getEffort());
+            chapter.setAcceptance(doc.getAcceptance());
+            r.getVersionChapters().add(chapter);
+
+            for (DeliveryNoteResponse.ScopeRow item : doc.getScope()) {
+                item.setVersionId(version.getId());
+                item.setVersionName(version.getName());
+                r.getScope().add(item);
+            }
+            for (DeliveryNoteResponse.DemandRow demand : doc.getDemands()) {
+                demand.setVersionId(version.getId());
+                demand.setVersionName(version.getName());
+                r.getDemands().add(demand);
+            }
+            for (DeliveryNoteResponse.ChangeRow change : doc.getChanges()) {
+                change.setVersionId(version.getId());
+                change.setVersionName(version.getName());
+                r.getChanges().add(change);
+            }
+            for (DeliveryNoteResponse.RiskRow risk : doc.getRisks()) {
+                risk.setVersionId(version.getId());
+                risk.setVersionName(version.getName());
+                r.getRisks().add(risk);
+            }
+            for (DeliveryNoteResponse.EvidenceRow evidence : doc.getEvidence()) {
+                evidence.setVersionId(version.getId());
+                evidence.setVersionName(version.getName());
+                r.getEvidence().add(evidence);
+                evidenceCount++;
+            }
+            for (DeliveryNoteResponse.DefectRow defect : doc.getDefects().getOpen()) {
+                if (!openById.containsKey(defect.getId())) {
+                    defect.setProjectId(version.getReqId());
+                    defect.setProjectName(row.getProjectName());
+                    openById.put(defect.getId(), defect);
+                }
+            }
+            for (DeliveryNoteResponse.DefectRow defect : doc.getDefects().getFixed()) {
+                if (!fixedById.containsKey(defect.getId())) {
+                    defect.setProjectId(version.getReqId());
+                    defect.setProjectName(row.getProjectName());
+                    fixedById.put(defect.getId(), defect);
+                }
+            }
+            DeliveryNoteResponse.Quality q = doc.getQuality();
+            qualityPlans += nz(q.getPlanCount());
+            qualityCases += nz(q.getCaseCount());
+            qualityExecuted += nz(q.getExecutedCount());
+            qualityPassed += nz(q.getPassedCount());
+            qualityFailed += nz(q.getFailedCount());
+            qualityBlocked += nz(q.getBlockedCount());
+            qualitySkipped += nz(q.getSkippedCount());
+            if (Boolean.TRUE.equals(q.getMissing())) {
+                qualityMissing++;
+            }
+            DeliveryNoteResponse.Effort e = doc.getEffort();
+            workMinutes += nz(e.getWorkMinutes());
+            estimateMinutes += nz(e.getEstimateMinutes());
+            if (Boolean.TRUE.equals(e.getMissing())) {
+                chapterMissingEffort++;
+            }
+            for (DeliveryNoteResponse.Bar bar : e.getByModule()) {
+                addBar(effortByModule, bar);
+            }
+            for (DeliveryNoteResponse.Bar bar : e.getByMember()) {
+                addBar(effortByMember, bar);
+            }
+            DeliveryNoteResponse.Acceptance a = doc.getAcceptance();
+            if (a != null) {
+                if ("verified".equals(a.getConclusionKind())) {
+                    verifiedChapters++;
+                } else if ("partial".equals(a.getConclusionKind())) {
+                    partialChapters++;
+                }
+                for (String basisText : a.getBasis()) {
+                    basis.add(version.getName() + " · " + basisText);
+                }
+                conditions.addAll(a.getConditions());
+                if (Boolean.TRUE.equals(a.getSignOffPending())) {
+                    pendingSignOff++;
+                }
+            }
+            periodStart = earlier(periodStart, periodStart(version, Collections.<VersionCommitmentTask>emptyList()));
+            LocalDate end = periodEnd(version, selected);
+            periodEnd = later(periodEnd, end);
+        }
+
+        /* 顶层数字按工作项 / 需求 ID 去重：同一项被多个版本纳入只计一次，分章仍按版本列出 */
+        r.setCounts(dedupeCounts(r.getScope()));
+        r.setDemandSummary(dedupeDemandSummary(r.getDemands()));
+        r.setProjects(planProjectRows(rows, r.getCounts()));
+        r.setQuality(planQuality(qualityPlans, qualityCases, qualityExecuted, qualityPassed, qualityFailed,
+                qualityBlocked, qualitySkipped, qualityMissing, openById.size() + fixedById.size(), rows.size()));
+        r.setDefects(planDefects(openById, fixedById));
+        r.setEffort(planEffort(workMinutes, estimateMinutes, effortByModule, effortByMember,
+                chapterMissingEffort, rows.size()));
+        r.setAcceptance(planAcceptance(r, basis, conditions, verifiedChapters, partialChapters,
+                pendingSignOff, rows.size(), planEvidence(r)));
+        r.setPeriodStart(periodStart);
+        r.setPeriodEnd(periodEnd);
+        r.setTargetDate(rows.size() == 1 ? rows.get(0).getTargetDate() : periodEnd);
+        r.setEvidenceKind(planEvidence(r) ? "release_snapshot" : "planned_scope");
+        fillCalibers(r);
+        r.setRevisions(planRevisions(workspaceId, plan.getId()));
+        r.setDocNo(nextPlanDocNo(workspaceId, plan.getId()));
+        collectPlanMissing(r, rows, evidenceCount);
+        return r;
+    }
+
+    private boolean planEvidence(DeliveryNoteResponse r) {
+        if (r.getVersionChapters() == null || r.getVersionChapters().isEmpty()) {
+            return false;
+        }
+        for (DeliveryNoteResponse.PlanVersionChapter chapter : r.getVersionChapters()) {
+            if (!Boolean.TRUE.equals(chapter.getReleased())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void collectPlanMissing(DeliveryNoteResponse r, List<PlanVersionRow> rows, int evidenceCount) {
+        int missingChapters = 0;
+        for (DeliveryNoteResponse.PlanVersionChapter chapter : r.getVersionChapters()) {
+            if (!Boolean.TRUE.equals(chapter.getReleased())) {
+                missingChapters++;
+            }
+        }
+        if (missingChapters > 0) {
+            r.getMissing().add("计划内 " + missingChapters + " 个版本尚无本计划的成功生产发布：客户版不可导出与分享");
+        }
+        if (evidenceCount == 0) {
+            r.getMissing().add("计划内还没有任何成功生产发布记录：本文档为内部草稿");
+        }
+        for (DeliveryNoteResponse.PlanVersionChapter chapter : r.getVersionChapters()) {
+            if (Boolean.TRUE.equals(chapter.getQuality().getMissing())) {
+                r.getMissing().add(chapter.getVersionName() + "：未创建测试计划或未圈选用例，不推断质量水平");
+            }
+            if (Boolean.TRUE.equals(chapter.getEffort().getMissing())) {
+                r.getMissing().add(chapter.getVersionName() + "：没有计时与补记，投入未记录");
+            }
+        }
+        if (rows.size() > 1) {
+            r.getMissing().add("质量、缺陷与投入按版本分章列出，不做跨版本合计，避免同一用例或缺陷被重复计算");
+        }
+    }
+
+    private DeliveryNoteResponse.PlanInfo planInfo(VersionReleasePlan plan, List<PlanVersionRow> rows) {
+        DeliveryNoteResponse.PlanInfo info = new DeliveryNoteResponse.PlanInfo();
+        info.setId(plan.getId());
+        info.setPlanNo(plan.getPlanNo());
+        info.setPlannedAt(plan.getPlannedAt());
+        info.setStatus(plan.getStatus());
+        info.setStatusName(planStatusName(plan.getStatus()));
+        info.setEnvironment(plan.getEnvironment());
+        info.setEnvironmentName(environmentName(plan.getEnvironment()));
+        info.setCoverage(plan.getCoverage());
+        info.setTargets(plan.getTargetKeys() == null ? new ArrayList<String>() : plan.getTargetKeys());
+        info.setNotes(Texts.trimToNull(plan.getNotes()));
+        info.setRisks(Texts.trimToNull(plan.getRisks()));
+        info.setTaskCount(releaseMapper.selectPlannedTaskIds(plan.getWorkspaceId(), plan.getId()).size());
+        AppUser owner = plan.getOwnerUserId() == null ? null : userMapper.selectById(plan.getOwnerUserId());
+        info.setOwnerName(owner == null ? null : Texts.trimToNull(owner.getDisplayName()));
+        Set<String> projectNames = new LinkedHashSet<String>();
+        for (PlanVersionRow row : rows) {
+            info.getVersionNames().add(row.getProjectName() + " · " + row.getVersionName());
+            projectNames.add(row.getProjectName());
+        }
+        info.getProjectNames().addAll(projectNames);
+        info.setVersionCount(rows.size());
+        return info;
+    }
+
+    private String planScopeName(VersionReleasePlan plan, List<PlanVersionRow> rows) {
+        String no = Nos.releasePlan(plan.getPlanNo());
+        String head = Texts.trimToNull(no) == null ? "发布计划" : "发布计划 " + no;
+        if (rows.size() == 1) {
+            return head + " · " + rows.get(0).getProjectName() + " · " + rows.get(0).getVersionName();
+        }
+        return head + " · 跨 " + projectCount(rows) + " 个项目 · " + rows.size() + " 个版本";
+    }
+
+    private static String soleProjectId(List<PlanVersionRow> rows) {
+        String id = null;
+        for (PlanVersionRow row : rows) {
+            if (id == null) {
+                id = row.getReqId();
+            } else if (!id.equals(row.getReqId())) {
+                return null;
+            }
+        }
+        return id;
+    }
+
+    private static int projectCount(List<PlanVersionRow> rows) {
+        Set<String> ids = new LinkedHashSet<String>();
+        for (PlanVersionRow row : rows) {
+            ids.add(row.getReqId());
+        }
+        return ids.size();
+    }
+
+    private String resolvePlanOwner(VersionReleasePlan plan, String userId) {
+        String id = Texts.trimToNull(plan.getOwnerUserId());
+        if (id == null) {
+            id = userId;
+        }
+        AppUser user = id == null ? null : userMapper.selectById(id);
+        return user == null || Texts.trimToNull(user.getDisplayName()) == null ? "未指派" : user.getDisplayName();
+    }
+
+    /* 计划覆盖的多个版本可能纳入同一工作项：顶层口径按 ID 去重，状态取较强的一侧（已上线 > 已完成 > 未纳入 > 延后） */
+    static DeliveryNoteResponse.Counts dedupeCounts(List<DeliveryNoteResponse.ScopeRow> scope) {
+        Map<String, DeliveryNoteResponse.ScopeRow> unique = new LinkedHashMap<String, DeliveryNoteResponse.ScopeRow>();
+        for (DeliveryNoteResponse.ScopeRow row : scope) {
+            DeliveryNoteResponse.ScopeRow old = unique.get(row.getId());
+            if (old == null || scopeRank(row.getState()) > scopeRank(old.getState())) {
+                unique.put(row.getId(), row);
+            }
+        }
+        DeliveryNoteResponse.Counts c = new DeliveryNoteResponse.Counts();
+        int released = 0, deferred = 0, done = 0, doing = 0;
+        int newCount = 0, improveCount = 0, fixCount = 0, otherCount = 0, unlinked = 0;
+        for (DeliveryNoteResponse.ScopeRow row : unique.values()) {
+            if ("released".equals(row.getState())) {
+                released++;
+            } else if ("deferred".equals(row.getState())) {
+                deferred++;
+            } else if ("done".equals(row.getState()) || row.getCompletedAt() != null) {
+                done++;
+            } else {
+                doing++;
+            }
+            String kind = row.getKind();
+            if (kind == null) {
+                unlinked++;
+            } else if ("new".equals(kind)) {
+                newCount++;
+            } else if ("improve".equals(kind)) {
+                improveCount++;
+            } else if ("fix".equals(kind)) {
+                fixCount++;
+            } else {
+                otherCount++;
+            }
+        }
+        c.setPlanned(unique.size());
+        c.setCurrentBound(unique.size() - deferred);
+        c.setReleased(released);
+        c.setDeferred(deferred);
+        c.setPending(unique.size() - released - deferred);
+        c.setDone(done);
+        c.setDoing(doing);
+        c.setNewCount(newCount);
+        c.setImproveCount(improveCount);
+        c.setFixCount(fixCount);
+        c.setOtherCount(otherCount);
+        c.setUnlinkedCount(unlinked);
+        return c;
+    }
+
+    private static int scopeRank(String state) {
+        if ("released".equals(state)) return 4;
+        if ("done".equals(state)) return 3;
+        if ("pending".equals(state)) return 2;
+        return 1;
+    }
+
+    /* 同一需求跨版本出现时顶层只计一条，兑现状态取计划内最好结果；分章明细保持按版本 */
+    static DeliveryNoteResponse.DemandSummary dedupeDemandSummary(List<DeliveryNoteResponse.DemandRow> demands) {
+        Map<String, String> stateById = new LinkedHashMap<String, String>();
+        for (DeliveryNoteResponse.DemandRow row : demands) {
+            String key = Texts.trimToNull(row.getId()) != null ? "id:" + row.getId() : "title:" + String.valueOf(row.getTitle());
+            String old = stateById.get(key);
+            if (old == null || demandRank(row.getState()) > demandRank(old)) {
+                stateById.put(key, row.getState());
+            }
+        }
+        DeliveryNoteResponse.DemandSummary summary = new DeliveryNoteResponse.DemandSummary();
+        int fulfilled = 0, partial = 0, deferred = 0, pending = 0;
+        for (String state : stateById.values()) {
+            if ("fulfilled".equals(state)) {
+                fulfilled++;
+            } else if ("partial".equals(state)) {
+                partial++;
+            } else if ("deferred".equals(state)) {
+                deferred++;
+            } else {
+                pending++;
+            }
+        }
+        summary.setTotal(stateById.size());
+        summary.setFulfilled(fulfilled);
+        summary.setPartial(partial);
+        summary.setDeferred(deferred);
+        summary.setPending(pending);
+        summary.setRatePct(stateById.isEmpty() ? 0 : Math.round(fulfilled * 100f / stateById.size()));
+        return summary;
+    }
+
+    private static int demandRank(String state) {
+        if ("fulfilled".equals(state)) return 4;
+        if ("partial".equals(state)) return 3;
+        if ("deferred".equals(state)) return 2;
+        return 1;
+    }
+
+    private static void addBar(Map<String, Integer> into, DeliveryNoteResponse.Bar bar) {
+        String name = bar.getName() == null ? "未记录" : bar.getName();
+        Integer old = into.get(name);
+        into.put(name, (old == null ? 0 : old) + nz(bar.getMinutes()));
+    }
+
+    private static DeliveryNoteResponse.Bar barOf(String name, int minutes, int total) {
+        DeliveryNoteResponse.Bar bar = new DeliveryNoteResponse.Bar();
+        bar.setName(name);
+        bar.setMinutes(minutes);
+        bar.setPct(total <= 0 ? 0 : Math.round(minutes * 1000f / total) / 10);
+        return bar;
+    }
+
+    private static List<DeliveryNoteResponse.Bar> mergedBars(Map<String, Integer> source) {
+        List<DeliveryNoteResponse.Bar> list = new ArrayList<DeliveryNoteResponse.Bar>();
+        int total = 0;
+        for (Integer value : source.values()) {
+            total += value == null ? 0 : value;
+        }
+        for (Map.Entry<String, Integer> entry : source.entrySet()) {
+            list.add(barOf(entry.getKey(), entry.getValue() == null ? 0 : entry.getValue(), total));
+        }
+        Collections.sort(list, new Comparator<DeliveryNoteResponse.Bar>() {
+            @Override
+            public int compare(DeliveryNoteResponse.Bar a, DeliveryNoteResponse.Bar b) {
+                return Integer.compare(b.getMinutes(), a.getMinutes());
+            }
+        });
+        return list;
+    }
+
+    private static DeliveryNoteResponse.Quality planQuality(int plans, int cases, int executed, int passed,
+                                                           int failed, int blocked, int skipped, int missing,
+                                                           int defects, int chapters) {
+        DeliveryNoteResponse.Quality q = new DeliveryNoteResponse.Quality();
+        q.setPlanCount(plans);
+        q.setCaseCount(cases);
+        q.setExecutedCount(executed);
+        q.setPassedCount(passed);
+        q.setFailedCount(failed);
+        q.setBlockedCount(blocked);
+        q.setSkippedCount(skipped);
+        q.setUnexecutedCount(Math.max(0, cases - executed));
+        q.setDefectCount(defects);
+        int base = executed - skipped;
+        q.setPassRatePct(base <= 0 ? null : Math.round(passed * 1000f / base) / 10d);
+        q.setCoveragePct(cases == 0 ? null : Math.round(executed * 1000f / cases) / 10d);
+        q.setMissing(plans == 0 || cases == 0 || missing == chapters);
+        q.setPlanName(plans == 0 ? null : "按版本累计 " + plans + " 个测试计划");
+        return q;
+    }
+
+    private static DeliveryNoteResponse.Defects planDefects(
+            Map<String, DeliveryNoteResponse.DefectRow> open,
+            Map<String, DeliveryNoteResponse.DefectRow> fixed) {
+        DeliveryNoteResponse.Defects d = new DeliveryNoteResponse.Defects();
+        Map<String, int[]> bySeverity = new LinkedHashMap<String, int[]>();
+        for (String severity : DefectMeta.SEVERITIES) {
+            bySeverity.put(severity, new int[2]);
+        }
+        int blockerOpen = 0;
+        d.getOpen().addAll(open.values());
+        d.getFixed().addAll(fixed.values());
+        for (DeliveryNoteResponse.DefectRow row : d.getOpen()) {
+            String severity = DefectMeta.isSeverity(row.getSeverity()) ? row.getSeverity() : DefectMeta.SEVERITY_MAJOR;
+            int[] agg = bySeverity.get(severity);
+            agg[0]++;
+            agg[1]++;
+            if (Boolean.TRUE.equals(row.getBlocksAcceptance())) {
+                blockerOpen++;
+            }
+        }
+        for (DeliveryNoteResponse.DefectRow row : d.getFixed()) {
+            String severity = DefectMeta.isSeverity(row.getSeverity()) ? row.getSeverity() : DefectMeta.SEVERITY_MAJOR;
+            bySeverity.get(severity)[0]++;
+        }
+        for (Map.Entry<String, int[]> entry : bySeverity.entrySet()) {
+            if (entry.getValue()[0] == 0) {
+                continue;
+            }
+            DeliveryNoteResponse.SeverityRow row = new DeliveryNoteResponse.SeverityRow();
+            row.setSeverity(entry.getKey());
+            row.setSeverityName(severityName(entry.getKey()));
+            row.setTotal(entry.getValue()[0]);
+            row.setOpen(entry.getValue()[1]);
+            d.getBySeverity().add(row);
+        }
+        Collections.sort(d.getOpen(), new Comparator<DeliveryNoteResponse.DefectRow>() {
+            @Override
+            public int compare(DeliveryNoteResponse.DefectRow a, DeliveryNoteResponse.DefectRow b) {
+                return Integer.compare(DefectMeta.SEVERITIES.indexOf(a.getSeverity()),
+                        DefectMeta.SEVERITIES.indexOf(b.getSeverity()));
+            }
+        });
+        d.setTotalCount(d.getOpen().size() + d.getFixed().size());
+        d.setFixedCount(d.getFixed().size());
+        d.setOpenCount(d.getOpen().size());
+        d.setBlockerOpenCount(blockerOpen);
+        d.setMissing(d.getOpen().isEmpty() && d.getFixed().isEmpty());
+        return d;
+    }
+
+    private static DeliveryNoteResponse.Effort planEffort(int workMinutes, int estimateMinutes,
+                                                          Map<String, Integer> byModule,
+                                                          Map<String, Integer> byMember,
+                                                          int missingChapters, int chapters) {
+        DeliveryNoteResponse.Effort e = new DeliveryNoteResponse.Effort();
+        e.setWorkMinutes(workMinutes);
+        e.setEstimateMinutes(estimateMinutes);
+        e.setDeviationMinutes(workMinutes - estimateMinutes);
+        e.setDeviationPct(estimateMinutes <= 0 ? null
+                : Math.round((workMinutes - estimateMinutes) * 1000f / estimateMinutes) / 10d);
+        e.setMemberCount(byMember.size());
+        e.setByModule(mergedBars(byModule));
+        e.setByMember(mergedBars(byMember));
+        e.setMissing(workMinutes <= 0 || missingChapters == chapters);
+        return e;
+    }
+
+    private static DeliveryNoteResponse.Acceptance planAcceptance(DeliveryNoteResponse r, Set<String> basis,
+                                                                 Set<String> conditions, int verified, int partial,
+                                                                 int pendingSignOff, int chapters, boolean evidence) {
+        DeliveryNoteResponse.Acceptance a = new DeliveryNoteResponse.Acceptance();
+        a.getBasis().addAll(basis);
+        a.getConditions().addAll(conditions);
+        a.setBlockerCount(nz(r.getDefects().getBlockerOpenCount()));
+        if (verified == chapters) {
+            a.setConclusionKind("verified");
+        } else if (verified > 0 || partial > 0) {
+            a.setConclusionKind("partial");
+        } else {
+            a.setConclusionKind("unverified");
+        }
+        a.setSignOffPending(pendingSignOff > 0 || !evidence);
+        a.setNote(r.getAcceptanceNote());
+        return a;
+    }
+
+    private static List<DeliveryNoteResponse.ProjectRow> planProjectRows(List<PlanVersionRow> rows,
+                                                                         DeliveryNoteResponse.Counts counts) {
+        Map<String, DeliveryNoteResponse.ProjectRow> map = new LinkedHashMap<String, DeliveryNoteResponse.ProjectRow>();
+        for (PlanVersionRow row : rows) {
+            DeliveryNoteResponse.ProjectRow project = map.get(row.getReqId());
+            if (project == null) {
+                project = new DeliveryNoteResponse.ProjectRow();
+                project.setId(row.getReqId());
+                project.setName(row.getProjectName());
+                project.setReleasedCount(0);
+                project.setPendingCount(0);
+                project.setTaskCount(0);
+                map.put(row.getReqId(), project);
+            }
+            project.setTaskCount(nz(project.getTaskCount()) + 1);
+        }
+        return new ArrayList<DeliveryNoteResponse.ProjectRow>(map.values());
+    }
+
+    private static LocalDate earlier(LocalDate a, LocalDate b) {
+        if (a == null) return b;
+        if (b == null) return a;
+        return a.isBefore(b) ? a : b;
+    }
+
+    private static LocalDate later(LocalDate a, LocalDate b) {
+        if (a == null) return b;
+        if (b == null) return a;
+        return a.isAfter(b) ? a : b;
+    }
+
+    private VersionReleasePlan requirePlan(String workspaceId, String planId) {
+        VersionReleasePlan plan = releaseMapper.selectPlan(workspaceId, planId);
+        if (plan == null) {
+            throw AppException.notFound("发布计划不存在：" + planId);
+        }
+        return plan;
+    }
+
+    private List<PlanVersionRow> planVersionRows(String workspaceId, String planId) {
+        List<PlanVersionRow> rows = releaseMapper.selectPlanVersions(workspaceId, planId);
+        if (rows.isEmpty()) {
+            throw AppException.notFound("发布计划没有覆盖版本：" + planId);
+        }
+        return rows;
+    }
+
+    private void assertPlanView(String workspaceId, String userId, List<PlanVersionRow> rows) {
+        for (PlanVersionRow row : rows) {
+            projectAccess.assertView(workspaceId, userId, row.getReqId());
+        }
+    }
+
+    private boolean canWritePlan(String workspaceId, String userId, List<PlanVersionRow> rows) {
+        for (PlanVersionRow row : rows) {
+            if (!projectAccess.canWrite(workspaceId, userId, row.getReqId())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void assertPlanWrite(String workspaceId, String userId, List<PlanVersionRow> rows) {
+        for (PlanVersionRow row : rows) {
+            projectAccess.assertWrite(workspaceId, userId, row.getReqId());
+        }
     }
 
     /** 事实聚合：编制侧与快照回放共用，不含任何权限判断 */
@@ -1350,7 +1958,7 @@ public class DeliveryNoteService {
         note.setAudience(cut(req.getAudience(), 120));
         note.setSupportContact(cut(req.getSupportContact(), 200));
         note.setAcceptance(cut(req.getAcceptanceNote(), 1000));
-        note.setOptions(writeJson(sanitizeOptions(req.getOptions(), current)));
+        note.setOptions(writeJson(sanitizeOptions(req.getOptions(), current == null ? null : current.getOptions())));
         note.setNarratives(writeJson(sanitizeNarratives(req.getNarratives())));
         note.setConfirmed(writeJson(sanitizeConfirmed(req.getConfirmed())));
         note.setUpdatedBy(userId);
@@ -1358,10 +1966,35 @@ public class DeliveryNoteService {
         return aggregate(workspaceId, userId, versionId, null);
     }
 
-    private Map<String, Object> sanitizeOptions(Map<String, Object> incoming, DeliveryNote current) {
+    @Transactional
+    public DeliveryNoteResponse savePlan(String workspaceId, String userId, String planId,
+                                         DeliveryNoteSaveRequest req) {
+        requirePlan(workspaceId, planId);
+        List<PlanVersionRow> rows = planVersionRows(workspaceId, planId);
+        assertPlanWrite(workspaceId, userId, rows);
+        DeliveryNotePlan current = noteMapper.selectPlanByPlanForUpdate(workspaceId, planId);
+        long expected = current == null ? 0L : nz(current.getRevision());
+        if (req.getRevision() != null && req.getRevision() != expected) {
+            throw new AppException(409, "交付报告已被他人修改，请刷新后重试");
+        }
+        DeliveryNotePlan note = new DeliveryNotePlan();
+        note.setWorkspaceId(workspaceId);
+        note.setPlanId(planId);
+        note.setAudience(cut(req.getAudience(), 120));
+        note.setSupportContact(cut(req.getSupportContact(), 200));
+        note.setAcceptance(cut(req.getAcceptanceNote(), 1000));
+        note.setOptions(writeJson(sanitizeOptions(req.getOptions(), current == null ? null : current.getOptions())));
+        note.setNarratives(writeJson(sanitizeNarratives(req.getNarratives())));
+        note.setConfirmed(writeJson(sanitizeConfirmed(req.getConfirmed())));
+        note.setUpdatedBy(userId);
+        noteMapper.upsertPlan(note);
+        return aggregatePlan(workspaceId, userId, planId);
+    }
+
+    private Map<String, Object> sanitizeOptions(Map<String, Object> incoming, String currentOptions) {
         Map<String, Object> options = defaultOptions();
-        if (current != null) {
-            options.putAll(readMap(current.getOptions()));
+        if (currentOptions != null) {
+            options.putAll(readMap(currentOptions));
         }
         if (incoming == null) {
             return options;
@@ -1470,6 +2103,9 @@ public class DeliveryNoteService {
         DeliveryNoteSnapshot snapshot = new DeliveryNoteSnapshot();
         snapshot.setId(Ids.gen("DN"));
         snapshot.setWorkspaceId(workspaceId);
+        snapshot.setScopeType("version");
+        snapshot.setScopeId(versionId);
+        snapshot.setScopeName(version.getName());
         snapshot.setVersionId(versionId);
         snapshot.setReqId(version.getReqId());
         snapshot.setReleaseId(selected == null ? null : selected.getId());
@@ -1490,6 +2126,64 @@ public class DeliveryNoteService {
         payload.setContentHash(snapshot.getContentHash());
         payload.setGeneratedAt(snapshot.getCreatedAt() == null ? LocalDateTime.now() : snapshot.getCreatedAt());
         payload.setRevisions(revisions(workspaceId, versionId));
+        return payload;
+    }
+
+    /** 计划维度导出：客户版要求计划内每个版本都有本计划的成功生产发布，缺一章就不放行 */
+    @Transactional
+    public DeliveryNoteResponse createPlanSnapshot(String workspaceId, String userId, String planId,
+                                                   DeliveryNoteSaveRequest req) {
+        VersionReleasePlan plan = requirePlan(workspaceId, planId);
+        List<PlanVersionRow> rows = planVersionRows(workspaceId, planId);
+        assertPlanWrite(workspaceId, userId, rows);
+        if (req != null) {
+            savePlan(workspaceId, userId, planId, req);
+        }
+        DeliveryNotePlan note = noteMapper.selectPlanByPlan(workspaceId, planId);
+        String tone = note == null ? "customer" : toneOf(readMap(note.getOptions()));
+        DeliveryNoteResponse payload = buildPlan(workspaceId, userId, plan, rows, note);
+        if ("customer".equals(tone) && !planEvidence(payload)) {
+            throw new AppException(422, "计划内仍有版本未完成本计划的成功生产发布，客户版不可导出；请切到管理版或内部版");
+        }
+        payload.setCanEdit(false);
+        payload.setCanSnapshot(false);
+        payload.setCanShare(false);
+        payload.setLocked(true);
+        stripForTone(payload, tone);
+
+        noteMapper.selectSnapshotIdsByScope(workspaceId, "plan", planId);
+        Integer maxSeq = noteMapper.selectMaxSeqByScope(workspaceId, "plan", planId);
+        int seq = maxSeq == null ? 1 : maxSeq + 1;
+        String docNo = "DS-" + LocalDate.now().format(DOC_DAY) + "-" + String.format("%02d", seq);
+        payload.setDocNo(docNo);
+        String body = writeJson(payload);
+
+        DeliveryNoteSnapshot snapshot = new DeliveryNoteSnapshot();
+        snapshot.setId(Ids.gen("DN"));
+        snapshot.setWorkspaceId(workspaceId);
+        snapshot.setScopeType("plan");
+        snapshot.setScopeId(planId);
+        snapshot.setScopeName(payload.getScopeName());
+        snapshot.setVersionId(null);
+        snapshot.setReqId(null);
+        snapshot.setReleaseId(null);
+        snapshot.setSeq(seq);
+        snapshot.setDocNo(docNo);
+        snapshot.setTone(tone);
+        snapshot.setPayload(body);
+        snapshot.setContentHash(sha256(body));
+        snapshot.setTitle(payload.getScopeName());
+        snapshot.setCreatedBy(userId);
+        AppUser user = userMapper.selectById(userId);
+        snapshot.setCreatedByName(user == null ? null : user.getDisplayName());
+        if (noteMapper.insertSnapshot(snapshot) != 1) {
+            throw new AppException(409, "快照编号冲突，请重试");
+        }
+        payload.setSnapshotId(snapshot.getId());
+        payload.setSnapshotSeq(seq);
+        payload.setContentHash(snapshot.getContentHash());
+        payload.setGeneratedAt(snapshot.getCreatedAt() == null ? LocalDateTime.now() : snapshot.getCreatedAt());
+        payload.setRevisions(planRevisions(workspaceId, planId));
         return payload;
     }
 
@@ -1522,6 +2216,25 @@ public class DeliveryNoteService {
             for (DeliveryNoteResponse.RiskRow row : payload.getRisks()) {
                 row.setOwner(null);
             }
+            /* 计划维度：各章节的事实切片与顶层同口径投影，成员、制品坐标与缺陷负责人一并剔除 */
+            for (DeliveryNoteResponse.PlanVersionChapter chapter : payload.getVersionChapters()) {
+                if (chapter.getRelease() != null) {
+                    chapter.getRelease().setArtifactDigest(null);
+                    chapter.getRelease().setArtifactRef(null);
+                    chapter.getRelease().setTargets(new ArrayList<String>());
+                }
+                if (chapter.getEffort() != null) {
+                    chapter.getEffort().setByMember(new ArrayList<DeliveryNoteResponse.Bar>());
+                }
+                if (chapter.getDefects() != null) {
+                    for (DeliveryNoteResponse.DefectRow row : chapter.getDefects().getOpen()) {
+                        row.setOwner(null);
+                    }
+                    for (DeliveryNoteResponse.DefectRow row : chapter.getDefects().getFixed()) {
+                        row.setOwner(null);
+                    }
+                }
+            }
             if (payload.getPlan() != null) {
                 payload.getPlan().setOwnerName(null);
                 /* 计划里的部署目标与发布记录同源，都是机房主机键，客户版同样物理剔除 */
@@ -1532,8 +2245,25 @@ public class DeliveryNoteService {
 
     public DeliveryNoteResponse snapshotDetail(String workspaceId, String userId, String snapshotId) {
         DeliveryNoteSnapshot snapshot = requireSnapshot(workspaceId, snapshotId);
-        projectAccess.assertView(workspaceId, userId, snapshot.getReqId());
+        assertSnapshotView(workspaceId, userId, snapshot);
         return frozen(snapshot);
+    }
+
+    /** 快照权限按范围判定：版本快照看单项目，计划快照要求覆盖的全部项目都可读/可写 */
+    private void assertSnapshotView(String workspaceId, String userId, DeliveryNoteSnapshot snapshot) {
+        if ("plan".equals(snapshot.getScopeType())) {
+            assertPlanView(workspaceId, userId, planVersionRows(workspaceId, snapshot.getScopeId()));
+            return;
+        }
+        projectAccess.assertView(workspaceId, userId, snapshot.getReqId());
+    }
+
+    private void assertSnapshotWrite(String workspaceId, String userId, DeliveryNoteSnapshot snapshot) {
+        if ("plan".equals(snapshot.getScopeType())) {
+            assertPlanWrite(workspaceId, userId, planVersionRows(workspaceId, snapshot.getScopeId()));
+            return;
+        }
+        projectAccess.assertWrite(workspaceId, userId, snapshot.getReqId());
     }
 
     private DeliveryNoteResponse frozen(DeliveryNoteSnapshot snapshot) {
@@ -1556,8 +2286,23 @@ public class DeliveryNoteService {
     }
 
     public List<DeliveryNoteResponse.RevisionRow> revisions(String workspaceId, String versionId) {
+        return revisionRows(noteMapper.selectSnapshotsByVersion(workspaceId, versionId));
+    }
+
+    List<DeliveryNoteResponse.RevisionRow> planRevisions(String workspaceId, String planId) {
+        return revisionRows(noteMapper.selectSnapshotsByScope(workspaceId, "plan", planId));
+    }
+
+    /** 计划快照清单：要求覆盖的全部项目可见，空计划按不存在处理 */
+    public List<DeliveryNoteResponse.RevisionRow> planSnapshots(String workspaceId, String userId, String planId) {
+        requirePlan(workspaceId, planId);
+        assertPlanView(workspaceId, userId, planVersionRows(workspaceId, planId));
+        return planRevisions(workspaceId, planId);
+    }
+
+    private List<DeliveryNoteResponse.RevisionRow> revisionRows(List<DeliveryNoteSnapshot> snapshots) {
         List<DeliveryNoteResponse.RevisionRow> rows = new ArrayList<DeliveryNoteResponse.RevisionRow>();
-        for (DeliveryNoteSnapshot snapshot : noteMapper.selectSnapshotsByVersion(workspaceId, versionId)) {
+        for (DeliveryNoteSnapshot snapshot : snapshots) {
             DeliveryNoteResponse.RevisionRow row = new DeliveryNoteResponse.RevisionRow();
             row.setId(snapshot.getId());
             row.setDocNo(snapshot.getDocNo());
@@ -1566,7 +2311,7 @@ public class DeliveryNoteService {
             row.setCreatedByName(snapshot.getCreatedByName());
             row.setCreatedAt(snapshot.getCreatedAt());
             row.setContentHash(snapshot.getContentHash());
-            row.setShared(noteMapper.selectShareBySnapshot(workspaceId, snapshot.getId()) != null);
+            row.setShared(noteMapper.selectShareBySnapshot(snapshot.getWorkspaceId(), snapshot.getId()) != null);
             rows.add(row);
         }
         return rows;
@@ -1576,7 +2321,7 @@ public class DeliveryNoteService {
 
     public DeliveryShareResponse shareInfo(String workspaceId, String userId, String snapshotId) {
         DeliveryNoteSnapshot snapshot = requireSnapshot(workspaceId, snapshotId);
-        projectAccess.assertView(workspaceId, userId, snapshot.getReqId());
+        assertSnapshotView(workspaceId, userId, snapshot);
         DeliveryNoteShare share = noteMapper.selectShareBySnapshot(workspaceId, snapshotId);
         if (share == null || expired(share)) {
             return null;
@@ -1589,7 +2334,7 @@ public class DeliveryNoteService {
                                              Boolean allowDownload, Integer days,
                                              String password, String allowedDomains, String watermarkText) {
         DeliveryNoteSnapshot snapshot = requireSnapshot(workspaceId, snapshotId);
-        projectAccess.assertWrite(workspaceId, userId, snapshot.getReqId());
+        assertSnapshotWrite(workspaceId, userId, snapshot);
         if ("internal".equals(snapshot.getTone())) {
             throw new AppException(422, "内部版含内部备注，不能对外分享；请重新生成客户版或管理版快照");
         }
@@ -1621,14 +2366,14 @@ public class DeliveryNoteService {
     @Transactional
     public void revokeShare(String workspaceId, String userId, String snapshotId) {
         DeliveryNoteSnapshot snapshot = requireSnapshot(workspaceId, snapshotId);
-        projectAccess.assertWrite(workspaceId, userId, snapshot.getReqId());
+        assertSnapshotWrite(workspaceId, userId, snapshot);
         noteMapper.deleteShare(workspaceId, snapshotId);
     }
 
     /** 分享访问明细（最近 100 条），仅项目可写成员可看 */
     public List<DeliveryNoteShareVisit> shareVisits(String workspaceId, String userId, String snapshotId) {
         DeliveryNoteSnapshot snapshot = requireSnapshot(workspaceId, snapshotId);
-        projectAccess.assertView(workspaceId, userId, snapshot.getReqId());
+        assertSnapshotView(workspaceId, userId, snapshot);
         return noteMapper.selectShareVisits(workspaceId, snapshotId, 100);
     }
 
@@ -2059,6 +2804,12 @@ public class DeliveryNoteService {
 
     private String nextDocNo(String workspaceId, String versionId) {
         Integer maxSeq = noteMapper.selectMaxSeq(workspaceId, versionId);
+        int seq = maxSeq == null ? 1 : maxSeq + 1;
+        return "DS-" + LocalDate.now().format(DOC_DAY) + "-" + String.format("%02d", seq);
+    }
+
+    private String nextPlanDocNo(String workspaceId, String planId) {
+        Integer maxSeq = noteMapper.selectMaxSeqByScope(workspaceId, "plan", planId);
         int seq = maxSeq == null ? 1 : maxSeq + 1;
         return "DS-" + LocalDate.now().format(DOC_DAY) + "-" + String.format("%02d", seq);
     }

@@ -157,6 +157,9 @@
   <select id="selectPlanForUpdate" resultMap="plan" useCache="false" flushCache="true">
     SELECT * FROM version_release_plan WHERE workspace_id = #{workspaceId} AND id = #{planId} FOR UPDATE
   </select>
+  <select id="selectPlan" resultMap="plan">
+    SELECT * FROM version_release_plan WHERE workspace_id = #{workspaceId} AND id = #{planId}
+  </select>
   <select id="selectPlannedTaskIds" resultType="string">
     SELECT task_id FROM version_release_plan_task WHERE workspace_id = #{workspaceId} AND plan_id = #{planId} ORDER BY task_id
   </select>
@@ -200,6 +203,11 @@
          INNER JOIN project_version v2 ON v2.workspace_id = x2.workspace_id AND v2.id = x2.version_id
          INNER JOIN requirement r2 ON r2.workspace_id = v2.workspace_id AND r2.id = v2.req_id
         WHERE x2.workspace_id = rp.workspace_id AND x2.plan_id = rp.id) AS versionNames,
+      (SELECT GROUP_CONCAT(r2.name ORDER BY r2.name, v2.name, v2.id SEPARATOR ' / ')
+         FROM version_release_plan_version x2
+         INNER JOIN project_version v2 ON v2.workspace_id = x2.workspace_id AND v2.id = x2.version_id
+         INNER JOIN requirement r2 ON r2.workspace_id = v2.workspace_id AND r2.id = v2.req_id
+        WHERE x2.workspace_id = rp.workspace_id AND x2.plan_id = rp.id) AS versionProjectNames,
       (SELECT GROUP_CONCAT(v2.id ORDER BY r2.name, v2.name, v2.id SEPARATOR ',')
          FROM version_release_plan_version x2
          INNER JOIN project_version v2 ON v2.workspace_id = x2.workspace_id AND v2.id = x2.version_id
@@ -217,7 +225,8 @@
         WHERE x2.workspace_id = rp.workspace_id AND x2.plan_id = rp.id) AS projectNames,
       (SELECT COUNT(*) FROM version_release_plan_version x2
         WHERE x2.workspace_id = rp.workspace_id AND x2.plan_id = rp.id) AS versionCount,
-      rp.planned_at AS plannedAt, rp.owner_user_id AS ownerUserId, u.display_name AS ownerName,
+      rp.plan_no AS planNo, rp.planned_at AS plannedAt, rp.updated_at AS updatedAt,
+      rp.owner_user_id AS ownerUserId, u.display_name AS ownerName,
       rp.environment AS environment, rp.coverage AS coverage, rp.status AS status,
       rp.revision AS revision, rp.notes AS notes, rp.risks AS risks,
       (SELECT COUNT(*) FROM version_release_plan_task pt

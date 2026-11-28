@@ -480,6 +480,7 @@ public class TaskCascade {
         deliveryNoteMapper.deleteSharesByWorkspace(workspaceId);
         deliveryNoteMapper.deleteSnapshotsByWorkspace(workspaceId);
         deliveryNoteMapper.deleteByWorkspace(workspaceId);
+        deliveryNoteMapper.deletePlanNotesByWorkspace(workspaceId);
         demandMapper.deleteLogsByWorkspace(workspaceId);
         demandJudgementMapper.deleteByWorkspace(workspaceId);
         demandCommentMapper.deleteByWorkspace(workspaceId);
@@ -534,10 +535,11 @@ public class TaskCascade {
         /* 版本必须在需求池之后删：需求池通过 version_id 指向版本 */
         if (clearVersions) {
             versionMapper.deleteByWorkspace(workspaceId);
-            deliveryNoteMapper.deleteShareVisitsByWorkspace(workspaceId);
-        deliveryNoteMapper.deleteSharesByWorkspace(workspaceId);
+                deliveryNoteMapper.deleteShareVisitsByWorkspace(workspaceId);
+            deliveryNoteMapper.deleteSharesByWorkspace(workspaceId);
             deliveryNoteMapper.deleteSnapshotsByWorkspace(workspaceId);
             deliveryNoteMapper.deleteByWorkspace(workspaceId);
+            deliveryNoteMapper.deletePlanNotesByWorkspace(workspaceId);
         }
     }
 }

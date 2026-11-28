@@ -73,7 +73,7 @@ var VIEWS = {
   projects: { title:"项目", sub:"项目集下的项目与全局健康度", enter:lazyEnter("projects", "enterProjectsView") },
   phase:    { title:"版本", sub:"版本计划、工作项范围与交付情况", enter:lazyEnter("phase", "enterPhaseView") },
   version:  { title:"版本详情", sub:"计划与实际、工时构成与发布记录", enter:lazyEnter("version", "enterVersionView") },
-  release:  { title:"发布工作台", sub:"发布计划、实际发布与历史记录", enter:lazyEnter("release", "enterReleaseView") },
+  release:  { title:"发布计划", sub:"跨项目统一排期；计划存意图，实际结果以发布记录为准", enter:lazyEnter("release", "enterReleaseView") },
   delivery: { title:"交付报告", sub:"面向使用方的变更说明", enter:lazyEnter("delivery", "enterDeliveryView") },
   demands:  { title:"需求池", sub:"未进入版本的需求与来源", enter:lazyEnter("demands", "enterDemandsView") },
   requirements: { title:"文档", sub:"空间文档、分类与协作记录", enter:enterRequirementsLazy },
@@ -583,6 +583,16 @@ $("sideNav").addEventListener("click", function(e){
     }else{
       showView("settings");
     }
+    return;
+  }
+  /* 发布计划是一级子页：点菜单回到计划清单，不保留上一次打开的工作台深链 */
+  if(key === "release"){
+    var relHash = "#/release";
+    if(String(window.location.hash || "") !== relHash){
+      try{ history.pushState(null, "", relHash); }
+      catch(e){ try{ window.location.hash = relHash; }catch(e2){ /* 受限环境忽略 */ } }
+    }
+    showView("release");
     return;
   }
   /* 一级入口就是视图本身 */

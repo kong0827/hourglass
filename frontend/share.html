@@ -91,6 +91,25 @@
     <section class="view" id="view-delivery-share" aria-label="交付报告只读分享">
       <div class="view-page dl-share-root" id="deliveryShareBody"></div>
     </section>
+    <section class="view" id="view-plan-share" aria-label="发布计划只读分享">
+      <div class="view-page plan-share-page">
+        <header class="ps-head">
+          <p class="ps-kicker">发布计划 · 只读分享</p>
+          <h1 id="planShareTitle">发布计划</h1>
+          <p class="ps-meta" id="planShareMeta"></p>
+          <div class="ps-stats" id="planShareStats"></div>
+        </header>
+        <section class="ps-card">
+          <div class="ps-card-h"><h2>覆盖版本</h2><span class="ps-count" id="planShareVersionCount"></span></div>
+          <div class="ps-table-wrap"><table class="ps-table" id="planShareVersions"></table></div>
+        </section>
+        <section class="ps-card">
+          <div class="ps-card-h"><h2>预计发布内容</h2><span class="ps-count" id="planShareTaskCount"></span></div>
+          <div class="ps-table-wrap"><table class="ps-table" id="planShareTasks"></table></div>
+        </section>
+        <p class="ps-foot" id="planShareFoot"></p>
+      </div>
+    </section>
   </div>
 </div>
 <!-- 链接缺失 / 失效 / 过期：独立错误页，不展示甘特工具栏、画布与图例 -->

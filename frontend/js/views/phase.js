@@ -8,10 +8,10 @@ import { openTaskDrawer, syncAssocRead } from "../core/task-drawer.js";
 import { updateBrand } from "../core/filters.js";
 import { reloadFilteredViews } from "../core/filters-ui.js";
 import { showView } from "../core/router.js";
-import { canEditReq, projectOptionsHTML, projectRefsEnriched, reqNameById, rt, state, taskCacheExtra } from "../core/state.js";
+import { canEditReq, projectOptionsHTML, projectRefsEnriched, reqNameById, reqSetId, rt, setNameById, state, taskCacheExtra } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { assocLinkHTML, normalizedIds, taskVersionIds, taskVersionsText, sameIds, taskPublicationHTML, taskHref, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, itemNoText, releaseNoText, releasePlanNoText, COLUMNS, colName, dayKey, dayDiff, parseDate, fmtMinute, fmtMinutesShort, versionPhaseInfoHTML, addDays, iso, VERSION_STATUS_META, PLAN_STATUS_META, versionStatusTagHTML, planStatusTagHTML, planStatusName } from "../lib/format.js";
+import { assocLinkHTML, normalizedIds, taskVersionIds, taskVersionsText, sameIds, taskPublicationHTML, taskHref, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, itemNoText, releaseNoText, releasePlanNoText, COLUMNS, colName, dayKey, dayDiff, parseDate, fmtMinute, fmtMinutesShort, versionPhaseInfoHTML, VERSION_STATUS_META, PLAN_STATUS_META, versionStatusTagHTML, planStatusName } from "../lib/format.js";
 import { loadReqs } from "./board.js";
 import { branchMetaById, branchNameById, loadBranches, openBranchById, requestBranchStatus } from "./branches.js";
 import { openDemandDetailById, openDemandVersionBackfill } from "./demands.js";
@@ -37,12 +37,11 @@ var phaseReq = $("phaseReq"), phaseMeta = $("phaseMeta"), phaseBody = $("phaseBo
 var editingVerId = null;
 /* 打开编辑时的版本令牌：保存时不能从缓存重读（缓存可能已被迟到的列表响应换掉，静默覆盖并发修改） */
 var editingVerRevision = null, editingVerStatus = null;
-var viewMode = "version";          /* version | phase | allversions | schedule | overview */
-var PHASE_MODES = { version:1, phase:1, allversions:1, schedule:1, overview:1 };
+var viewMode = "version";          /* version | phase | allversions | overview */
+var PHASE_MODES = { version:1, phase:1, allversions:1, overview:1 };
 var PHASE_SCOPE = {
-  allversions: { name:"全部版本", desc:"跨项目版本清单，可勾选预填新的发布计划" },
-  schedule: { name:"发布日程", desc:"跨项目未完成发布计划，按计划时间排序" },
-  overview: { name:"全部项目", desc:"项目级的首版 / 迭代投入与风险总览" }
+  allversions: { name:"全部项目", desc:"跨项目版本清单，可按项目集或项目筛选，勾选后新建发布计划" },
+  overview: { name:"投入总览", desc:"项目级的首版 / 迭代投入与风险总览" }
 };
 function phaseModeFromHash(){
   var raw = String(window.location.hash || "").replace(/^#\/?/, "");
@@ -66,11 +65,8 @@ var verInline = null;              /* { id, field:"name"|"dates", busy } */
 var cache = null;                  /* { phase, vstats, versions, tasks } */
 var overviewCache = null;
 var allVersionsCache = null, allVersionsSeq = 0, allVersionsSel = [];
-var allVersionsFilters = { project:"", status:"", q:"" };
-var scheduleCache = null;          /* { rows }：跨项目发布计划 */
-var scheduleSeq = 0;
-var cacheReqId = null;             /* cache 对应的项目，日程跳转后避免串项目 */
-var scheduleFilters = { project:"", env:"", status:"open", range:"90" };
+var allVersionsFilters = { set:"", project:"", status:"", q:"" };
+var cacheReqId = null;             /* cache 对应的项目，跨项目视图来回切换后避免串项目 */
 var loadSeq = 0;
 /* 任务抽屉的「计划版本」选项缓存：按项目缓存，写版本后失效 */
 var versionOptionsCache = {};
@@ -156,7 +152,15 @@ function syncReqSel(){
   if(!phaseReq) return;
   /* 归档项目默认不出现在切换器里，但当前正在看的那一个保留，避免视图突然跳走 */
   var list = rt.reqList.filter(function(r){ return !r.archivedAt || r.id === rt.phaseReqId; });
-  phaseReq.innerHTML = projectOptionsHTML(list, rt.phaseReqId);
+  /* 范围三档：全部项目 / 项目集 / 单项目；前两档落到跨项目版本清单，不改变版本归属 */
+  var sets = (rt.projectSets || []).filter(function(s){
+    return list.some(function(r){ return (r.setId || "") === s.id; });
+  });
+  phaseReq.innerHTML = '<option value="__all">全部项目</option>'
+    + sets.map(function(s){
+      return '<option value="__set:' + esc(s.id) + '">项目集 · ' + esc(s.name) + '</option>';
+    }).join("")
+    + projectOptionsHTML(list, rt.phaseReqId);
   if(!rt.phaseReqId && list.length) rt.phaseReqId = list[0].id;
   if(rt.phaseReqId) phaseReq.value = rt.phaseReqId;
 }
@@ -164,11 +168,10 @@ function syncReqSel(){
    以最终落地的项目列表补一次同步，避免刷新后误判「还没有项目」 */
 window.addEventListener("ds:reqs-loaded", function(){
   if(document.body.dataset.view !== "phase" || !rt.reqsLoaded) return;
-  if(viewMode === "allversions"){ loadAllVersions(); return; }
+  if(viewMode === "allversions"){ syncModeSeg(); loadAllVersions(); return; }
   if(!rt.reqList.length || (phaseReq && phaseReq.options.length)) return;
   syncReqSel();
   if(viewMode === "overview") loadOverview();
-  else if(viewMode === "schedule") loadSchedule();
   else loadPhaseData();
 });
 /* 里程碑在项目驾驶舱里改过：版本卡上的达成/证据要跟着刷新 */
@@ -219,7 +222,7 @@ function loadPhaseData(){
     /* 版本工时汇总的分类维度：分类名与颜色，失败只影响分类分组标题 */
     API.get("/api/categories", { project: reqId }).catch(function(){ return []; })
   ]).then(function(rs){
-    if(current !== loadSeq || rt.phaseReqId !== reqId || viewMode === "overview" || viewMode === "schedule" || viewMode === "allversions") return;
+    if(current !== loadSeq || rt.phaseReqId !== reqId || viewMode === "overview" || viewMode === "allversions") return;
     cache = { phase: rs[0], vstats: rs[1], versions: rs[2], tasks: rs[3], milestones: rs[4] || [] };
     rollupUi.cats = rs[5] || [];
     cacheReqId = reqId;
@@ -248,20 +251,19 @@ function enterPhaseView(){
     if(wantNew){
       /* 跨项目视图没有「当前项目」可写：若还记着上次进入的项目，先切回该项目的按版本视图再开弹窗，
          避免「跳转过来只得到一句提示」；没有可回落的项目或只读时才提示。 */
-      var crossMode = viewMode === "overview" || viewMode === "schedule" || viewMode === "allversions";
+      var crossMode = viewMode === "overview" || viewMode === "allversions";
       if(crossMode && rt.phaseReqId && canWritePhase()){
         toast("已切到 " + (reqNameById(rt.phaseReqId) || "上次的项目") + "，继续新建版本", "fs");
         viewMode = "version";
         syncPhaseModeHash(viewMode);
         syncModeSeg();
       }
-      if(viewMode === "overview" || viewMode === "schedule" || viewMode === "allversions") toast("请先切换到具体项目，再新建版本", "warn");
+      if(viewMode === "overview" || viewMode === "allversions") toast("请先切换到具体项目，再新建版本", "warn");
       else if(!rt.phaseReqId) toast("先选择项目，再新建版本", "warn");
       else if(!canWritePhase()) denyPhaseReadOnly();
       else openVersionDialog(null);
     }
     if(viewMode === "overview") loadOverview();
-    else if(viewMode === "schedule") loadSchedule();
     else if(viewMode === "allversions") loadAllVersions();
     else loadPhaseData();
   };
@@ -279,7 +281,6 @@ function enterPhaseView(){
 }
 function reloadView(){
   if(viewMode === "overview"){ return loadOverview(); }
-  if(viewMode === "schedule"){ return loadSchedule(); }
   if(viewMode === "allversions"){ return loadAllVersions(); }
   invalidateVersionCache(rt.phaseReqId);
   return loadPhaseData();
@@ -397,6 +398,7 @@ function loadAllVersions(){
 function allVersionsFiltered(){
   var f = allVersionsFilters, q = String(f.q || "").trim().toLowerCase();
   return (allVersionsCache || []).filter(function(r){
+    if(f.set && reqSetId(r.reqId) !== f.set) return false;
     if(f.project && r.reqId !== f.project) return false;
     if(f.status && r.versionStatus !== f.status) return false;
     if(q && String(r.versionName || "").toLowerCase().indexOf(q) === -1
@@ -427,6 +429,9 @@ function renderAllVersions(){
     if(r.canManage) manageable[r.reqId] = true;
   });
   var filtered = allVersionsFiltered();
+  var setOptions = (rt.projectSets || []).filter(function(s){
+    return projectIds.some(function(id){ return reqSetId(id) === s.id; });
+  });
   var manageCount = projectIds.filter(function(id){ return manageable[id]; }).length;
   var selbar = "";
   if(selected.length){
@@ -454,12 +459,12 @@ function renderAllVersions(){
       var on = allVersionsSel.indexOf(r.versionId) !== -1;
       var ended = versionEnded({ status: r.versionStatus });
       body += '<tr' + (on ? ' class="is-selected"' : '') + '>'
-        + '<td class="allv-checkcol"><label class="allv-pick"><input type="checkbox" data-allv-pick="' + esc(r.versionId) + '"'
-          + (on ? ' checked' : '') + (r.canManage && !ended ? '' : ' disabled') + ' aria-label="选择 ' + esc(r.versionName) + '"></label></td>'
+        + '<td class="allv-checkcol"><label class="allv-pick"' + (r.versionStatus === "released" ? ' title="已发布的版本不能再加入新计划"' : '') + '><input type="checkbox" data-allv-pick="' + esc(r.versionId) + '"'
+          + (on ? ' checked' : '') + (r.canManage && !ended && r.versionStatus !== "released" ? '' : ' disabled') + ' aria-label="选择 ' + esc(r.versionName) + '"></label></td>'
         + '<td><button class="allv-vname link-cell" type="button" data-ver-open="' + esc(r.versionId) + '" data-ver-req="' + esc(r.reqId) + '" title="打开「' + esc(r.versionName) + '」的版本详情页">'
           + '<span>' + esc(r.versionName) + '</span>' + icon("chevronRight", 12) + '</button><div class="allv-vsub">'
           + (ended ? esc(versionStatusName(r.versionStatus)) + ' · 历史保留，不参与发布计划'
-            : (r.versionStatus === "released" ? '已发布 · 内容只读' : '工作项 ' + (r.taskCount == null ? "—" : r.taskCount) + ' 项')) + '</div></td>'
+            : (r.versionStatus === "released" ? '已发布 · 内容只读，不能再加入新计划' : '工作项 ' + (r.taskCount == null ? "—" : r.taskCount) + ' 项')) + '</div></td>'
         + '<td>' + versionStatusTag(r.versionStatus) + '</td>'
         + '<td>' + (r.targetDate ? esc(String(r.targetDate).substring(0, 10)) : '<span class="mute">未设置</span>') + '</td>'
         + '<td class="num">' + (r.taskCount == null ? "—" : r.taskCount) + '</td>'
@@ -470,6 +475,10 @@ function renderAllVersions(){
   }
   phaseBody.innerHTML = '<div class="panel allv-panel">'
     + '<div class="phase-tbl-tools allv-tools">'
+    + (setOptions.length ? '<label class="phase-filter">项目集<select class="mini-select" data-allv-filter="set" aria-label="按项目集筛选">'
+      + '<option value="">全部项目集</option>'
+      + setOptions.map(function(s){ return '<option value="' + esc(s.id) + '"' + (s.id === allVersionsFilters.set ? ' selected' : '') + '>' + esc(s.name) + '</option>'; }).join("")
+      + '</select></label>' : "")
     + '<label class="phase-filter">项目<select class="mini-select" data-allv-filter="project" aria-label="按项目筛选">'
     + '<option value="">全部项目</option>'
     + projectOptionsHTML(projectRefsEnriched(projectIds.map(function(id){ return { id:id, name:projectNames[id] }; })), allVersionsFilters.project)
@@ -482,144 +491,35 @@ function renderAllVersions(){
     + '<div class="tbl-wrap phase-tbl-wrap"><table class="phase-tbl allv-tbl"><thead><tr>'
     + '<th class="allv-checkcol"><span class="sr-only">选择</span></th><th>版本</th><th>状态</th><th>目标就绪日</th><th class="num">工作项</th><th>最近发布</th><th>可管理</th>'
     + '</tr></thead><tbody>' + body + '</tbody></table></div>'
-    + '<p class="allv-foot">发布计划可跨项目、跨版本；主版本取第一个勾选版本。已发布版本的内容只读，但仍可用于汇总计划。列表按项目分组、版本倒序。</p>'
+    + '<p class="allv-foot">发布计划可跨项目、跨版本；主版本取第一个勾选版本。已发布版本内容只读，且不能再加入新计划（已在计划内的不受影响）。列表按项目分组、版本倒序。</p>'
     + '</div>';
 }
 function createPlanFromAllVersions(){
   var map = allVersionRowMap();
   var picked = allVersionsSel.map(function(id){ return map[id]; })
-    .filter(function(r){ return r && r.canManage && !versionEnded({ status: r.versionStatus }); });
-  if(!picked.length){ toast("先勾选至少一个可管理且未关闭/取消的版本", "warn"); return; }
+    .filter(function(r){ return r && r.canManage && !versionEnded({ status: r.versionStatus }) && r.versionStatus !== "released"; });
+  if(!picked.length){ toast("先勾选至少一个可管理、未关闭/取消且未发布的版本", "warn"); return; }
   var anchor = picked[0];
   var known = { id: anchor.versionId, reqId: anchor.reqId, name: anchor.versionName, status: anchor.versionStatus,
     targetDate: anchor.targetDate, canManageReleasePlan: true, canPublish: false };
   openReleaseDetail(anchor.versionId, "plan", null, known, picked.map(function(r){ return r.versionId; }), true);
 }
 
-/* ---------- 发布日程（跨项目只读汇总） ---------- */
+/* ---------- 发布计划入口（跨项目列表已独立成菜单：这里只做跳转） ---------- */
 
-function planStatusTag(st){
-  /* 收敛到 PLAN_STATUS_META（P2-11）：draft/canceled 原用未定义的 tag-neutral，现统一为 ghost */
-  return planStatusTagHTML(st);
+function openPlanListJump(){
+  var h = "#/release?time=quarter";
+  try{ history.pushState(null, "", h); }
+  catch(e){ window.location.hash = h; }
+  showView("release");
 }
 function coverageName(c){ return { full:"全量", partial:"部分", unknown:"覆盖未知" }[c] || c || "—"; }
-/* 日程里的项目/版本是 GROUP_CONCAT 的「 / 」串：最多展示两枚标签，其余收进 +N，完整列表放 title */
-function nameChips(text, max, unit){
-  var list = String(text || "").split(" / ").map(function(s){ return s.trim(); }).filter(Boolean);
-  if(!list.length) return '<span class="release-chip is-empty">—</span>';
-  var shown = list.slice(0, max), rest = list.length - shown.length;
-  return '<span class="release-chips">'
-    + shown.map(function(n){ return '<span class="release-chip" title="' + esc(n) + '">' + esc(n) + '</span>'; }).join("")
-    + (rest > 0 ? '<span class="release-chip is-more" title="' + esc(list.slice(shown.length).join("、")) + '" aria-label="还有 ' + rest + ' 个' + (unit || "") + '">+' + rest + '</span>'
-      + '<span class="sr-only">共 ' + list.length + ' 个' + (unit || "") + '：' + esc(list.join("、")) + '</span>' : "")
-    + '</span>';
-}
-/* 日程版本列：名称串与后端同序的 ids/reqIds 串逐枚对齐后才接成跳转入口；
-   旧后端不返回 ids（或长度不齐）时回落纯文本 pill，不渲染死链。+N 是聚合计数，保持纯文本。 */
-function versionChips(r, max){
-  var names = String(r.versionNames || r.versionName || "").split(" / ").map(function(s){ return s.trim(); }).filter(Boolean);
-  if(!names.length) return '<span class="release-chip is-empty">—</span>';
-  var ids = String(r.versionIds || "").split(",").map(function(s){ return s.trim(); });
-  var reqs = String(r.versionReqIds || "").split(",").map(function(s){ return s.trim(); });
-  var aligned = ids.length === names.length && reqs.length === names.length
-    && ids.every(function(id, i){ return !!id && !!reqs[i]; });
-  if(!aligned) return nameChips(names.join(" / "), max, "版本");
-  var shown = names.slice(0, max), rest = names.length - shown.length;
-  return '<span class="release-chips">'
-    + shown.map(function(n, i){ return assocLinkHTML("version", ids[i], n, { req:reqs[i], cls:"release-chip tag" }); }).join("")
-    + (rest > 0 ? '<span class="release-chip is-more" title="' + esc(names.slice(shown.length).join("、")) + '" aria-label="还有 ' + rest + ' 个版本">+' + rest + '</span>'
-      + '<span class="sr-only">共 ' + names.length + ' 个版本：' + esc(names.join("、")) + '</span>' : "")
-    + '</span>';
-}
-function scheduleRange(){
-  if(scheduleFilters.range === "all") return { from:"", to:"" };
-  if(scheduleFilters.range === "around") return { from:iso(addDays(new Date(), -90)), to:iso(addDays(new Date(), 90)) };
-  return { from:iso(new Date()), to:iso(addDays(new Date(), scheduleFilters.range === "30" ? 30 : 90)) };
-}
-function loadSchedule(){
-  var seq = ++scheduleSeq;
-  if(phaseMeta) phaseMeta.textContent = "发布日程 · 跨项目未完成计划";
-  rt.phaseProjectName = "";
-  updateBrand();
-  phaseBody.innerHTML = UI.skeletonRows(4);
-  var range = scheduleRange(), f = scheduleFilters;
-  return API.get("/api/release-plans", { from:range.from, to:range.to, project:f.project, env:f.env, status:f.status }).then(function(rows){
-    if(seq !== scheduleSeq || viewMode !== "schedule") return;
-    scheduleCache = { rows: rows || [] };
-    renderSchedule();
-  }).catch(function(ex){
-    if(seq !== scheduleSeq || viewMode !== "schedule") return;
-    phaseBody.innerHTML = UI.emptyState({
-      icon:"alert", title:"发布日程加载失败", text: ex.message || "网络异常，请稍后重试", actionLabel:"重试"
-    });
-    bindRetry(phaseBody, loadSchedule);
-  });
-}
-function renderSchedule(){
-  if(!scheduleCache) return;
-  var rows = scheduleCache.rows, f = scheduleFilters, now = Date.now();
-  var projects = (rt.reqList || []).filter(function(r){ return !r.archivedAt; });
-  var openCount = rows.filter(function(r){ return r.status === "draft" || r.status === "ready"; }).length;
-  var overdueCount = rows.filter(function(r){
-    return (r.status === "draft" || r.status === "ready") && r.plannedAt && new Date(r.plannedAt).getTime() < now;
-  }).length;
-  function select(name, pairs, chosen, label){
-    return '<label class="phase-filter"><span>' + esc(label) + '</span>'
-      + '<select class="mini-select" data-schedule-filter="' + name + '" aria-label="按' + esc(label) + '筛选">'
-      + pairs.map(function(p){ return '<option value="' + esc(p[0]) + '"' + (p[0] === chosen ? ' selected' : '') + '>' + esc(p[1]) + '</option>'; }).join("")
-      + '</select></label>';
-  }
-  var body = rows.map(function(r){
-    var late = (r.status === "draft" || r.status === "ready") && r.plannedAt && new Date(r.plannedAt).getTime() < now;
-    var planTime = r.plannedAt ? fmtReleaseTime(r.plannedAt).replace(/:00$/, "") : "未定时间";
-    var projectText = r.projectNames || r.projectName || "—";
-    return '<tr data-schedule-open="' + esc(r.id) + '" data-schedule-version="' + esc(r.versionId) + '" data-schedule-project="' + esc(r.reqId) + '" title="打开该计划（含全部版本）的发布计划与发布记录">'
-      + '<td>' + esc(planTime) + (late ? ' <span class="tag tag-warning">已过期</span>' : '') + '</td>'
-      + '<td>' + nameChips(projectText, 2, "项目") + '</td>'
-      + '<td>' + versionChips(r, 2) + '</td>'
-      + '<td>' + esc(releaseEnvironmentName(r.environment)) + ' · ' + esc(coverageName(r.coverage)) + '</td>'
-      + '<td>' + planStatusTag(r.status) + '</td>'
-      + '<td>' + esc(r.ownerName || "未指定") + '</td>'
-      + '<td class="num">' + (r.plannedTaskCount || 0) + '</td>'
-      + '</tr>';
-  }).join("");
-  var empty = '<tr><td colspan="7"><p class="hint">当前筛选下没有发布计划</p></td></tr>';
-  phaseBody.innerHTML = '<div class="panel"><div class="panel-head"><h3>跨项目发布日程</h3>'
-    + '<span class="meta-right">' + rows.length + ' 份计划 · 未完成 ' + openCount + ' · 已过期 ' + overdueCount + '</span></div>'
-    + '<div class="row row-gap schedule-filters">'
-    + '<label class="phase-filter"><span>项目</span>'
-    + '<select class="mini-select" data-schedule-filter="project" aria-label="按项目筛选">'
-    + '<option value="">全部项目</option>' + projectOptionsHTML(projects, f.project) + '</select></label>'
-    + select("env", [["", "全部环境"], ["production", "生产"], ["staging", "预发布"], ["test", "测试"]], f.env, "环境")
-    + select("status", [["open", "未完成"], ["all", "全部状态"], ["ready", "仅就绪"], ["draft", "仅草稿"], ["completed", "已完成"], ["canceled", "已取消"]], f.status, "状态")
-    + select("range", [["30", "未来 30 天"], ["90", "未来 90 天"], ["around", "前后 3 个月"], ["all", "全部时间"]], f.range, "时间范围")
-    + '<button class="btn sm" type="button" data-schedule-refresh>刷新</button>'
-    + '</div>'
-    + '<div class="tbl-wrap phase-tbl-wrap"><table class="phase-tbl"><thead><tr>'
-    + '<th>计划时间</th><th>项目</th><th>版本</th><th>环境 · 覆盖</th><th>状态</th><th>负责人</th><th class="num">范围项数</th>'
-    + '</tr></thead><tbody>' + (body || empty) + '</tbody></table></div></div>';
-}
-function openSchedulePlan(reqId, versionId){
-  if(!reqId || !versionId) return;
-  rt.phaseReqId = reqId;
-  if(phaseReq) phaseReq.value = reqId;
-  if(cacheReqId !== reqId){ cache = null; cacheReqId = null; }
-  function onClose(){ if(viewMode === "schedule") loadSchedule(); }
-  var known = findVersion(versionId);
-  if(known){ openReleaseDetail(versionId, "plan", onClose, known); return; }
-  API.get("/api/versions", { reqId:reqId }).then(function(vs){
-    if(viewMode !== "schedule") return;
-    var v = (vs || []).filter(function(item){ return item.id === versionId; })[0];
-    if(!v){ toast("版本已变化或不可见", "warn"); return; }
-    openReleaseDetail(versionId, "plan", onClose, v);
-  }).catch(function(ex){ toast(ex.message || "版本加载失败", "warn"); });
-}
 
 /* ---------- 渲染 ---------- */
 
 function syncModeSeg(){
   var seg = $("phaseModeSeg");
-  var cross = viewMode === "overview" || viewMode === "schedule" || viewMode === "allversions";
+  var cross = viewMode === "overview" || viewMode === "allversions";
   if(seg){
     seg.classList.toggle("is-scope", cross);
     seg.querySelectorAll("[data-pmode]").forEach(function(b){
@@ -631,11 +531,31 @@ function syncModeSeg(){
   if(phaseReq) phaseReq.style.display = cross ? "none" : "";
   if($("phaseLabelRange")) $("phaseLabelRange").style.display = cross ? "none" : "";
   if($("btnVerNew")){
-    $("btnVerNew").style.display = cross ? "none" : "";
+    /* 合成范围里新建版本会被拒绝：按钮保留但禁用并写清原因，不直接消失 */
+    $("btnVerNew").style.display = "";
     $("btnVerNew").classList.add("primary");
+    $("btnVerNew").disabled = cross;
+    $("btnVerNew").title = cross ? "当前范围是全部项目 / 项目集：先在范围里选择具体项目，再新建版本" : "";
   }
   var scopeLabel = $("phaseScopeLabel");
-  if(scopeLabel) scopeLabel.textContent = cross ? (PHASE_SCOPE[viewMode] || {}).name : "跨项目视图";
+  if(scopeLabel){
+    scopeLabel.textContent = !cross ? "范围"
+      : viewMode === "allversions" ? (allVersionsFilters.set ? "项目集 · " + (setNameById(allVersionsFilters.set) || allVersionsFilters.set) : "全部项目")
+      : (PHASE_SCOPE[viewMode] || {}).name || "范围";
+  }
+  var setsBox = $("phaseScopeSets");
+  if(setsBox){
+    var scopeProjects = (rt.reqList || []).filter(function(r){ return !r.archivedAt; });
+    var setList = (rt.projectSets || []).filter(function(s){
+      return scopeProjects.some(function(r){ return (r.setId || "") === s.id; });
+    });
+    setsBox.innerHTML = setList.map(function(s){
+      var on = viewMode === "allversions" && allVersionsFilters.set === s.id;
+      return '<button class="scope-item" type="button" role="menuitem" data-scope-set="' + esc(s.id) + '"' + (on ? ' aria-current="true"' : '') + '>'
+        + '<span class="si-ic" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5A2 2 0 0 1 5 4.5h3l1.5 2H15a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></span>'
+        + '<span class="si-tx"><b>项目集 · ' + esc(s.name) + '</b><span>只列该集下项目的版本</span></span></button>';
+    }).join("");
+  }
   var scopeBtn = $("phaseScopeBtn");
   if(scopeBtn){
     scopeBtn.classList.toggle("is-active", cross);
@@ -644,7 +564,7 @@ function syncModeSeg(){
   var menu = $("phaseScopeMenu");
   if(menu){ menu.hidden = true; }
   if(menu) menu.querySelectorAll("[data-pmode]").forEach(function(b){
-    var on = b.dataset.pmode === viewMode;
+    var on = b.dataset.pmode === viewMode && !(viewMode === "allversions" && allVersionsFilters.set);
     if(on) b.setAttribute("aria-current", "true"); else b.removeAttribute("aria-current");
   });
   var backName = $("phaseScopeBackName");
@@ -663,12 +583,17 @@ function applyPhaseMode(mode){
   if(!PHASE_MODES[mode]) return;
   viewMode = mode;
   syncPhaseModeHash(mode);
+  if(mode === "version"){
+    /* 从范围回到单项目：下拉恢复成具体项目，三种范围共用同一个切换器 */
+    syncReqSel();
+    syncModeSeg();
+    if(cache) renderPhaseView();
+    else loadPhaseData();
+    return;
+  }
   syncModeSeg();
   if(mode === "overview"){ loadOverview(); return; }
-  if(mode === "schedule"){ loadSchedule(); return; }
-  if(mode === "allversions"){ loadAllVersions(); return; }
-  if(cache) renderPhaseView();
-  else loadPhaseData();
+  loadAllVersions();
 }
 function metricCells(cells, drill){
   return '<div class="pgrid">' + cells.map(function(c){
@@ -960,7 +885,6 @@ function openMemberDrill(userId, name){
 function renderPhaseView(){
   syncModeSeg();
   if(viewMode === "overview"){ renderOverviewMode(); return; }
-  if(viewMode === "schedule"){ if(scheduleCache) renderSchedule(); return; }
   if(!cache) return;
   if(viewMode === "version") renderVersionMode();
   else renderPhaseMode();
@@ -1711,7 +1635,7 @@ function versionListShellHTML(){
     + '<div class="vl-head" aria-hidden="true"><span>版本</span><span>时间</span><span>进度</span><span class="vl-stage-head">阶段构成 · 点色块下钻</span><span>最近发布</span><span></span></div>'
     + '<div data-ver-rows></div>'
     + '<div class="vl-foot">'
-    + '<button class="link-cell vl-foot-link" type="button" data-ver-schedule-link>查看发布日程 →</button></div>'
+    + '<button class="link-cell vl-foot-link" type="button" data-ver-plans-link>查看全部发布计划 →</button></div>'
     + '</div>';
 }
 
@@ -2615,7 +2539,7 @@ function releaseStatusName(status){ return PLAN_STATUS_META[status] ? PLAN_STATU
 function openProjectReleasePlan(entry){
   entry = entry === "history" ? "history" : "plan";
   if(!rt.phaseReqId){ toast("先选择项目，再查看发布计划与记录", "warn"); return; }
-  var fromOverview = viewMode === "overview" || viewMode === "schedule" || viewMode === "allversions";
+  var fromOverview = viewMode === "overview" || viewMode === "allversions";
   viewMode = "version";
   syncPhaseModeHash(viewMode);
   syncModeSeg();
@@ -2670,7 +2594,7 @@ function releasePageSurface(host, v, returnHash){
   root.innerHTML = '<div class="page-toolbar release-page-bar">'
     + '<button class="btn sm ghost" type="button" data-release-back><span aria-hidden="true">←</span> 返回版本</button>'
     + '<span class="toolbar-meta"><b>' + esc(v.name) + '</b> · 发布工作台</span>'
-    + '<span class="toolbar-right"><span class="release-watch-slot" data-release-watch-slot></span><button class="btn sm ghost" type="button" data-release-view-version>查看版本</button><button class="btn sm ghost" type="button" data-release-history-entry>发布历史</button></span>'
+    + '<span class="toolbar-right"><span class="release-watch-slot" data-release-watch-slot></span><button class="btn sm ghost" type="button" data-release-plan-report title="按当前发布计划生成逐版本分章的交付报告">交付报告</button><button class="btn sm ghost" type="button" data-release-plan-share title="生成只读链接：对方无需登录即可查看计划范围与时间">分享计划</button><button class="btn sm ghost" type="button" data-release-view-version>查看版本</button><button class="btn sm ghost" type="button" data-release-history-entry>发布历史</button></span>'
     + '</div><div class="release-body release-page-body" aria-live="polite"></div>';
   host.innerHTML = "";
   host.appendChild(root);
@@ -2781,7 +2705,7 @@ export function mountReleaseWorkspace(pageHost, opts){
   var busy = false, loadSeq = 0, previewSeq = 0, mayManage = false, mayPublish = false;
   /* 预览失效后要说清是「没预览过」还是「改过已过期」；范围区还兼顾异常清单，只在清单变化时重绘 */
   var previewStale = false, previewTried = false, scopeSig = "", scopeMode = "";
-  var planOptions = null, planScopeVersionIds = null, planVersionQuery = "", planTaskPoolCache = {}, planTaskFetchKey = "", planTaskErrorKey = "", planTaskSeq = 0;
+  var planOptions = null, planScopeVersionIds = null, planVersionQuery = "", planVersionShowReleased = false, planTaskPoolCache = {}, planTaskFetchKey = "", planTaskErrorKey = "", planTaskSeq = 0;
   var presetPlanVersionIds = opts.presetVersionIds && opts.presetVersionIds.length ? normalizedIds(opts.presetVersionIds) : null;
   var pending = null, storageError = "", recoveryMessage = "", recoveredRecord = null, retryAllowed = false, resetAllowed = false;
   var page = 0, filters = {result:"", environment:"", operation:""}, advancedOpen = false;
@@ -2827,6 +2751,31 @@ export function mountReleaseWorkspace(pageHost, opts){
       if(!pending || !pending.body || !pending.body.idempotencyKey || !Array.isArray(pending.body.actualTaskIds) || !Array.isArray(pending.body.targetKeys)) throw new Error("待确认请求格式异常");
     }
   }catch(ex){ storageError = "无法安全读取待确认请求；禁止新建事件，请恢复会话存储后重开。"; }
+  /* 计划面顶部两个动作：交付报告按计划维度生成；分享给业务方只读查看范围与时间 */
+  function actionPlanId(){ return planId || (plans.length === 1 ? plans[0].id : ""); }
+  var planReportAct = layer.querySelector("[data-release-plan-report]");
+  if(planReportAct) planReportAct.addEventListener("click", function(){
+    var pid = actionPlanId();
+    if(!pid){ toast("先在计划面保存一份发布计划，再生成交付报告", "warn"); return; }
+    import("./delivery.js").then(function(m){ m.openPlanDeliveryNote(pid); })
+      .catch(function(ex){ toast((ex && ex.message) || "打不开交付报告", "bad"); });
+  });
+  var planShareAct = layer.querySelector("[data-release-plan-share]");
+  if(planShareAct) planShareAct.addEventListener("click", function(){
+    var pid = actionPlanId();
+    if(!pid){ toast("先在计划面保存一份发布计划，再生成分享链接", "warn"); return; }
+    if(!mayManage){ toast("仅空间主、管理员或项目负责人可生成分享链接", "warn"); return; }
+    import("../lib/plan-share.js").then(function(m){ m.openPlanShare(pid); })
+      .catch(function(ex){ toast((ex && ex.message) || "打不开分享", "bad"); });
+  });
+  /* 分享要求覆盖项目的管理权；查看者仍可看已分享的公开页，但不能在这里生成或停止链接 */
+  function syncPlanShareBtn(){
+    if(!planShareAct) return;
+    planShareAct.disabled = !mayManage;
+    planShareAct.title = mayManage
+      ? "生成只读链接：对方无需登录即可查看计划范围与时间"
+      : "仅空间主、管理员或项目负责人可生成分享链接";
+  }
   function current(){
     if(userId !== (rt.currentUser || {}).id){ dlg.close(); return false; }
     return dlg.current() && reqId === rt.phaseReqId && wsId === (rt.currentWs || {}).id;
@@ -2925,6 +2874,10 @@ export function mountReleaseWorkspace(pageHost, opts){
         locked = missing.filter(function(ver){ return !ver.ended; });
     if(!groups.length && !missing.length) return '<p class="hint">没有可管理的版本</p>';
     var q = String(planVersionQuery || "").trim().toLowerCase(), shown = missing.length, total = missing.length;
+    var hiddenReleased = 0;
+    /* 已保存计划里的版本：已发布的只在计划内保留（可移出），移出后不能再加入 */
+    var saved = selectedPlan(), planMembers = saved && saved.id && Array.isArray(saved.versionIds)
+      ? normalizedIds(saved.versionIds) : [];
     var html = groups.map(function(project){
       var all = project.versions || [];
       total += all.length;
@@ -2934,13 +2887,25 @@ export function mountReleaseWorkspace(pageHost, opts){
         if(!q || hitProject) return true;
         return String(ver.name || ver.id).toLowerCase().indexOf(q) !== -1 || String(ver.id) === String(id);
       });
+      /* 已发布版本不能新加入计划：默认收起；计划内已有成员与当前版本始终可见，便于核对或移出 */
+      versions = versions.filter(function(ver){
+        if(ver.status !== "released") return true;
+        if(selected.indexOf(ver.id) !== -1 || ver.id === id || planVersionShowReleased) return true;
+        hiddenReleased++;
+        return false;
+      });
       if(!versions.length) return '';
       shown += versions.length;
       var projectCount = all.filter(function(ver){ return selected.indexOf(ver.id) !== -1; }).length;
       return '<div class="release-version-group" role="group" aria-label="' + esc(project.name || project.id) + '"><div class="release-version-project"><span class="release-version-project-name">' + esc(project.name || project.id) + '</span><span class="release-version-project-count' + (projectCount ? ' is-on' : '') + '" data-plan-version-group-count="' + esc(project.id) + '">' + (projectCount ? projectCount + ' / ' + all.length : '未选') + '</span></div>'
         + versions.map(function(ver){
           var on = selected.indexOf(ver.id) !== -1, fixed = ver.id === id;
-          return '<label class="release-version-row' + (on ? ' is-selected' : '') + (fixed ? ' is-fixed' : '') + '"' + (fixed ? ' title="当前版本固定包含在计划中"' : '') + '><input type="checkbox" data-plan-version="' + esc(ver.id) + '"' + (on ? ' checked' : '') + (disabled || fixed ? ' disabled' : '') + '><span><b>' + esc(ver.name || ver.id) + '</b><small>' + esc(versionStatusName(ver.status)) + (ver.targetDate ? ' · 目标 ' + esc(ver.targetDate) : '') + (fixed ? ' · 当前版本' : '') + '</small></span></label>';
+          var releasedNew = ver.status === "released" && planMembers.indexOf(ver.id) === -1;
+          var releasedMember = ver.status === "released" && !releasedNew && !fixed;
+          var title = fixed ? '当前版本固定包含在计划中'
+            : releasedNew ? '版本已发布，不能再加入新的发布计划；已在计划内的版本不受影响'
+            : releasedMember ? '版本已发布；已在计划内可移出，移出后不能再加入' : '';
+          return '<label class="release-version-row' + (on ? ' is-selected' : '') + (fixed ? ' is-fixed' : '') + (releasedNew ? ' is-released-locked' : '') + '"' + (title ? ' title="' + title + '"' : '') + '><input type="checkbox" data-plan-version="' + esc(ver.id) + '"' + (on ? ' checked' : '') + (disabled || fixed || releasedNew ? ' disabled' : '') + '><span><b>' + esc(ver.name || ver.id) + '</b><small>' + esc(versionStatusName(ver.status)) + (ver.targetDate ? ' · 目标 ' + esc(ver.targetDate) : '') + (fixed ? ' · 当前版本' : '') + (releasedNew ? ' · 已发布，不能加入' : releasedMember ? ' · 已发布，仅可移出' : '') + '</small></span></label>';
         }).join('') + '</div>';
     }).join('');
     var endedHtml = ended.length
@@ -2962,9 +2927,13 @@ export function mountReleaseWorkspace(pageHost, opts){
       : '';
     return '<div class="release-version-picker" role="group" aria-label="计划包含的版本">'
       + '<div class="release-version-tools"><input type="search" data-plan-version-search value="' + esc(planVersionQuery || "") + '" placeholder="搜索版本或项目" aria-label="搜索版本或项目" autocomplete="off">'
+      + (hiddenReleased || planVersionShowReleased
+        ? '<button class="btn sm ghost release-version-released-toggle" type="button" data-plan-version-toggle-released aria-pressed="' + (planVersionShowReleased ? "true" : "false") + '">'
+          + (planVersionShowReleased ? "收起已发布" : "显示已发布（" + hiddenReleased + " · 仅可查看）") + '</button>'
+        : "")
       + '<span class="release-version-count" role="status">显示 ' + shown + ' / 共 ' + total + ' 个版本</span></div>'
       + html + endedHtml + lockedHtml + '</div>'
-      + '<p class="hint">计划可跨版本、跨项目；当前版本固定包含。计划只是意图，实际发布仍按单个版本登记，全部包含版本都完成生产部署 / 重部署后计划才自动完成。</p>';
+      + '<p class="hint">计划可跨版本、跨项目；当前版本固定包含。已发布的版本不能再加入新的发布计划，默认收起；已在计划内的版本仍显示，可移出但不能重新加入。计划只是意图，实际发布仍按单个版本登记，全部包含版本都完成生产部署 / 重部署后计划才自动完成。</p>';
   }
   /* 搜索只重建版本清单本身；勾选以 planScopeVersionIds 为准，不会被重绘丢掉 */
   function rerenderPlanVersionPicker(){
@@ -4952,7 +4921,9 @@ export function mountReleaseWorkspace(pageHost, opts){
       var old = pending.body;
       Object.keys(actualDraft).forEach(function(k){ actualDraft[k] = k === "actualTaskIds" ? normalizedIds(old[k]) : k === "targetKeys" ? normalizedIds(old[k]).join('\n') : k === "occurredAt" ? localMinute(old[k]) : old[k] || ""; });
     }
-    var p = selectedPlan() || {}, a = actualDraft, locked = !mayManage || p.status === "completed" || !!pending || !!storageError, disabled = locked ? ' disabled' : '';
+    /* 已发布版本不能成为新计划的锚点：已有计划仍可按原范围编辑，新计划请基于后续版本 */
+    var releasedAnchor = v.status === "released" && !(selectedPlan() && selectedPlan().id);
+    var p = selectedPlan() || {}, a = actualDraft, locked = !mayManage || p.status === "completed" || !!pending || !!storageError || releasedAnchor, disabled = locked ? ' disabled' : '';
     if(activeTab === "actual" && !mayPublish) activeTab = "plan";
     var envs = [["production", "生产"], ["staging", "预发布"], ["test", "测试"]], coverage = [["full", "全量"], ["partial", "部分"], ["unknown", "覆盖未知"]];
     var planChoices = plans.map(function(item){ return [item.id, planOptionShort(item)]; });
@@ -4970,6 +4941,7 @@ export function mountReleaseWorkspace(pageHost, opts){
       if(versionIsEnded) planLockReasons.push("版本「" + v.name + "」已" + (v.status === "closed" ? "关闭" : "取消") + "：发布计划与实际发布都只读，历史记录仍可在「历史与内容」查看；要继续交付请新建后续版本。");
       else planLockReasons.push("当前身份不能维护发布计划，也不能记录实际发布：默认仅空间主、管理员与项目负责人（且对该项目可写）可操作；如你对该项目可写，可请管理员在「设置 → 工作流 → 发布权限」放开「项目可写成员」。");
     }
+    if(releasedAnchor) planLockReasons.push("版本「" + v.name + "」已发布：已发布的版本不能再加入新计划，因此不能再新建发布计划；历史交付请查看发布记录，已有计划仍可在上方选择后核对。");
     if(p.status === "completed") planLockReasons.push("计划已完成，只读；需要调整请新建独立计划。");
     if(pending) planLockReasons.push("本机有一条待确认的发布请求，处理前计划只读。");
     if(storageError) planLockReasons.push("本机草稿读取异常，暂以只读方式展示计划。");
@@ -5034,7 +5006,7 @@ export function mountReleaseWorkspace(pageHost, opts){
       + (mayPublish ? '<div class="release-panel" id="release-panel-actual" data-release-panel="actual"' + (activeTab === "actual" ? '' : ' hidden') + '>' + actualSection + '</div>' : '')
       + '<div class="release-panel" id="release-panel-history" data-release-panel="history"' + (activeTab === "history" ? '' : ' hidden') + '>' + historySection + versionLogSection + contentSection + '</div>';
     inheritSig = ""; diffSig = "";
-    renderHistory(); renderVersionLog(); renderCheck(); renderPrep(); syncWatch(); syncControls(); syncAdvanced(); updateChecklists(); renderScopeState(true); refreshPlanBranches(); filterPicker("plan"); filterPicker("actual"); error(storageError); UI.wireTooltips(dlg.body);
+    renderHistory(); renderVersionLog(); renderCheck(); renderPrep(); syncWatch(); syncPlanShareBtn(); syncControls(); syncAdvanced(); updateChecklists(); renderScopeState(true); refreshPlanBranches(); filterPicker("plan"); filterPicker("actual"); error(storageError); UI.wireTooltips(dlg.body);
     if(restoreScroll != null){ dlg.scrollTo(restoreScroll); restoreScroll = null; }
     if(entryFocus){ entryFocus = false; focusActual(); }
     if(mayManage && activeTab === "plan") ensurePlanTaskPool();
@@ -5244,7 +5216,7 @@ export function mountReleaseWorkspace(pageHost, opts){
     if(pending || storageError) return;
     if(e.target.matches('[data-plan-select]')){
       var sel = e.target, nextPlan = sel.value;
-      confirmDiscardPlan(function(){ readActual(); planId = nextPlan; planJustSaved = false; planScopeVersionIds = null; planVersionQuery = ""; planTaskFetchKey = ""; planTaskErrorKey = ""; prepState.planId = ""; prepState.data = null; watchState.planId = ""; watchState.loaded = false; invalidatePreview(); render(); loadPrep(); }, function(){ sel.value = planId || ""; });
+      confirmDiscardPlan(function(){ readActual(); planId = nextPlan; planJustSaved = false; planScopeVersionIds = null; planVersionQuery = ""; planVersionShowReleased = false; planTaskFetchKey = ""; planTaskErrorKey = ""; prepState.planId = ""; prepState.data = null; watchState.planId = ""; watchState.loaded = false; invalidatePreview(); render(); loadPrep(); }, function(){ sel.value = planId || ""; });
       return;
     }
     if(e.target.matches('[data-plan-version]')){
@@ -5344,6 +5316,14 @@ export function mountReleaseWorkspace(pageHost, opts){
       return;
     }
     if(e.target.closest('[data-plan-sync-close]')){ var syncHost = layer.querySelector("[data-plan-sync-host]"); if(syncHost) syncHost.innerHTML = ""; return; }
+    /* 已发布版本默认收起：按钮是 click 语义，和 input/change 的 changed 分开处理 */
+    if(e.target.closest('[data-plan-version-toggle-released]')){
+      planVersionShowReleased = !planVersionShowReleased;
+      rerenderPlanVersionPicker();
+      var releasedToggle = layer.querySelector('[data-plan-version-toggle-released]');
+      if(releasedToggle){ try{ releasedToggle.focus({preventScroll:true}); }catch(ex){ /* noop */ } }
+      return;
+    }
     if(busy || !current()) return;
     var applyPlan = e.target.closest('[data-release-apply-plan]');
     if(applyPlan){
@@ -5484,7 +5464,7 @@ export function mountReleaseWorkspace(pageHost, opts){
       dismissPlanDraftBanner();
       return;
     }
-    if(e.target.closest('[data-plan-new]')){ if(mayManage) confirmDiscardPlan(function(){ readActual(); planId = ""; planJustSaved = false; planScopeVersionIds = null; planVersionQuery = ""; planTaskFetchKey = ""; planTaskErrorKey = ""; prepState.planId = ""; prepState.data = null; watchState.planId = ""; watchState.loaded = false; invalidatePreview(); render(); }); return; }
+    if(e.target.closest('[data-plan-new]')){ if(mayManage) confirmDiscardPlan(function(){ readActual(); planId = ""; planJustSaved = false; planScopeVersionIds = null; planVersionQuery = ""; planVersionShowReleased = false; planTaskFetchKey = ""; planTaskErrorKey = ""; prepState.planId = ""; prepState.data = null; watchState.planId = ""; watchState.loaded = false; invalidatePreview(); render(); }); return; }
     if(e.target.closest('[data-release-preview]')){ runPreview(); return; }
     /* 异常清单内的就地处理：取消勾选 / 聚焦原因输入 / 回计划面核对 */
     var anomalyDrop = e.target.closest('[data-anomaly-drop]');
@@ -6261,9 +6241,23 @@ function ensureEpicOptions(keep, taskId){
 /* ---------- 事件 ---------- */
 
 if(phaseReq) phaseReq.addEventListener("change", function(){
-  rt.phaseReqId = phaseReq.value || null;
+  var val = phaseReq.value || "";
+  /* 全部项目 / 项目集：范围是合成视图，落到跨项目版本清单再筛 */
+  if(val === "__all"){
+    allVersionsFilters.set = "";
+    allVersionsFilters.project = "";
+    applyPhaseMode("allversions");
+    return;
+  }
+  if(val.indexOf("__set:") === 0){
+    allVersionsFilters.set = val.slice(6);
+    allVersionsFilters.project = "";
+    applyPhaseMode("allversions");
+    return;
+  }
+  rt.phaseReqId = val || null;
   /* 跨项目视图里改项目：回到单项目按版本，范围条同步收起 */
-  if(viewMode === "overview" || viewMode === "schedule" || viewMode === "allversions"){
+  if(viewMode === "overview" || viewMode === "allversions"){
     viewMode = "version";
     syncPhaseModeHash(viewMode);
     syncModeSeg();
@@ -6284,7 +6278,20 @@ if($("phaseScopeBtn")) $("phaseScopeBtn").addEventListener("click", function(e){
 });
 if($("phaseScopeMenu")) $("phaseScopeMenu").addEventListener("click", function(e){
   var b = e.target.closest("[data-pmode]");
-  if(b){ applyPhaseMode(b.dataset.pmode); return; }
+  if(b){
+    /* 「全部项目」是范围基线：清掉残留的项目集筛选 */
+    if(b.dataset.pmode === "allversions"){ allVersionsFilters.set = ""; allVersionsFilters.project = ""; }
+    applyPhaseMode(b.dataset.pmode);
+    return;
+  }
+  var setB = e.target.closest("[data-scope-set]");
+  if(setB){
+    allVersionsFilters.set = setB.getAttribute("data-scope-set") || "";
+    allVersionsFilters.project = "";
+    applyPhaseMode("allversions");
+    return;
+  }
+  if(e.target.closest("[data-open-plans]")){ openPlanListJump(); return; }
   if(e.target.closest("[data-scope-back]")) applyPhaseMode("version");
 });
 if($("phaseScopeBack")) $("phaseScopeBack").addEventListener("click", function(){ applyPhaseMode("version"); });
@@ -6347,7 +6354,7 @@ if(phaseBody) phaseBody.addEventListener("click", function(e){
     return;
   }
   if(e.target.closest("[data-rollup-more]")){ rollupUi.more = !rollupUi.more; paintRollup(); return; }
-  if(e.target.closest("[data-ver-schedule-link]")){ applyPhaseMode("schedule"); return; }
+  if(e.target.closest("[data-ver-plans-link]")){ openPlanListJump(); return; }
   var inlineBtn = e.target.closest("[data-ver-inline]");
   if(inlineBtn){ startVersionInlineEdit(inlineBtn.getAttribute("data-ver-id"), inlineBtn.getAttribute("data-ver-inline")); return; }
   if(e.target.closest("[data-ver-inline-save]")){ saveVersionInline(); return; }
@@ -6365,7 +6372,6 @@ if(phaseBody) phaseBody.addEventListener("click", function(e){
     openVersionPage(verOpen.getAttribute("data-ver-req") || rt.phaseReqId, verOpen.getAttribute("data-ver-open"));
     return;
   }
-  if(e.target.closest("[data-schedule-refresh]")){ loadSchedule(); return; }
   var rollDim = e.target.closest("[data-rollup-dim]");
   if(rollDim){
     var dim = rollDim.dataset.rollupDim;
@@ -6378,8 +6384,6 @@ if(phaseBody) phaseBody.addEventListener("click", function(e){
   if(rollRow){ openRollupDrill(rollRow.dataset.rollupGroup, rollRow.dataset.rollupKey || "", rollRow.dataset.rollupVer || ""); return; }
   if(e.target.closest("[data-allv-clear]")){ allVersionsSel = []; renderAllVersions(); return; }
   if(e.target.closest("[data-allv-plan]")){ createPlanFromAllVersions(); return; }
-  var sch = e.target.closest("[data-schedule-open]");
-  if(sch){ openSchedulePlan(sch.dataset.scheduleProject, sch.dataset.scheduleVersion); return; }
   var ovr = e.target.closest("[data-ov-project]");
   if(ovr){
     rt.phaseReqId = ovr.dataset.ovProject;
@@ -6488,15 +6492,13 @@ if(phaseBody) phaseBody.addEventListener("change", function(e){
     paintRollup();
     return;
   }
-  var sf = e.target.closest("[data-schedule-filter]");
-  if(sf){
-    scheduleFilters[sf.dataset.scheduleFilter] = sf.value;
-    loadSchedule();
-    return;
-  }
   var avf = e.target.closest("[data-allv-filter]");
   if(avf){
-    allVersionsFilters[avf.dataset.allvFilter] = avf.value;
+    var key = avf.dataset.allvFilter;
+    allVersionsFilters[key] = avf.value;
+    /* 项目集与单项目是同一层范围：改一个就清掉另一个，避免组合出空结果 */
+    if(key === "set") allVersionsFilters.project = "";
+    else if(key === "project" && avf.value) allVersionsFilters.set = "";
     renderAllVersions();
     return;
   }

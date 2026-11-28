@@ -53,6 +53,8 @@ public interface ReleaseMapper {
                                                              @Param("viewerId") String viewerId,
                                                              @Param("limit") int limit);
     VersionReleasePlan selectPlanForUpdate(@Param("workspaceId") String workspaceId, @Param("planId") String planId);
+    /** 只读取计划：交付说明聚合不占计划行锁 */
+    VersionReleasePlan selectPlan(@Param("workspaceId") String workspaceId, @Param("planId") String planId);
     List<String> selectPlannedTaskIds(@Param("workspaceId") String workspaceId, @Param("planId") String planId);
     List<String> selectPlannedTaskIdsForUpdate(@Param("workspaceId") String workspaceId, @Param("planId") String planId);
     int deletePlanTasks(@Param("workspaceId") String workspaceId, @Param("planId") String planId);

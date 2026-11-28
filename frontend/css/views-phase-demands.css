@@ -386,6 +386,27 @@ a.rel-plan-row:hover .rp-go svg{transform:translateX(2px);}
   .rel-plan-foot .rel-empty-acts{margin-left:0;}
 }
 
+/* ===== 发布计划列表（原型 plan-list-1440）：KPI 四卡、环境点、就绪检查胶囊 ===== */
+.pl-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--space-2);margin-bottom:10px;}
+.pl-kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 14px;min-height:88px;gap:3px;justify-content:flex-start;}
+.pl-kpi b{font-size:22px;line-height:1.15;font-weight:650;}
+.pl-kpi .pl-kpi-label{font-size:12px;color:var(--text-2);}
+.pl-kpi .pl-kpi-sub{font-size:11px;color:var(--text-3);}
+@media (max-width:1100px){
+  .pl-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+/* 环境只读标识：圆点 + 文案，颜色只作辅助，文案本身已能区分 */
+.rel-env{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:550;color:var(--text-2);white-space:nowrap;}
+.rel-env::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--text-3);flex:0 0 auto;}
+.rel-env.is-production::before{background:var(--info);}
+.rel-env.is-staging::before{background:var(--plum);}
+/* 就绪检查结论：取覆盖版本最差结论；草稿 / 已取消不计算 */
+.rel-check{display:inline-flex;align-items:center;gap:6px;padding:1px 8px;border-radius:var(--r-pill);background:var(--surface-sunken);color:var(--text-3);font-size:11.5px;font-weight:550;white-space:nowrap;}
+.rel-check::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:0 0 auto;}
+.rel-check.is-pass{background:var(--success-soft);color:var(--success-fg);}
+.rel-check.is-warn{background:var(--warning-soft);color:var(--warning-fg);}
+.rel-check.is-block{background:var(--danger-soft);color:var(--danger-fg);}
+
 /* ===== 页内 3 步条：计划范围 → 实际发布 → 历史与内容（原型 REL-1） ===== */
 .rel-steps-wrap{display:flex;align-items:center;gap:10px;}
 .rel-steps{display:flex;align-items:center;flex:1 1 auto;min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:9px 14px;}
@@ -552,6 +573,11 @@ a.rel-plan-row:hover .rp-go svg{transform:translateX(2px);}
 .release-version-row.is-ended{background:var(--warning-soft);box-shadow:inset 2px 0 0 var(--warning);}
 .release-version-row.is-ended:hover{background:var(--warning-soft);}
 .release-version-row.is-ended small{color:var(--text-2);}
+/* 已发布版本不能再新加入计划：置灰只读，和可移出的历史成员区分 */
+.release-version-row.is-released-locked{cursor:default;background:var(--surface-sunken);}
+.release-version-row.is-released-locked:hover{background:var(--surface-sunken);}
+.release-version-row.is-released-locked b{color:var(--text-3);}
+.release-version-row.is-released-locked small{color:var(--text-3);}
 .release-version-row:focus-within{outline:2px solid var(--primary);outline-offset:-2px;}
 .release-version-row input{flex:0 0 auto;width:16px;height:16px;margin-top:2px;accent-color:var(--primary);}
 .release-version-row span{display:flex;flex-direction:column;gap:2px;min-width:0;}

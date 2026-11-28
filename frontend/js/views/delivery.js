@@ -10,30 +10,46 @@ import { activeView, showView } from "../core/router.js";
 import { reqSetId, rt, setSortOf, setNameById } from "../core/state.js";
 import { UI, copyToClipboard, esc, toast } from "../core/ui.js";
 import { DD } from "../lib/delivery-doc.js";
-import { assocLinkHTML } from "../lib/format.js";
+import { PD } from "../lib/plan-doc.js";
+import { assocLinkHTML, planStatusName } from "../lib/format.js";
 import { printDeliveryPaper, registerDeliveryPrintSource, triggerDownload } from "../lib/download.js";
 import { openTaskById } from "../core/task-actions.js";
 
 var host = null;
 var data = null;
 var versionId = null;
+var planId = null;
 var loadSeq = 0;
 var editMode = false, editingField = null;
 var risksExpanded = false;
 var dirty = false, saving = false, saveQueued = false, saveTimer = null;
 var saveState = "idle";
-var pickerRows = null, pickerQuery = "";
+var pickerDim = "version", pickerRows = null, pickerQuery = "";
+var planRows = null, planQuery = "", planStatusFilter = "all";
 var exportFmt = "pdf";
 var busyAction = false;
 
 function $(sel, root) { return (root || host || document).querySelector(sel); }
-function opts() { return data ? DD.options(data) : DD.DEFAULTS; }
-function view() { return { editMode: editMode, editingField: editingField, risksExpanded: risksExpanded, readonly: DD.locked(data) }; }
-function base() { return "/api/versions/" + encodeURIComponent(versionId) + "/delivery-note"; }
+/* 版本 / 计划两套文档渲染器同一方法面：其余交互（确认、导出、快照、分享）只认这个入口 */
+function isPlanData(d) { return !!(d && d.scopeType === "plan"); }
+function isPlan() { return isPlanData(data) || (!data && !!planId); }
+function D() { return isPlanData(data) ? PD : DD; }
+function opts() { return data ? D().options(data) : DD.DEFAULTS; }
+function view() { return { editMode: editMode, editingField: editingField, risksExpanded: risksExpanded, readonly: D().locked(data) }; }
+function base() {
+  if (isPlan()) return "/api/release-plans/" + encodeURIComponent(planId) + "/delivery-note";
+  return "/api/versions/" + encodeURIComponent(versionId) + "/delivery-note";
+}
+function scopeKey() { return isPlanData(data) ? (planId || data.scopeId) : versionId; }
+function resetDocState() {
+  editMode = false; editingField = null; dirty = false; saveState = "idle"; risksExpanded = false;
+  saveQueued = false;
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+}
 
 /* ==================== 入口 ==================== */
 
-/* 深链：#/delivery?versionId=…&releaseId=…，刷新与转发都能落回同一份说明 */
+/* 深链：#/delivery?versionId=…&releaseId=…（版本）或 #/delivery?planId=…（发布计划），刷新与转发都能落回同一份说明 */
 function hashParams() {
   var raw = String(location.hash || "");
   var q = raw.indexOf("?");
@@ -48,9 +64,10 @@ function hashParams() {
   });
   return out;
 }
-function setDeliveryHash(id, releaseId, replace) {
-  var h = id ? "#/delivery?versionId=" + encodeURIComponent(id)
-    + (releaseId ? "&releaseId=" + encodeURIComponent(releaseId) : "") : "#/delivery";
+function setDeliveryHash(kind, id, extra, replace) {
+  var h = !id ? "#/delivery"
+    : kind === "plan" ? "#/delivery?planId=" + encodeURIComponent(id)
+    : "#/delivery?versionId=" + encodeURIComponent(id) + (extra ? "&releaseId=" + encodeURIComponent(extra) : "");
   if (location.hash === h) return;
   try { replace ? history.replaceState(null, "", h) : history.pushState(null, "", h); }
   catch (e) { try { location.hash = h; } catch (e2) { /* 受限环境忽略 */ } }
@@ -61,6 +78,7 @@ function enterDeliveryView() {
   if (!host) return;
   wire();
   var hp = hashParams();
+  if (hp.planId) { loadPlan(hp.planId); return; }
   var want = hp.versionId || rt.deliveryVersionId || versionId;
   if (want) { load(want, hp.releaseId || ""); return; }
   renderPicker();
@@ -70,28 +88,138 @@ function openDeliveryNote(id, releaseId) {
   rt.deliveryVersionId = id;
   rt.deliveryReleaseId = releaseId || "";
   versionId = null;
-  setDeliveryHash(id, releaseId || "", false);
+  planId = null;
+  setDeliveryHash("version", id, releaseId || "", false);
   showView("delivery");
 }
-/* 浏览器前进/后退落在另一个版本：跟着 hash 重新聚合，不整页重进 */
+/* 从发布计划列表 / 交付报告选择器进入：一份计划 = 一份跨版本汇总报告 */
+function openPlanDeliveryNote(id) {
+  if (!id) return;
+  versionId = null;
+  planId = id;
+  setDeliveryHash("plan", id, "", false);
+  showView("delivery");
+}
+/* 浏览器前进/后退落在另一个对象：跟着 hash 重新聚合，不整页重进 */
 function refreshFromHash() {
   if (!host || activeView !== "delivery") return;
   var hp = hashParams();
-  if (hp.versionId && hp.versionId !== versionId) { load(hp.versionId, hp.releaseId || ""); return; }
-  if (!hp.versionId && versionId) { data = null; versionId = null; rt.deliveryVersionId = ""; renderPicker(); }
+  if (hp.planId) { if (!isPlanData(data) || hp.planId !== planId) loadPlan(hp.planId); return; }
+  if (hp.versionId) { if (isPlanData(data) || hp.versionId !== versionId) load(hp.versionId, hp.releaseId || ""); return; }
+  if (versionId || planId) {
+    data = null; versionId = null; planId = null;
+    rt.deliveryVersionId = "";
+    renderPicker();
+  }
 }
 
+function dimTab(kind, label) {
+  return '<button type="button" data-dl-act="pick-dim" data-dl-val="' + kind + '"'
+    + ' class="' + (pickerDim === kind ? "on" : "") + '" aria-pressed="' + (pickerDim === kind ? "true" : "false") + '">'
+    + esc(label) + "</button>";
+}
 function renderPicker() {
+  var isPlanPick = pickerDim === "plan";
   host.innerHTML = '<div class="dl-head"><div>'
-    + '<div class="dl-title-row"><h2 class="dl-pick-title">选择要生成交付报告的版本</h2></div></div></div>'
+    + '<div class="dl-title-row"><h2 class="dl-pick-title">选择要生成交付报告的对象</h2></div>'
+    + '<div class="dl-facts"><span>' + icon("note", 12) + (isPlanPick
+      ? "发布计划可跨项目、跨版本，生成一份逐版本分章的汇总报告"
+      : "版本交付针对单个版本；需要跨版本时切到「发布计划」") + "</span></div>"
+    + "</div>"
+    + '<div class="dl-acts"><div class="dl-fmt-tabs" role="group" aria-label="交付报告维度">'
+    + dimTab("version", "按版本") + dimTab("plan", "按发布计划") + "</div></div></div>"
     + '<div id="dlPickerList">' + UI.skeletonRows(4) + "</div>";
+  if (isPlanPick) { loadPlanPicker(); return; }
   if (pickerRows) { paintPicker(); return; }
   API.get("/api/versions/cross-project").then(function (rows) {
     pickerRows = rows || [];
-    if (activeView === "delivery" && !data) paintPicker();
+    if (activeView === "delivery" && !data && pickerDim === "version") paintPicker();
   }).catch(function (ex) {
     var box = document.getElementById("dlPickerList");
     if (box) box.innerHTML = UI.errorState(ex.message || "版本清单加载失败");
+  });
+}
+/* 计划选择器：跨项目计划按未完成优先、时间倒序；已完成/已取消默认收在筛选里 */
+function loadPlanPicker() {
+  if (planRows) { paintPlanPicker(); return; }
+  API.get("/api/release-plans", { status: "all" }).then(function (rows) {
+    planRows = rows || [];
+    if (activeView === "delivery" && !data && pickerDim === "plan") paintPlanPicker();
+  }).catch(function (ex) {
+    var box = document.getElementById("dlPickerList");
+    if (box) box.innerHTML = UI.errorState(ex.message || "发布计划清单加载失败");
+  });
+}
+function planStatusBadge(st) {
+  /* 与 PLAN_STATUS_META 同源：草稿/已取消都是中性灰，只有就绪与完成各自着色 */
+  var cls = st === "completed" ? "ok" : st === "ready" ? "pri" : "";
+  return '<span class="dl-badge ' + cls + '">' + esc(planStatusName(st)) + "</span>";
+}
+function planTimeText(iso) {
+  if (!iso) return "未定时间";
+  return DD.timeText(iso);
+}
+function planMatches(q, r) {
+  if (!q) return true;
+  return [r.projectNames, r.versionNames, r.projectName, r.versionName, planStatusName(r.status), r.ownerName]
+    .join(" ").toLowerCase().indexOf(q) !== -1;
+}
+function paintPlanPicker() {
+  var box = document.getElementById("dlPickerList");
+  if (!box) return;
+  var q = planQuery.trim().toLowerCase();
+  var rows = (planRows || []).filter(function (r) {
+    if (planStatusFilter === "open" && (r.status === "completed" || r.status === "canceled")) return false;
+    if (planStatusFilter === "done" && r.status !== "completed") return false;
+    return planMatches(q, r);
+  }).sort(function (a, b) {
+    var ao = a.status === "completed" || a.status === "canceled" ? 1 : 0;
+    var bo = b.status === "completed" || b.status === "canceled" ? 1 : 0;
+    if (ao !== bo) return ao - bo;
+    return String(b.plannedAt || "").localeCompare(String(a.plannedAt || ""));
+  });
+  var filters = '<div class="dl-fmt-tabs" role="group" aria-label="计划状态筛选">'
+    + [["all", "全部"], ["open", "未完成"], ["done", "已完成"]].map(function (f) {
+      return '<button type="button" data-dl-act="plan-status" data-dl-val="' + f[0] + '"'
+        + (planStatusFilter === f[0] ? ' class="on"' : "") + ' aria-pressed="' + (planStatusFilter === f[0] ? "true" : "false") + '">'
+        + f[1] + "</button>";
+    }).join("") + "</div>";
+  if (!rows.length) {
+    box.innerHTML = '<div class="dl-rfield" style="max-width:340px;margin:12px 0">'
+      + '<input class="input" type="search" id="dlPlanQuery" placeholder="搜索计划、项目或版本" value="' + esc(planQuery) + '" aria-label="搜索发布计划">'
+      + "</div>" + filters
+      + UI.emptyState({
+        icon: "layers", title: planQuery || planStatusFilter !== "all" ? "没有匹配的发布计划" : "还没有发布计划",
+        text: planQuery || planStatusFilter !== "all" ? "换个关键词或切回「全部」。" : "先在「发布计划」里创建计划并选择版本，这里就能生成汇总报告。"
+      });
+    wirePlanQuery();
+    return;
+  }
+  box.innerHTML = '<div class="dl-rfield" style="max-width:340px;margin:12px 0">'
+    + '<input class="input" type="search" id="dlPlanQuery" placeholder="搜索计划、项目或版本" value="' + esc(planQuery) + '" aria-label="搜索发布计划">'
+    + "</div>" + filters
+    + '<div class="dl-rows" style="margin-top:12px">' + rows.map(function (r) {
+      var sub = [r.projectNames, r.versionCount ? r.versionCount + " 个版本" : "",
+        planTimeText(r.plannedAt), r.environment === "production" ? "生产" : r.environment === "staging" ? "预发" : "测试",
+        r.ownerName ? "负责人 " + r.ownerName : "", r.plannedTaskCount != null ? "范围 " + r.plannedTaskCount + " 项" : ""]
+        .filter(Boolean).join(" · ");
+      return '<div class="dl-row body" style="grid-template-columns:96px minmax(0,1fr) 120px">'
+        + "<span>" + planStatusBadge(r.status) + "</span>"
+        + '<span class="tt"><b>' + esc(r.versionNames || r.versionName || "未命名计划") + "</b><span>" + esc(sub) + "</span></span>"
+        + '<span><button class="btn sm soft" type="button" data-dl-open-plan="' + esc(r.id) + '">'
+        + icon("note", 13) + "生成报告</button></span></div>";
+    }).join("") + "</div>";
+  wirePlanQuery();
+}
+function wirePlanQuery() {
+  var input = document.getElementById("dlPlanQuery");
+  if (!input) return;
+  input.addEventListener("input", function () {
+    planQuery = input.value;
+    var pos = input.selectionStart;
+    paintPlanPicker();
+    var next = document.getElementById("dlPlanQuery");
+    if (next) { next.focus(); try { next.setSelectionRange(pos, pos); } catch (e) { /* search 类型部分浏览器不支持 */ } }
   });
 }
 function pickerSetOf(reqId){
@@ -173,13 +301,14 @@ function paintPicker() {
 function load(id, releaseId) {
   var current = ++loadSeq;
   versionId = id;
+  planId = null;
   rt.deliveryVersionId = id;
   data = null;
-  editMode = false; editingField = null; dirty = false; saveState = "idle"; risksExpanded = false;
+  resetDocState();
   host.innerHTML = UI.skeletonRows(6);
   var want = releaseId || rt.deliveryReleaseId || "";
   rt.deliveryReleaseId = "";
-  setDeliveryHash(id, want, true);
+  setDeliveryHash("version", id, want, true);
   return API.get(base(), want ? { releaseId: want } : null).then(function (resp) {
     if (current !== loadSeq || activeView !== "delivery") return;
     data = resp;
@@ -192,36 +321,65 @@ function load(id, releaseId) {
   });
 }
 
+function loadPlan(id) {
+  var current = ++loadSeq;
+  planId = id;
+  versionId = null;
+  data = null;
+  resetDocState();
+  host.innerHTML = UI.skeletonRows(6);
+  setDeliveryHash("plan", id, "", true);
+  return API.get(base()).then(function (resp) {
+    if (current !== loadSeq || activeView !== "delivery") return;
+    data = resp;
+    renderAll();
+  }).catch(function (ex) {
+    if (current !== loadSeq) return;
+    host.innerHTML = UI.errorState(ex.message || "发布计划交付报告加载失败");
+    var btn = host.querySelector("[data-empty-action]");
+    if (btn) btn.addEventListener("click", function () { loadPlan(id); });
+  });
+}
+
 /* ==================== 渲染 ==================== */
 
 function renderAll() {
   if (!data) return;
-  var o = opts(), g = DD.gates(data), isLocked = DD.locked(data);
+  var doc = D(), o = opts(), g = doc.gates(data), isLocked = doc.locked(data), plan = isPlanData(data);
   /* 只读权限不靠点击后 toast：保存 / 导出 / 分享按钮直接禁用并写明原因 */
   var noSnapshotRight = !data.canSnapshot && !isLocked;
   var noShare = noSnapshotRight && !data.snapshotId;
-  /* 页面标题已在顶栏，正文不再重复 h1；这里直接给版本与口径 chip */
+  var readWhy = plan ? "你对该计划覆盖的项目只有查看权限" : "你对该项目只有查看权限";
+  var chs = plan ? (data.versionChapters || []) : [];
+  var relCount = plan ? chs.filter(function (x) { return x.released; }).length : 0;
+  /* 页面标题已在顶栏，正文不再重复 h1；这里直接给对象与口径 chip */
   host.innerHTML = '<div class="dl-head"><div>'
     + '<div class="dl-title-row">'
-    + '<span class="dl-chip pri">' + esc(DD.toneName(o.tone)) + "</span>"
-    + '<span class="dl-chip">' + esc(data.projectName || "未归属项目") + " · " + assocLinkHTML("version", data.versionId, data.versionName || "", { req:data.projectId, plain:"" }) + "</span>"
+    + '<span class="dl-chip pri">' + esc(doc.toneName(o.tone)) + "</span>"
+    + (plan
+      ? '<span class="dl-chip">' + icon("layers", 11) + esc(data.scopeName || "发布计划")
+        + (data.plan && data.plan.statusName ? " · " + esc(data.plan.statusName) : "") + "</span>"
+      : '<span class="dl-chip">' + esc(data.projectName || "未归属项目") + " · " + assocLinkHTML("version", data.versionId, data.versionName || "", { req:data.projectId, plain:"" }) + "</span>")
     + (isLocked ? '<span class="dl-chip plum">' + icon("lock", 11) + "快照 " + esc(data.docNo || "") + "</span>" : "")
     + "</div>"
     + '<div class="dl-facts">'
-    + "<span>" + icon("layers", 12) + "承诺 <b>" + (data.counts ? data.counts.planned || 0 : 0) + "</b> 项</span>"
+    + (plan
+      ? "<span>" + icon("layers", 12) + "计划版本 <b>" + relCount + " / " + chs.length + "</b> 已发布</span>"
+        + "<span>" + icon("board", 12) + "涉及项目 <b>" + (data.plan && data.plan.projectNames ? data.plan.projectNames.length : 0) + "</b> 个</span>"
+      : "<span>" + icon("layers", 12) + "承诺 <b>" + (data.counts ? data.counts.planned || 0 : 0) + "</b> 项</span>")
     + "<span>" + icon("note", 12) + "编号 <b>" + esc(data.docNo || "未编号") + "</b></span>"
-    + "<span>" + icon("clock", 12) + "生成 <b>" + esc(DD.timeText(data.generatedAt)) + "</b></span>"
+    + "<span>" + icon("clock", 12) + "生成 <b>" + esc(doc.timeText(data.generatedAt)) + "</b></span>"
     + "<span>" + icon("shield", 12) + "编制 <b>" + esc(data.ownerName || "未记录") + "</b></span>"
     + "</div></div>"
     + '<div class="dl-acts">'
-    + '<button class="btn sm ghost" type="button" data-dl-act="pick">' + icon("layers", 13) + "切换版本</button>"
+    + '<button class="btn sm ghost" type="button" data-dl-act="pick">' + icon("layers", 13) + (plan ? "切换计划" : "切换版本") + "</button>"
     + '<button class="btn sm ghost" type="button" data-dl-act="snapshots">' + icon("layers", 13) + "快照记录"
     + ((data.revisions || []).length ? " (" + data.revisions.length + ")" : "") + "</button>"
     + '<button class="btn sm" type="button" data-dl-act="save"' + (isLocked || !data.canEdit ? " disabled" : "")
-    + (isLocked ? ' title="快照已锁定，不能保存草稿"' : !data.canEdit ? ' title="你对该项目只有查看权限，不能保存草稿"' : "") + ">"
+    + (isLocked ? ' title="快照已锁定，不能保存草稿"' : !data.canEdit ? ' title="' + readWhy + '，不能保存草稿"' : "") + ">"
     + icon("check", 13) + '保存草稿<span id="dlSaveState"></span></button>'
-    + '<button class="btn sm" type="button" data-dl-act="share"' + (noShare ? ' disabled title="你对该项目只有查看权限，不能生成分享链接"' : "") + ">" + icon("share", 13) + "分享链接</button>"
-    + '<button class="btn sm primary" type="button" data-dl-act="export"' + (noSnapshotRight ? ' disabled title="你对该项目只有查看权限，不能导出快照"' : "") + ">" + icon("download", 13) + "导出报告</button>"
+    + '<button class="btn sm" type="button" data-dl-act="share"' + (noShare ? ' disabled title="' + readWhy + '，不能生成分享链接"' : "") + ">" + icon("share", 13) + "分享链接</button>"
+    + '<button class="btn sm primary" type="button" data-dl-act="export"' + (noSnapshotRight ? ' disabled title="' + readWhy + '，不能导出快照"' : "") + ">" + icon("download", 13) + "导出报告</button>"
     + "</div></div>"
     + '<div id="dlBanner"></div>'
     + '<div class="dl-work"><div class="dl-main">'
@@ -240,6 +398,7 @@ function renderAll() {
 }
 
 function bannerHTML() {
+  if (isPlanData(data)) return planBannerHTML();
   var g = DD.gates(data), isLocked = DD.locked(data);
   var kind, ic, title, desc, acts = "";
   if (isLocked) {
@@ -279,6 +438,45 @@ function bannerHTML() {
     + (acts ? '<div class="ba">' + acts + "</div>" : "") + "</div>";
 }
 
+/* 计划维度门禁：只有计划内每个版本都有本计划的成功生产发布（非回滚），才可对外 */
+function planBannerHTML() {
+  var g = PD.gates(data), isLocked = PD.locked(data);
+  var kind, ic, title, desc, acts = "";
+  if (isLocked) {
+    kind = "lock"; ic = "lock"; title = "正在查看不可变快照 " + (data.docNo || "");
+    desc = "内容已冻结，不随系统记录变化；控制区与文字编辑均已锁定。";
+    acts = '<button class="btn sm" type="button" data-dl-act="back-draft">回到当前草稿</button>';
+  } else if (!data.canSnapshot) {
+    kind = "lock"; ic = "lock"; title = "只读查看";
+    desc = "你对该计划覆盖的项目只有查看权限，可阅读但不能改写、导出或分享；需要时请联系项目负责人。";
+  } else if (g.customerBlocked) {
+    kind = "bad"; ic = "alertCircle"; title = "计划内仍有版本未完成本计划的生产发布，客户版不可导出";
+    desc = "各版本都要有发布记录指向本计划、环境为生产、结果成功且非回滚；实际交付以这些记录为准，完成数量不代表已交付。可切到管理版先看内部草稿。";
+    acts = '<button class="btn sm" type="button" data-dl-act="tone" data-dl-tone="manager">切到管理版</button>'
+      + '<button class="btn sm ghost" type="button" data-dl-act="goto-plan-release">去发布计划</button>';
+  } else if (!g.production) {
+    kind = "warn"; ic = "alert"; title = "计划内仍有版本未完成本计划的生产发布";
+    desc = "本说明目前是内部草稿；各版本都确认本计划的成功生产发布后，才能作为对外交付依据。";
+    acts = '<button class="btn sm ghost" type="button" data-dl-act="goto-plan-release">去发布计划</button>';
+  } else if (g.pending.length) {
+    kind = "warn"; ic = "edit"; title = g.pending.length + " 处对外表述待确认";
+    desc = "系统按各版本事实草拟了这些段落，核对无误后点「确认这段」；也可以改写。全部确认后才能导出与分享。";
+    acts = '<button class="btn sm" type="button" data-dl-act="accept-all">全部确认</button>'
+      + '<button class="btn sm ghost" type="button" data-dl-act="goto-pending">逐项查看</button>';
+  } else {
+    kind = "ok"; ic = "checkCircle"; title = "事实与文字均已就绪";
+    desc = "可导出不可变快照并生成只读分享链接；导出后各版本记录再变化也不影响已发出的这一份。";
+  }
+  if (!isLocked && data.canEdit && !g.customerBlocked && g.pending.length && acts.indexOf("accept-all") < 0) {
+    acts += '<button class="btn sm" type="button" data-dl-act="accept-all">全部确认</button>'
+      + '<button class="btn sm ghost" type="button" data-dl-act="goto-pending">逐项查看</button>';
+    desc += "另有 " + g.pending.length + " 处对外表述待确认，核对后才能导出。";
+  }
+  return '<div class="dl-banner ' + kind + '"><span class="bi">' + icon(ic, 15) + "</span>"
+    + "<div><div class=\"bt\">" + esc(title) + "</div><div class=\"bp\">" + esc(desc) + "</div></div>"
+    + (acts ? '<div class="ba">' + acts + "</div>" : "") + "</div>";
+}
+
 /* 哪些区块有「对外表述」、对应哪个确认字段：目录上的 ✓/! 与正文确认按钮同一口径 */
 var NAV_CONFIRM_SECTION = { summary: "summary", change: "changes", issue: "defects", acceptance: "acceptance" };
 function navConfirmField(sectionKey) {
@@ -286,9 +484,10 @@ function navConfirmField(sectionKey) {
   return "";
 }
 function secnavHTML() {
-  var pend = DD.pendingFields(data).map(function (f) { return NAV_CONFIRM_SECTION[f]; });
+  var doc = D();
+  var pend = doc.pendingFields(data).map(function (f) { return NAV_CONFIRM_SECTION[f]; });
   var done = data.confirmed || [];
-  return DD.sectionList(data).map(function (s, i) {
+  return doc.sectionList(data).map(function (s, i) {
     var isPend = pend.indexOf(s.k) !== -1;
     var field = navConfirmField(s.k);
     var mark = isPend
@@ -304,6 +503,7 @@ function secnavHTML() {
 
 function renderDoc() {
   if (!data) return;
+  var doc = D();
   var sheetHost = document.getElementById("dlSheetHost");
   var nav = document.getElementById("dlSecnav");
   var banner = document.getElementById("dlBanner");
@@ -311,10 +511,10 @@ function renderDoc() {
   if (nav) nav.innerHTML = secnavHTML();
   var navHead = document.getElementById("dlNavHead");
   if (navHead) {
-    var secTotal = DD.sectionList(data).length, pendTotal = DD.pendingFields(data).length;
+    var secTotal = doc.sectionList(data).length, pendTotal = doc.pendingFields(data).length;
     navHead.textContent = secTotal + " 个区块" + (pendTotal ? " · " + pendTotal + " 处待确认" : "");
   }
-  if (sheetHost) sheetHost.innerHTML = DD.sheetMarkup(data, view());
+  if (sheetHost) sheetHost.innerHTML = doc.sheetMarkup(data, view());
   updateMeter();
   /* 重排会把横向滚动位置清零，重新把当前节带回视野 */
   secnavCurrent = null;
@@ -363,7 +563,7 @@ function measurePages() {
 
 function updateMeter() {
   var pages = measurePages();
-  var g = DD.gates(data);
+  var doc = D(), g = doc.gates(data);
   var el = document.getElementById("dlMeterPages");
   if (el) {
     el.textContent = String(pages);
@@ -375,7 +575,7 @@ function updateMeter() {
     p.parentNode.className = g.pending.length ? "m-warn" : "m-ok";
   }
   var s = document.getElementById("dlMeterSecs");
-  if (s) s.textContent = String(DD.sectionList(data).length);
+  if (s) s.textContent = String(doc.sectionList(data).length);
 }
 
 /* 滚动时标出当前区块：纸张很长，左侧目录要能告诉读者「现在在哪一节」 */
@@ -385,7 +585,7 @@ function syncSecnav() {
   if (!nav) return;
   var scroller = document.getElementById("view-delivery");
   var top = scroller ? scroller.getBoundingClientRect().top : 0;
-  var secs = DD.sectionList(data), current = null;
+  var secs = D().sectionList(data), current = null;
   secs.forEach(function (s) {
     var el = document.getElementById("dl-sec-" + s.k);
     if (el && el.getBoundingClientRect().top - top <= 88) current = s.k;
@@ -430,17 +630,24 @@ function rfield(label, inner) {
   return '<div class="dl-rfield"><span class="rl">' + esc(label) + "</span>" + inner + "</div>";
 }
 function railHTML() {
-  var o = opts(), isLocked = DD.locked(data), readOnly = isLocked || !data.canEdit;
+  var doc = D(), o = opts(), isLocked = doc.locked(data), readOnly = isLocked || !data.canEdit, plan = isPlanData(data);
   var dis = readOnly ? " disabled" : "";
   var releases = [["", "自动取最近一次成功生产发布"]].concat((data.releaseOptions || []).map(function (r) {
     return [r.id, (r.deliveryEvidence ? "✓ " : "· ") + r.label];
   }));
-  var groups = '<div class="dl-rgroup"><div class="dl-rg-lab">' + icon("users", 12) + "读者与依据</div>"
-    + rfield("语气版本", seg("tone", [["customer", "客户"], ["manager", "管理"], ["internal", "内部"]], o.tone, "语气版本"))
-    + rfield("发布依据", '<select class="select" data-dl-release' + dis + ' aria-label="发布依据">'
+  var chs = plan ? (data.versionChapters || []) : [];
+  var relCount = chs.filter(function (x) { return x.released; }).length;
+  /* 计划维度不选单条发布记录：每个版本各取本计划自己的成功生产发布 */
+  var basisHTML = plan
+    ? '<div class="dl-kvbox wide"><span>发布依据</span><strong>' + relCount + " / " + chs.length
+      + " 个版本已完成本计划的生产发布</strong></div>"
+    : '<select class="select" data-dl-release' + dis + ' aria-label="发布依据">'
       + releases.map(function (r) {
         return '<option value="' + esc(r[0]) + '"' + (String(r[0]) === String(o.releaseId || "") ? " selected" : "") + ">" + esc(r[1]) + "</option>";
-      }).join("") + "</select>")
+      }).join("") + "</select>";
+  var groups = '<div class="dl-rgroup"><div class="dl-rg-lab">' + icon("users", 12) + "读者与依据</div>"
+    + rfield("语气版本", seg("tone", [["customer", "客户"], ["manager", "管理"], ["internal", "内部"]], o.tone, "语气版本"))
+    + rfield("发布依据", basisHTML)
     + rfield("交付对象", '<input class="input" type="text" maxlength="120" data-dl-text="audience" value="'
       + esc(data.audience || "") + '" placeholder="如 某公司 · 清算业务部"' + dis + ">")
     + "</div>"
@@ -474,22 +681,23 @@ function railHTML() {
     + switchRow("brand", "信头与编号", "沙漏信头 + 文档编号", o.brand, readOnly)
     + switchRow("watermark", "草稿水印", "未确认发布时强制显示", o.watermark, readOnly)
     + rfield("补充说明", '<textarea class="dl-ta" maxlength="4000" data-dl-narr="note" placeholder="要额外告知接收人的事项（会单独成节）"' + dis + ">"
-      + esc(DD.narrative(data, "note") || "") + "</textarea>")
+      + esc(doc.narrative(data, "note") || "") + "</textarea>")
     + "</div>"
     + '<div class="dl-rgroup"><div class="dl-rg-lab">' + icon("table", 12) + "附录</div>"
     + switchRow("showCaliber", "统计口径", "每个数字的定义与分母", o.showCaliber, readOnly)
     + switchRow("showRevisions", "修订记录", "本版本已导出的快照", o.showRevisions, readOnly)
     + "</div>";
-  var g = DD.gates(data);
+  var g = doc.gates(data);
   return '<aside class="dl-rail' + (readOnly ? " locked" : "") + '" aria-label="生成控制区">'
     + '<div class="dl-rail-head"><h3>' + icon("settings", 13) + "生成控制</h3>"
     + '<div class="dl-rh-sub">实时生效，不改变任何事实' + (readOnly ? " · 当前只读" : "") + "</div>"
     + '<div class="dl-meter"><div class="m-ok"><b id="dlMeterPages">1</b><span>A4 页数</span></div>'
     + '<div class="' + (g.pending.length ? "m-warn" : "m-ok") + '"><b id="dlMeterPending">' + g.pending.length + "</b><span>待确认</span></div>"
-    + '<div><b id="dlMeterSecs">' + DD.sectionList(data).length + "</b><span>区块</span></div></div></div>"
+    + '<div><b id="dlMeterSecs">' + doc.sectionList(data).length + "</b><span>区块</span></div></div></div>"
     + (isLocked ? '<div class="dl-lockbar">' + icon("lock", 12) + " 快照已锁定，控制区不可改。"
       + '<button class="btn sm" type="button" data-dl-act="back-draft">回到当前草稿</button></div>'
-      : !data.canEdit ? '<div class="dl-lockbar">' + icon("lock", 12) + " 你对该项目只有查看权限，可阅读但不能改写或导出。</div>" : "")
+      : !data.canEdit ? '<div class="dl-lockbar">' + icon("lock", 12) + " "
+        + (plan ? "你对该计划覆盖的项目只有查看权限" : "你对该项目只有查看权限") + "，可阅读但不能改写或导出。</div>" : "")
     + '<div class="dl-rail-body">' + groups + "</div>"
     + '<div class="dl-rail-foot">'
     + '<button class="btn sm ghost" type="button" data-dl-act="reset"' + dis + ">重置默认</button>"
@@ -534,15 +742,15 @@ function saveBody() {
   };
 }
 function saveNow(silent) {
-  if (!data || DD.locked(data) || !data.canEdit) return Promise.resolve(null);
+  if (!data || D().locked(data) || !data.canEdit) return Promise.resolve(null);
   if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
   if (saving) { saveQueued = true; return Promise.resolve(null); }
   saving = true;
   saveState = "saving";
   paintSaveState();
   return API.put(base(), saveBody()).then(function (resp) {
-    /* 保存期间又切了版本：这份响应属于旧版本，丢弃 */
-    if (resp && resp.versionId === versionId) {
+    /* 保存期间又切了对象：这份响应属于旧对象，丢弃 */
+    if (resp && resp.scopeId === scopeKey()) {
       resp.options = resp.options || data.options;
       data = resp;
       dirty = false;
@@ -558,7 +766,7 @@ function saveNow(silent) {
     dirty = true;
     var msg = String(ex && ex.message || "保存失败");
     toast(msg, "bad");
-    if (/409|已被他人修改/.test(msg)) load(versionId);
+    if (/409|已被他人修改/.test(msg)) { if (isPlanData(data)) loadPlan(planId); else load(versionId); }
     return null;
   }).then(function (r) {
     saving = false;
@@ -576,7 +784,7 @@ function harvestEditing() {
 function setNarrative(field, text) {
   var value = String(text == null ? "" : text).replace(/\u00a0/g, " ").trim();
   data.narratives = data.narratives || {};
-  if (!value || (field !== "internal" && field !== "note" && value === DD.autoText(data, field))) {
+  if (!value || (field !== "internal" && field !== "note" && value === D().autoText(data, field))) {
     delete data.narratives[field];
   } else {
     data.narratives[field] = value.slice(0, 4000);
@@ -593,7 +801,7 @@ function unconfirmField(field) {
 /* ==================== 选项变更 ==================== */
 
 function applyOption(key, value) {
-  if (!data || DD.locked(data) || !data.canEdit) return;
+  if (!data || D().locked(data) || !data.canEdit) return;
   data.options = data.options || {};
   data.options[key] = value;
   if (key === "tone") {
@@ -611,7 +819,7 @@ function applyOption(key, value) {
 function syncRailControls() {
   var o = opts();
   var dim = $('[data-dl-opt-select="effortDim"]');
-  if (dim) dim.disabled = DD.locked(data) || !data.canEdit || !o.showEffort;
+  if (dim) dim.disabled = D().locked(data) || !data.canEdit || !o.showEffort;
 }
 
 /* ==================== 事件 ==================== */
@@ -622,7 +830,8 @@ function wire() {
   wired = true;
   /* 原生 Ctrl+P 与「导出 PDF」印同一份只读投影；离开本视图或还没选版本时不接管打印 */
   registerDeliveryPrintSource(function () {
-    return data && activeView === "delivery" ? DD.sheetMarkup(data, { readonly: true, clean: true, a4: true }) : null;
+    return data && activeView === "delivery"
+      ? D().sheetMarkup(data, { readonly: true, clean: true, a4: true, plainLinks: isPlanData(data) }) : null;
   });
   host.addEventListener("click", onClick);
   host.addEventListener("change", onChange);
@@ -636,7 +845,7 @@ function wire() {
     if (activeView === "delivery" && data) { updateMeter(); syncSecnav(); }
   });
   window.addEventListener("ds:before-route", function () {
-    if (dirty && data && !DD.locked(data)) saveNow(true);
+    if (dirty && data && !D().locked(data)) saveNow(true);
   });
 }
 
@@ -645,7 +854,7 @@ function onChange(e) {
   if (t.dataset.dlOpt !== undefined) { applyOption(t.dataset.dlOpt, t.checked); return; }
   if (t.dataset.dlOptSelect) { applyOption(t.dataset.dlOptSelect, t.value); return; }
   if (t.dataset.dlRelease !== undefined) {
-    if (DD.locked(data) || !data.canEdit) return;
+    if (isPlanData(data) || D().locked(data) || !data.canEdit) return;
     data.options.releaseId = t.value;
     dirty = true;
     /* 发布依据要重新聚合事实：保存后后端按持久化的 releaseId 返回同一条记录 */
@@ -657,14 +866,14 @@ function onInput(e) {
   var t = e.target;
   if (t.dataset.dlVerbosity !== undefined) { applyOption("verbosity", Number(t.value)); return; }
   if (t.dataset.dlText) {
-    if (!data || DD.locked(data) || !data.canEdit) return;
+    if (!data || D().locked(data) || !data.canEdit) return;
     data[t.dataset.dlText] = t.value;
     markDirty();
     renderDoc();
     return;
   }
   if (t.dataset.dlNarr) {
-    if (!data || DD.locked(data) || !data.canEdit) return;
+    if (!data || D().locked(data) || !data.canEdit) return;
     setNarrative(t.dataset.dlNarr, t.value);
     markDirty();
     renderDoc();
@@ -673,7 +882,7 @@ function onInput(e) {
 function onFocusOut(e) {
   var t = e.target;
   if (!t.dataset || !t.dataset.dlField || t.getAttribute("contenteditable") !== "true") return;
-  if (!data || DD.locked(data)) return;
+  if (!data || D().locked(data)) return;
   var field = t.dataset.dlField;
   setNarrative(field, t.textContent);
   if (field !== "internal" && field !== "note") confirmField(field);
@@ -685,6 +894,8 @@ function onFocusOut(e) {
 function onClick(e) {
   var open = e.target.closest("[data-dl-open]");
   if (open) { load(open.dataset.dlOpen); return; }
+  var openPlan = e.target.closest("[data-dl-open-plan]");
+  if (openPlan) { openPlanDeliveryNote(openPlan.dataset.dlOpenPlan); return; }
   var jump = e.target.closest("[data-dl-jump]");
   if (jump) {
     var sec = document.getElementById("dl-sec-" + jump.dataset.dlJump);
@@ -700,11 +911,27 @@ function onClick(e) {
   if (act === "density") { applyOption("density", btn.dataset.dlVal); return; }
   if (act === "evidence") { applyOption("evidence", Number(btn.dataset.dlVal)); return; }
   if (act === "evidence-level") { applyOption("evidence", Number(btn.dataset.dlLv)); return; }
-  if (act === "pick") { data = null; versionId = null; rt.deliveryVersionId = ""; setDeliveryHash("", "", true); renderPicker(); return; }
+  if (act === "pick-dim") {
+    if (btn.dataset.dlVal === pickerDim) return;
+    pickerDim = btn.dataset.dlVal === "plan" ? "plan" : "version";
+    pickerQuery = "";
+    renderPicker();
+    return;
+  }
+  if (act === "plan-status") { planStatusFilter = btn.dataset.dlVal || "all"; paintPlanPicker(); return; }
+  if (act === "pick") {
+    var wasPlan = isPlan();
+    data = null; versionId = null; planId = null; rt.deliveryVersionId = "";
+    pickerDim = wasPlan ? "plan" : "version";
+    setDeliveryHash("", "", "", true);
+    renderPicker();
+    return;
+  }
   if (act === "save") { saveNow(false); return; }
   if (act === "reset") { resetOptions(); return; }
   if (act === "lean") { leanOptions(); return; }
-  if (act === "back-draft") { load(versionId); return; }
+  if (act === "back-draft") { if (isPlanData(data)) loadPlan(planId || data.scopeId); else load(versionId); return; }
+  if (act === "goto-plan-release") { openPlanRelease(); return; }
   if (act === "edit-mode") { editMode = !editMode; editingField = null; harvestEditing(); renderDoc(); return; }
   if (act === "edit-one") { startEditOne(btn.dataset.dlField); return; }
   if (act === "accept") { confirmField(btn.dataset.dlKey); markDirty(); renderDoc(); return; }
@@ -716,12 +943,12 @@ function onClick(e) {
     return;
   }
   if (act === "goto-pending") {
-    var target = document.getElementById("dl-sec-" + DD.pendingSection(data));
+    var target = document.getElementById("dl-sec-" + D().pendingSection(data));
     if (target) target.scrollIntoView({ block: "start", behavior: "smooth" });
     return;
   }
   if (act === "accept-all") {
-    DD.pendingFields(data).forEach(confirmField);
+    D().pendingFields(data).forEach(confirmField);
     markDirty();
     renderDoc();
     toast("已确认全部对外表述，导出前请再通读一遍", "fs");
@@ -743,7 +970,7 @@ function onClick(e) {
   if (act === "goto") { gotoView(btn.dataset.dlView, btn.dataset.dlRef); return; }
 }
 function startEditOne(field) {
-  if (!data || DD.locked(data) || !data.canEdit) return;
+  if (!data || D().locked(data) || !data.canEdit) return;
   editingField = field;
   renderDoc();
   var el = $('[data-dl-field="' + field + '"]');
@@ -759,25 +986,26 @@ function startEditOne(field) {
   } catch (err) { /* 选区 API 不可用时只聚焦 */ }
 }
 function resetOptions() {
-  if (!data || DD.locked(data) || !data.canEdit) return;
-  var keepRelease = (data.options || {}).releaseId || "";
-  data.options = Object.assign({}, DD.DEFAULTS, { releaseId: keepRelease });
+  if (!data || D().locked(data) || !data.canEdit) return;
+  var keepRelease = isPlanData(data) ? "" : ((data.options || {}).releaseId || "");
+  data.options = Object.assign({}, D().DEFAULTS, { releaseId: keepRelease });
   markDirty();
   renderAll();
   toast("生成控制已重置为默认", "fs");
 }
 function leanOptions() {
-  if (!data || DD.locked(data) || !data.canEdit) return;
-  Object.assign(data.options, DD.leanPatch());
+  if (!data || D().locked(data) || !data.canEdit) return;
+  Object.assign(data.options, D().leanPatch());
   markDirty();
   renderAll();
   toast("已压到最简：精简叙述 + 紧凑排版 + 分类汇总", "fs");
 }
 function gotoView(name, refId) {
   if (!name) { toast("该证据没有可跳转的原始记录", "warn"); return; }
+  if (name === "release-plan") { openPlanRelease(refId); return; }
   if (dirty) saveNow(true);
   if (name === "board" && refId) { openTaskById(refId); return; }
-  var pid = data && data.projectId;
+  var pid = data && (data.projectId || ((data.versionChapters || [])[0] || {}).reqId);
   /* 目标页的项目定位与页签都在各自模块内部，按需拉模块再落路由，避免把低频视图拉进首屏 */
   import("../core/view-loader.js").then(function (m) {
     if (name === "phase") {
@@ -799,6 +1027,19 @@ function gotoView(name, refId) {
     }
     showView(name);
   }).catch(function (ex) { toast(ex.message || "打开原始记录失败", "bad"); });
+}
+/* 下钻到版本报告：计划文档里的版本名直接落到该版本，不另开一套页面 */
+/* 回到提供事实的发布计划工作台：计划维度的发布记录、范围与门禁都在那里 */
+function openPlanRelease(refId) {
+  var ch = data && (data.versionChapters || [])[0];
+  if (!ch) { toast("计划没有覆盖版本，无法打开发布计划", "warn"); return; }
+  var id = refId || (data.plan && data.plan.id) || planId;
+  var run = function () {
+    import("./release.js").then(function (m) {
+      m.openReleasePage({ id: ch.versionId, reqId: ch.reqId, planId: id, tab: "plan" });
+    }).catch(function (ex) { toast(ex.message || "打开发布计划失败", "bad"); });
+  };
+  if (dirty) saveNow(true).then(run); else run();
 }
 
 /* ==================== 通用弹层 ==================== */
@@ -831,7 +1072,7 @@ function removeModal(layer) {
 /* ==================== 数字来源 ==================== */
 
 function openSource(key) {
-  var s = DD.sourceInfo(data, key);
+  var s = D().sourceInfo(data, key);
   var layer = modal(modalHead(s.title, "数字只读。下面是它的口径与原始记录。")
     + '<div class="sheet-body"><div class="dl-caliber">' + esc(s.caliber) + "</div>"
     + (s.rows.length ? s.rows.map(function (x) {
@@ -850,8 +1091,8 @@ function openSource(key) {
   });
 }
 function openSourcesOverview() {
-  var rows = DD.sourcesOverview(data);
-  modal(modalHead("数据来源总览", (data.projectName || "") + " · " + (data.versionName || "") + " · 全部为只读聚合")
+  var rows = D().sourcesOverview(data);
+  modal(modalHead("数据来源总览", (data.scopeName || ((data.projectName || "") + " · " + (data.versionName || ""))) + " · 全部为只读聚合")
     + '<div class="sheet-body"><div class="dl-caliber">生成过程只读：一次取回版本、承诺、发布、需求、测试、缺陷与工时，不写任何业务表；'
     + '只有「导出报告」会落一条不可变快照。</div>'
     + rows.map(function (x) {
@@ -868,11 +1109,12 @@ function openSourcesOverview() {
 
 function openExport() {
   if (!data) return;
-  var g = DD.gates(data);
-  if (!data.canSnapshot && !DD.locked(data)) { toast("你对该项目只有查看权限，不能导出快照", "warn"); return; }
-  if (!DD.locked(data) && !g.canExport) { toast(g.exportBlock, "warn"); return; }
+  var doc = D(), g = doc.gates(data);
+  var readWhy = isPlanData(data) ? "你对该计划覆盖的项目只有查看权限" : "你对该项目只有查看权限";
+  if (!data.canSnapshot && !doc.locked(data)) { toast(readWhy + "，不能导出快照", "warn"); return; }
+  if (!doc.locked(data) && !g.canExport) { toast(g.exportBlock, "warn"); return; }
   exportFmt = "pdf";
-  var layer = modal(modalHead("导出交付报告", DD.locked(data) ? "当前已是不可变快照，导出不会再生成新快照。" : "导出即锁定：先冻结一份不可变快照，再产出文件。")
+  var layer = modal(modalHead("导出交付报告", doc.locked(data) ? "当前已是不可变快照，导出不会再生成新快照。" : "导出即锁定：先冻结一份不可变快照，再产出文件。")
     + '<div class="sheet-body"><div class="dl-fmt-tabs" role="group" aria-label="导出格式">'
     + '<button type="button" data-dl-fmt="pdf" class="on">' + icon("print", 13) + " PDF（A4）</button>"
     + '<button type="button" data-dl-fmt="md">' + icon("table", 13) + " Markdown</button>"
@@ -900,19 +1142,20 @@ function openExport() {
   paintExport(layer);
 }
 function paintExport(layer) {
+  var doc = D();
   var body = layer.querySelector("#dlExportBody");
   var hint = layer.querySelector("#dlExportHint");
   var go = layer.querySelector("#dlExportGo");
   if (exportFmt === "pdf") {
     body.innerHTML = '<div class="dl-paper-frame"><div class="dl-paper-holder"><div class="dl-paper" id="dlPaper">'
-      + DD.sheetMarkup(data, { readonly: true, clean: true, a4: true }) + "</div></div></div>"
+      + doc.sheetMarkup(data, { readonly: true, clean: true, a4: true, plainLinks: isPlanData(data) }) + "</div></div></div>"
       + '<p class="hint">PDF 由浏览器打印生成：在打印对话框里选「另存为 PDF」，纸张 A4、边距默认。'
       + "预览按缩放显示，实际分页以打印结果为准。</p>";
     hint.textContent = "导出后快照锁定，控制区不可再改";
     go.innerHTML = icon("print", 13) + " 冻结并打开打印";
     fitPaper(layer);
   } else if (exportFmt === "md") {
-    body.innerHTML = '<pre class="dl-md-pre">' + esc(DD.markdown(data)) + "</pre>"
+    body.innerHTML = '<pre class="dl-md-pre">' + esc(doc.markdown(data)) + "</pre>"
       + '<p class="hint">纯文本，可直接贴进邮件、IM 或知识库。</p>';
     hint.textContent = "同时提供「复制」与「下载 .md」";
     go.innerHTML = icon("download", 13) + " 冻结并下载 .md";
@@ -920,7 +1163,7 @@ function paintExport(layer) {
     body.innerHTML = '<div class="dl-caliber">单文件 HTML：样式内联，双击即可打开，不依赖沙漏服务，也不需要登录。'
       + "适合归档或作为附件发送。</div>"
       + '<div class="dl-paper-frame"><div class="dl-paper-holder"><div class="dl-paper" id="dlPaper">'
-      + DD.sheetMarkup(data, { readonly: true, clean: true, a4: true }) + "</div></div></div>";
+      + doc.sheetMarkup(data, { readonly: true, clean: true, a4: true, plainLinks: isPlanData(data) }) + "</div></div></div>";
     hint.textContent = "含浅色主题令牌与打印样式";
     go.innerHTML = icon("download", 13) + " 冻结并下载 .html";
     fitPaper(layer);
@@ -949,13 +1192,13 @@ function fitPaper(layer) {
     }
     if (hint) {
       hint.textContent = "约 " + pages + " 页 A4 · "
-        + DD.toneName(opts().tone) + " · 预览缩放 " + Math.round(scale * 100) + "%";
+        + D().toneName(opts().tone) + " · 预览缩放 " + Math.round(scale * 100) + "%";
     }
   });
 }
 /* 导出统一先冻结：拿到 locked 载荷后再产出文件，接收人与编制人看到同一份 */
 function freezeForExport() {
-  if (DD.locked(data)) return Promise.resolve(data);
+  if (D().locked(data)) return Promise.resolve(data);
   return saveNow(true).then(function () {
     return API.post(base() + "/snapshots", saveBody());
   }).then(function (resp) {
@@ -973,9 +1216,9 @@ function doExport(layer) {
   if (go) { go.disabled = true; go.textContent = "处理中…"; }
   var fmt = exportFmt;
   freezeForExport().then(function (snapshot) {
-    var name = DD.exportBaseName(snapshot);
+    var name = D().exportBaseName(snapshot);
     if (fmt === "md") {
-      var md = DD.markdown(snapshot);
+      var md = D().markdown(snapshot);
       triggerDownload(name + ".md", md, "text/markdown;charset=utf-8");
       copyToClipboard(md, "已下载并复制 Markdown", "已下载 .md（复制失败可手动选择）");
       removeModal(layer);
@@ -983,13 +1226,13 @@ function doExport(layer) {
     }
     if (fmt === "html") {
       return inlineCSS().then(function (css) {
-        triggerDownload(name + ".html", DD.htmlDocument(snapshot, css), "text/html;charset=utf-8");
+        triggerDownload(name + ".html", D().htmlDocument(snapshot, css), "text/html;charset=utf-8");
         toast("已下载独立 HTML", "fs");
         removeModal(layer);
       });
     }
     removeModal(layer);
-    printDeliveryPaper(DD.sheetMarkup(snapshot, { readonly: true, clean: true, a4: true }));
+    printDeliveryPaper(D().sheetMarkup(snapshot, { readonly: true, clean: true, a4: true, plainLinks: isPlanData(snapshot) }));
     return null;
   }).catch(function (ex) {
     toast(ex && ex.message || "导出失败", "bad");
@@ -1037,7 +1280,7 @@ function openSnapshots() {
       removeModal(layer);
       API.get("/api/delivery-notes/" + encodeURIComponent(v.dataset.dlSnapView)).then(function (resp) {
         data = resp;
-        editMode = false; editingField = null; dirty = false;
+        resetDocState();
         renderAll();
       }).catch(function (ex) { toast(ex.message || "快照打开失败", "bad"); });
       return;
@@ -1056,10 +1299,10 @@ function shareURL(token) {
 }
 function openShare(snapshotId, docNo) {
   if (!data) return;
-  var g = DD.gates(data);
+  var doc = D(), g = doc.gates(data);
   var sid = snapshotId || data.snapshotId || "";
   if (!sid && !g.canShare) { toast(g.shareBlock || "当前不可分享", "warn"); return; }
-  if (!sid && !data.canSnapshot) { toast("你对该项目只有查看权限，不能生成分享链接", "warn"); return; }
+  if (!sid && !data.canSnapshot) { toast((isPlanData(data) ? "你对该计划覆盖的项目只有查看权限" : "你对该项目只有查看权限") + "，不能生成分享链接", "warn"); return; }
   var layer = modal(modalHead("只读分享链接", sid ? "链接指向已冻结的快照，内容不会随系统变化。" : "生成链接会先冻结一份不可变快照，再对外分享。")
     + '<div class="sheet-body" id="dlShareBody">' + UI.skeletonRows(2) + "</div>"
     + '<div class="sheet-foot"><span class="hint">接收人无需登录；内部复盘版永不分享</span>'
@@ -1221,10 +1464,10 @@ function shortUA(ua) {
 }
 
 function refreshRevisions() {
-  if (!versionId) return;
+  if (!versionId && !planId) return;
   API.get(base() + "/snapshots").then(function (rows) {
     if (data) data.revisions = rows || [];
   }).catch(function () { /* 修订记录只是附录，失败不打扰 */ });
 }
 
-export { enterDeliveryView, openDeliveryNote, refreshFromHash };
+export { enterDeliveryView, openDeliveryNote, openPlanDeliveryNote, refreshFromHash };

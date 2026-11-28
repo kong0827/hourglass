@@ -594,8 +594,56 @@ public class VersionReleaseService {
             throw AppException.badRequest("发布环境无效");
         }
         String viewerId = access.viewerScope(workspaceId, userId);
-        return mapper.selectPlanSchedule(workspaceId, fromDate, toDate, reqId, env,
+        List<ReleasePlanRow> rows = mapper.selectPlanSchedule(workspaceId, fromDate, toDate, reqId, env,
                 scheduleStatuses(status), viewerId, 500);
+        attachPlanReadiness(workspaceId, rows);
+        return rows;
+    }
+
+    /**
+     * 列表的就绪检查：按计划覆盖的每个版本跑真实检查，结论取最差、阻断与提醒数相加。
+     * 只有「就绪 / 已完成」需要结论（草稿标未检查）；列表最多 500 行，超预算的行留空而不是拖慢整页。
+     */
+    private void attachPlanReadiness(String workspaceId, List<ReleasePlanRow> rows) {
+        int budget = 200;
+        for (int pass = 0; pass < 2; pass++) {
+            for (ReleasePlanRow row : rows) {
+                boolean wanted = pass == 0 ? "ready".equals(row.getStatus()) : "completed".equals(row.getStatus());
+                if (!wanted) continue;
+                List<PlanVersionRow> versions = new ArrayList<PlanVersionRow>(
+                        mapper.selectPlanVersions(workspaceId, row.getId()));
+                if (versions.isEmpty() && Texts.trimToNull(row.getVersionId()) != null) {
+                    PlanVersionRow legacy = new PlanVersionRow();
+                    legacy.setVersionId(row.getVersionId());
+                    legacy.setReqId(row.getReqId());
+                    legacy.setVersionStatus(row.getVersionStatus());
+                    versions.add(legacy);
+                }
+                if (versions.isEmpty() || versions.size() > budget) continue;
+                VersionReleasePlan plan = mapper.selectPlan(workspaceId, row.getId());
+                if (plan == null) continue;
+                plan.setPlannedTaskIds(mapper.selectPlannedTaskIds(workspaceId, row.getId()));
+                budget -= versions.size();
+                int blockers = 0, reminders = 0;
+                boolean block = false, warn = false;
+                for (PlanVersionRow versionRow : versions) {
+                    ProjectVersion version = new ProjectVersion();
+                    version.setId(versionRow.getVersionId());
+                    version.setReqId(versionRow.getReqId());
+                    version.setStatus(versionRow.getVersionStatus());
+                    ReleaseCheckResponse check = evaluate(workspaceId, version, plan);
+                    List<String> versionBlockers = check.getBlockers();
+                    List<String> versionReminders = check.getReminders();
+                    blockers += versionBlockers == null ? 0 : versionBlockers.size();
+                    reminders += versionReminders == null ? 0 : versionReminders.size();
+                    if ("block".equals(check.getVerdict())) block = true;
+                    else if ("warn".equals(check.getVerdict())) warn = true;
+                }
+                row.setCheckBlockers(blockers);
+                row.setCheckReminders(reminders);
+                row.setCheckVerdict(block ? "block" : warn ? "warn" : "pass");
+            }
+        }
     }
 
     private LocalDate scheduleDate(String value, String label) {
@@ -744,6 +792,11 @@ public class VersionReleaseService {
             }
         }
         if (!ids.contains(anchorId)) throw AppException.badRequest("当前版本必须包含在计划中");
+        /* 已发布版本不能新加入计划；已在计划内的保留，避免编辑其他字段时被历史数据卡住 */
+        Set<String> existingVersionIds = new HashSet<String>();
+        if (old != null) {
+            for (PlanVersionRow row : planVersions(workspaceId, old)) existingVersionIds.add(row.getVersionId());
+        }
         Map<String, ProjectVersion> initial = new TreeMap<String, ProjectVersion>();
         for (String id : ids) initial.put(id, requireVersion(userId, workspaceId, id));
         SortedSet<String> projectIds = new TreeSet<String>();
@@ -759,6 +812,9 @@ public class VersionReleaseService {
                 throw new AppException(409, "版本项目已变化");
             if (isEnded(version.getStatus())) {
                 throw AppException.badRequest("已关闭或已取消的版本不能加入发布计划：" + version.getName());
+            }
+            if ("released".equals(version.getStatus()) && !existingVersionIds.contains(version.getId())) {
+                throw AppException.badRequest("已发布的版本不能新加入发布计划：" + version.getName());
             }
             permissions.assertManageReleaseForUpdate(userId, workspaceId, version.getReqId());
             versions.add(version);

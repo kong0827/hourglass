@@ -18,6 +18,10 @@ import java.util.Map;
 @Data
 public class DeliveryNoteResponse {
 
+    /** version / plan；计划维度为多版本文档，版本维度保持原有单版本结构 */
+    private String scopeType;
+    private String scopeId;
+    private String scopeName;
     private String versionId;
     private String versionName;
     private String versionStatus;
@@ -76,6 +80,8 @@ public class DeliveryNoteResponse {
     private List<RevisionRow> revisions = new ArrayList<RevisionRow>();
     /** 缺失标注：系统内确实没有记录的部分，不推断 */
     private List<String> missing = new ArrayList<String>();
+    /** 计划维度：按版本分章，每章是本计划内该版本的事实切片；版本维度为空 */
+    private List<PlanVersionChapter> versionChapters = new ArrayList<PlanVersionChapter>();
 
     @Data
     public static class ReleaseOption {
@@ -146,9 +152,31 @@ public class DeliveryNoteResponse {
         private Integer taskCount;
         private Integer versionCount;
         private List<String> versionNames = new ArrayList<String>();
+        /** 计划覆盖的项目名（去重，与 versionNames 同源） */
+        private List<String> projectNames = new ArrayList<String>();
         private String notes;
         /** 计划里写下的风险与回滚约定，原文引用，不改写 */
         private String risks;
+    }
+
+    /** 计划维度的一章：一个被覆盖版本的事实切片，不含人工叙述（叙述只在计划层） */
+    @Data
+    public static class PlanVersionChapter {
+        private String versionId;
+        private String versionName;
+        private String reqId;
+        private String projectName;
+        private String versionStatus;
+        private LocalDate targetDate;
+        /** 本计划内是否已有成功生产发布（非回滚） */
+        private Boolean released;
+        private String evidenceKind;
+        private ReleaseInfo release;
+        private Counts counts;
+        private Quality quality;
+        private Defects defects;
+        private Effort effort;
+        private Acceptance acceptance;
     }
 
     @Data
@@ -220,6 +248,9 @@ public class DeliveryNoteResponse {
         private String kind;
         private String kindName;
         private LocalDateTime completedAt;
+        /** 计划维度：该项所属版本；版本维度为空 */
+        private String versionId;
+        private String versionName;
     }
 
     @Data
@@ -252,6 +283,9 @@ public class DeliveryNoteResponse {
         /** 需求性质：new 新增 / improve 优化 / fix 修复 / other 其他；空=未记录 */
         private String kind;
         private String kindName;
+        /** 计划维度：该需求所属版本；版本维度为空 */
+        private String versionId;
+        private String versionName;
     }
 
     @Data
@@ -264,6 +298,9 @@ public class DeliveryNoteResponse {
         private String source;
         /** add / move / date / scope / status */
         private String kind;
+        /** 计划维度：该变更所属版本；版本维度为空 */
+        private String versionId;
+        private String versionName;
     }
 
     @Data
@@ -326,6 +363,9 @@ public class DeliveryNoteResponse {
         /** 阻塞验收：未关闭且严重度为 blocker/critical */
         private Boolean blocksAcceptance;
         private String note;
+        /** 计划维度：缺陷所属项目（缺陷按项目记录，跨版本同项目会去重） */
+        private String projectId;
+        private String projectName;
     }
 
     @Data
@@ -357,6 +397,9 @@ public class DeliveryNoteResponse {
         /** pri / warn / bad / "" */
         private String tone;
         private String refId;
+        /** 计划维度：风险所属版本；版本维度为空 */
+        private String versionId;
+        private String versionName;
     }
 
     @Data
@@ -385,6 +428,9 @@ public class DeliveryNoteResponse {
         /** 前端跳转目标视图 */
         private String view;
         private String refId;
+        /** 计划维度：该证据所属版本；版本维度为空 */
+        private String versionId;
+        private String versionName;
     }
 
     @Data

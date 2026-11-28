@@ -92,6 +92,7 @@ class VersionReleaseServiceTest {
         });
         when(mapper.selectTaskForUpdate(eq("W"), anyString())).thenAnswer(i -> scope.stream().filter(t -> t.getId().equals(i.getArgument(1))).findFirst().orElse(null));
         when(mapper.selectPlanForUpdate(eq("W"), anyString())).thenAnswer(i -> plans.get(i.getArgument(1)));
+        when(mapper.selectPlan(eq("W"), anyString())).thenAnswer(i -> plans.get(i.getArgument(1)));
         when(mapper.selectPlans(eq("W"), anyString())).thenAnswer(i -> new ArrayList<VersionReleasePlan>(plans.values()));
         when(mapper.selectPlannedTaskIds(eq("W"), anyString())).thenAnswer(i -> new ArrayList<String>(plans.get(i.getArgument(1)).getPlannedTaskIds()));
         when(mapper.selectPlannedTaskIdsForUpdate(eq("W"), anyString())).thenAnswer(i -> new ArrayList<String>(plans.get(i.getArgument(1)).getPlannedTaskIds()));
@@ -291,8 +292,12 @@ class VersionReleaseServiceTest {
         VersionRelease second = confirm(retry); assertNotEquals(first.getId(), second.getId()); assertEquals("completed", plan.getStatus());
     }
     @Test void twoPlansTwoSuccessesAndReleasedVersionDoesNotBlockEvents() {
-        VersionReleasePlan first = plan("test"); confirm(request(first, "test"));
-        version.setStatus("released"); VersionReleasePlan second = plan("production"); confirm(request(second, "prod"));
+        /* 两个计划都在版本发布前建好：已发布版本不能再新建计划，但已有计划的事件照常登记 */
+        VersionReleasePlan first = plan("test");
+        VersionReleasePlan second = plan("production");
+        confirm(request(first, "test"));
+        version.setStatus("released");
+        confirm(request(second, "prod"));
         assertNotEquals(first.getId(), second.getId()); assertEquals(2, records.size()); assertEquals(1, TransactionSynchronizationManager.getSynchronizations().size());
     }
     @Test void sameKeyReplayBeforeCompletedPlanReadAndNoDuplicateNotification() {
@@ -571,6 +576,63 @@ class VersionReleaseServiceTest {
         verify(mapper).insertPlanVersion("W", saved.getId(), "V2", "P2");
         verify(locks).lockProjects("W", "P", "P2");
         verify(permissions).assertManageRelease("U", "W", "P2");
+    }
+
+    @Test void releasedVersionCannotJoinNewPlanButExistingPlanKeepsItEditable() {
+        ProjectVersion second = new ProjectVersion(); second.setId("V2"); second.setWorkspaceId("W"); second.setReqId("P2");
+        second.setName("2.0"); second.setStatus("released"); versionObjects.put("V2", second);
+        Requirement other = new Requirement(); other.setId("P2"); other.setWorkspaceId("W"); other.setName("Other");
+        when(reqMapper.selectById("P2")).thenReturn(other);
+        Task t3 = task("T3"); t3.setReqId("P2");
+        versionScopes.put("V2", Collections.singletonList(t3));
+        bindings.add(binding("T3", "V2", "2.0"));
+        ReleasePlanRequest request = planRequest("production");
+        request.setVersionIds(Arrays.asList("V", "V2"));
+        request.setPlannedTaskIds(Arrays.asList("T1", "T3"));
+
+        /* 已发布版本不能新加入计划 */
+        code(400, () -> service.savePlan("U", "W", "V", request));
+
+        /* 计划保存后才发布的版本保留成员身份：编辑其他字段不被历史数据卡住 */
+        second.setStatus("active");
+        VersionReleasePlan saved = service.savePlan("U", "W", "V", request);
+        second.setStatus("released");
+        ReleasePlanRequest keep = planRequest("production");
+        keep.setId(saved.getId()); keep.setRevision(saved.getRevision()); keep.setReason("Keep released member");
+        keep.setVersionIds(Arrays.asList("V", "V2")); keep.setPlannedTaskIds(Arrays.asList("T1", "T3"));
+        VersionReleasePlan kept = service.savePlan("U", "W", "V", keep);
+        assertEquals(Arrays.asList("V", "V2"), kept.getVersionIds());
+
+        /* 移出后不能再加入 */
+        ReleasePlanRequest remove = planRequest("production");
+        remove.setId(kept.getId()); remove.setRevision(kept.getRevision()); remove.setReason("Remove released member");
+        remove.setVersionIds(Collections.singletonList("V")); remove.setPlannedTaskIds(Arrays.asList("T1", "T2"));
+        VersionReleasePlan removed = service.savePlan("U", "W", "V", remove);
+        assertEquals(Collections.singletonList("V"), removed.getVersionIds());
+        ReleasePlanRequest readd = planRequest("production");
+        readd.setId(removed.getId()); readd.setRevision(removed.getRevision()); readd.setReason("Re-add released member");
+        readd.setVersionIds(Arrays.asList("V", "V2")); readd.setPlannedTaskIds(Arrays.asList("T1", "T3"));
+        code(400, () -> service.savePlan("U", "W", "V", readd));
+    }
+
+    @Test void planScheduleReadinessTakesWorstVerdictAcrossCoveredVersions() {
+        VersionReleasePlan saved = multiVersionPlan();
+        ReleasePlanRow row = new ReleasePlanRow();
+        row.setId(saved.getId()); row.setStatus("ready"); row.setVersionId("V"); row.setReqId("P");
+        when(access.viewerScope("W", "U")).thenReturn(null);
+        when(mapper.selectPlanSchedule("W", null, null, null, null, null, null, 500))
+                .thenReturn(new ArrayList<ReleasePlanRow>(Collections.singletonList(row)));
+        ReleaseCheckCase failed = new ReleaseCheckCase();
+        failed.setCaseId("C1"); failed.setRequired(true); failed.setResult("failed");
+        when(planCases.selectEvidenceCasesByVersion("W", "V")).thenReturn(Collections.singletonList(failed));
+        when(testPlans.countByVersion("W", "V")).thenReturn(1);
+        when(testPlans.countActiveByVersion("W", "V")).thenReturn(1);
+
+        List<ReleasePlanRow> rows = service.planSchedule("U", "W", null, null, null, null, "all");
+
+        assertEquals("block", rows.get(0).getCheckVerdict());
+        assertEquals(Integer.valueOf(1), rows.get(0).getCheckBlockers());
+        assertTrue(rows.get(0).getCheckReminders() >= 1);
     }
 
     @Test void planCompletesOnlyWhenEveryVersionHasProductionSuccess() {

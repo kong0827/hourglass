@@ -83,6 +83,40 @@ public class DeliveryNoteController {
         return ApiResult.ok(notes.snapshotDetail(ctx.getWsId(), ctx.getUserId(), snapshotId));
     }
 
+    /* ---------- 发布计划维度：一份计划一章版本，人工层按计划单独保存 ---------- */
+
+    @GetMapping("/api/release-plans/{id}/delivery-note")
+    public ApiResult<DeliveryNoteResponse> planNote(@PathVariable String id,
+                                                    @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(notes.aggregatePlan(ctx.getWsId(), ctx.getUserId(), id));
+    }
+
+    @PutMapping("/api/release-plans/{id}/delivery-note")
+    public ApiResult<DeliveryNoteResponse> savePlanNote(@PathVariable String id,
+                                                        @RequestBody DeliveryNoteSaveRequest req,
+                                                        @CurrentWorkspace WorkspaceCtx ctx) {
+        DeliveryNoteResponse resp = notes.savePlan(ctx.getWsId(), ctx.getUserId(), id, req);
+        audit.recordCurrent(ctx.getWsId(), "delivery_note_save", "version_release_plan", id,
+                resp.getScopeName(), true, "保存发布计划交付说明人工层与生成控制", null);
+        return ApiResult.ok(resp);
+    }
+
+    @GetMapping("/api/release-plans/{id}/delivery-note/snapshots")
+    public ApiResult<List<DeliveryNoteResponse.RevisionRow>> planSnapshots(@PathVariable String id,
+                                                                          @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(notes.planSnapshots(ctx.getWsId(), ctx.getUserId(), id));
+    }
+
+    @PostMapping("/api/release-plans/{id}/delivery-note/snapshots")
+    public ApiResult<DeliveryNoteResponse> planSnapshot(@PathVariable String id,
+                                                        @RequestBody(required = false) DeliveryNoteSaveRequest req,
+                                                        @CurrentWorkspace WorkspaceCtx ctx) {
+        DeliveryNoteResponse resp = notes.createPlanSnapshot(ctx.getWsId(), ctx.getUserId(), id, req);
+        audit.recordCurrent(ctx.getWsId(), "delivery_note_snapshot", "delivery_note_snapshot", resp.getSnapshotId(),
+                resp.getDocNo(), true, "生成发布计划交付说明不可变快照（" + resp.getOptions().get("tone") + "）", null);
+        return ApiResult.ok(resp);
+    }
+
     @GetMapping("/api/delivery-notes/{snapshotId}/share")
     public ApiResult<DeliveryShareResponse> shareInfo(@PathVariable String snapshotId,
                                                       @CurrentWorkspace WorkspaceCtx ctx) {

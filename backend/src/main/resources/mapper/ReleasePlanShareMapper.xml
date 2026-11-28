@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.ReleasePlanShareMapper">
+
+  <select id="selectByPlan" resultType="ReleasePlanShare">
+    SELECT workspace_id AS workspaceId, plan_id AS planId, token, created_by AS createdBy,
+           created_at AS createdAt, revoked_at AS revokedAt
+    FROM release_plan_share
+    WHERE workspace_id = #{workspaceId} AND plan_id = #{planId}
+  </select>
+
+  <select id="selectByToken" resultType="ReleasePlanShare">
+    SELECT workspace_id AS workspaceId, plan_id AS planId, token, created_by AS createdBy,
+           created_at AS createdAt, revoked_at AS revokedAt
+    FROM release_plan_share
+    WHERE token = #{token}
+  </select>
+
+  <!-- 重新生成时换新 token 并把 revoked_at 清空：旧链接不会因为重新分享而复活 -->
+  <insert id="upsert">
+    INSERT INTO release_plan_share (workspace_id, plan_id, token, created_by, created_at, revoked_at)
+    VALUES (#{workspaceId}, #{planId}, #{token}, #{createdBy}, NOW(), NULL)
+    ON DUPLICATE KEY UPDATE
+      token = VALUES(token),
+      created_by = VALUES(created_by),
+      created_at = NOW(),
+      revoked_at = NULL
+  </insert>
+
+  <update id="revoke">
+    UPDATE release_plan_share SET revoked_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND plan_id = #{planId} AND revoked_at IS NULL
+  </update>
+</mapper>

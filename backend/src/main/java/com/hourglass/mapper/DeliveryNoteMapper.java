@@ -1,6 +1,7 @@
 package com.hourglass.mapper;
 
 import com.hourglass.entity.DeliveryNote;
+import com.hourglass.entity.DeliveryNotePlan;
 import com.hourglass.entity.DeliveryNoteShare;
 import com.hourglass.entity.DeliveryNoteShareVisit;
 import com.hourglass.entity.DeliveryNoteSnapshot;
@@ -20,6 +21,14 @@ public interface DeliveryNoteMapper {
 
     int deleteByWorkspace(@Param("workspaceId") String workspaceId);
 
+    DeliveryNotePlan selectPlanByPlan(@Param("workspaceId") String workspaceId, @Param("planId") String planId);
+
+    DeliveryNotePlan selectPlanByPlanForUpdate(@Param("workspaceId") String workspaceId, @Param("planId") String planId);
+
+    int upsertPlan(DeliveryNotePlan note);
+
+    int deletePlanNotesByWorkspace(@Param("workspaceId") String workspaceId);
+
     int insertSnapshot(DeliveryNoteSnapshot snapshot);
 
     DeliveryNoteSnapshot selectSnapshotById(@Param("id") String id);
@@ -32,6 +41,18 @@ public interface DeliveryNoteMapper {
 
     List<String> selectSnapshotIdsByVersion(@Param("workspaceId") String workspaceId,
                                             @Param("versionId") String versionId);
+
+    List<DeliveryNoteSnapshot> selectSnapshotsByScope(@Param("workspaceId") String workspaceId,
+                                                      @Param("scopeType") String scopeType,
+                                                      @Param("scopeId") String scopeId);
+
+    Integer selectMaxSeqByScope(@Param("workspaceId") String workspaceId,
+                                @Param("scopeType") String scopeType,
+                                @Param("scopeId") String scopeId);
+
+    List<String> selectSnapshotIdsByScope(@Param("workspaceId") String workspaceId,
+                                          @Param("scopeType") String scopeType,
+                                          @Param("scopeId") String scopeId);
 
     int deleteSnapshotsByWorkspace(@Param("workspaceId") String workspaceId);
 

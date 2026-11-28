@@ -2,6 +2,7 @@
 import { GS } from "./lib/gantt-shared.js";
 import { API } from "./core/api.js";
 import { DD } from "./lib/delivery-doc.js";
+import { PD } from "./lib/plan-doc.js";
 import { printDeliveryPaper, registerDeliveryPrintSource } from "./lib/download.js";
 import { ensureVendor } from "./core/doc-editor.js";
 import { parseSnapshot, snapshotToHtml } from "./core/univer-doc-io.js";
@@ -231,6 +232,7 @@ import { openSheetView } from "./core/sheet-editor.js";
     }
     if (kind === "doc") { bootDoc(token); return; }
     if (kind === "delivery") { bootDelivery(token); return; }
+    if (kind === "plan") { bootPlan(token); return; }
     fetch(API.base + "/api/share/gantt?token=" + encodeURIComponent(token), { credentials: "omit" })
       .then(function (r) { return r.text(); })
       .then(function (txt) { return JSON.parse(txt); })
@@ -562,6 +564,11 @@ import { openSheetView } from "./core/sheet-editor.js";
   /* 交付报告分享：kind=delivery。只渲染冻结快照，没有任何写入口；
      数字仍可点开看口径与来源记录，但不给跳原始记录的入口——接收人没有账号。 */
   var dlNote = null, dlShare = null, dlLayer = null, dlToken = "", dlUnlockPwd = "";
+  /* 快照有两种维度：计划维度按版本分章，接收人只看冻结内容，所有关联一律纯文本 */
+  function noteDoc(n) { return n && n.scopeType === "plan" ? PD : DD; }
+  function deliveryShareMarkup(a4) {
+    return noteDoc(dlNote).sheetMarkup(dlNote, { readonly: true, clean: true, a4: !!a4, plainLinks: true });
+  }
   function bootDelivery(token) {
     dlToken = token;
     dlUnlockPwd = "";
@@ -659,12 +666,13 @@ import { openSheetView } from "./core/sheet-editor.js";
     dlNote = d.note || {};
     /* 接收人直接 Ctrl+P 也要印出同一份纸张；甘特分享页 dlNote 为空，不接管打印 */
     registerDeliveryPrintSource(function () {
-      return dlNote ? watermarkHTML(dlShare && dlShare.watermarkText)
-        + DD.sheetMarkup(dlNote, { readonly: true, clean: true, a4: true }) : null;
+      return dlNote ? watermarkHTML(dlShare && dlShare.watermarkText) + deliveryShareMarkup(true) : null;
     });
     $("view-gantt").classList.remove("on");
     $("view-delivery-share").classList.add("on");
-    var title = (dlNote.projectName || "交付报告") + " · " + (dlNote.versionName || "");
+    var plan = dlNote.scopeType === "plan";
+    var title = plan ? (dlNote.scopeName || "交付报告")
+      : (dlNote.projectName || "交付报告") + " · " + (dlNote.versionName || "");
     document.title = title + " · 只读分享";
     var sub = [d.workspaceName, DD.toneName(dlNote.options && dlNote.options.tone), d.docNo,
       "生成于 " + DD.timeText(d.createdAt), "有效至 " + DD.timeText(d.expiresAt)].filter(Boolean).join(" · ");
@@ -675,7 +683,7 @@ import { openSheetView } from "./core/sheet-editor.js";
       + '<button class="btn sm" type="button" id="dlShareSources">数字口径</button>'
       + (d.allowDownload ? '<button class="btn sm primary" type="button" id="dlSharePdf">下载 PDF</button>' : "")
       + "</div>"
-      + DD.sheetMarkup(dlNote, { readonly: true, clean: true })
+      + deliveryShareMarkup(false)
       + '<div class="dl-share-foot">这是一份不可变快照：分享者导出时的内容已冻结，之后系统里的变化不会改动本页。'
       + "数字全部来自系统记录，点任意数字可看它的统计口径与原始记录；标注「未记录 / 未验证」的部分表示系统内确实没有记录，未做推断。<br>"
       + "<b>" + esc(d.docNo || "未编号") + "</b>"
@@ -688,8 +696,7 @@ import { openSheetView } from "./core/sheet-editor.js";
     var pdf = $("dlSharePdf");
     if (pdf) pdf.addEventListener("click", function () {
       logShareDownload();
-      printDeliveryPaper(watermarkHTML(d.watermarkText)
-        + DD.sheetMarkup(dlNote, { readonly: true, clean: true, a4: true }));
+      printDeliveryPaper(watermarkHTML(d.watermarkText) + deliveryShareMarkup(true));
     });
     $("deliveryShareBody").addEventListener("click", function (e) {
       var m = e.target.closest('[data-dl-act="source"]');
@@ -730,13 +737,13 @@ import { openSheetView } from "./core/sheet-editor.js";
   }
   function openDeliverySource(key) {
     if (!dlNote) return;
-    var s = DD.sourceInfo(dlNote, key);
+    var s = noteDoc(dlNote).sourceInfo(dlNote, key);
     deliveryLayer(s.title, "数字只读。下面是它的统计口径与原始记录。",
       '<div class="dl-caliber">' + esc(s.caliber) + "</div>" + sourceRecords(s.rows));
   }
   function openDeliverySources() {
     if (!dlNote) return;
-    var rows = DD.sourcesOverview(dlNote).map(function (x) {
+    var rows = noteDoc(dlNote).sourcesOverview(dlNote).map(function (x) {
       return { id: "·", m: x.name + " ← " + x.from, s: x.table };
     });
     deliveryLayer("数据来源总览", (dlShare.docNo || "") + " · 全部为只读聚合，接收人看不到内部备注",
@@ -746,6 +753,95 @@ import { openSheetView } from "./core/sheet-editor.js";
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape" && dlLayer) closeDeliveryLayer();
   });
+
+  /* ==================== 发布计划分享（kind=plan） ==================== */
+  /* 只读展示「打算什么时候发、发哪些版本、范围有哪些工作项」；
+     备注、风险与内部检查不在公开投影里，接收人不需要账号。 */
+  var PLAN_STATUS = { draft: "草稿", ready: "就绪", completed: "已完成", canceled: "已取消" };
+  var PLAN_TONE = { draft: "ghost", ready: "tag-info", completed: "tag-success", canceled: "ghost" };
+  var PLAN_ENV = { production: "生产", staging: "预发布", test: "测试" };
+  var PLAN_COVERAGE = { full: "全量", partial: "部分", unknown: "覆盖未知" };
+  var PLAN_VERSION_STATUS = { planned: "计划中", active: "进行中", released: "已发布", closed: "已关闭", canceled: "已取消" };
+  var PLAN_VERSION_TONE = { planned: "ghost", active: "tag-info", released: "tag-success", closed: "ghost", canceled: "ghost" };
+  var PLAN_TASK_STATUS = { backlog: "待处理", doing: "进行中", test: "待测试", testing: "测试中", done: "已完成", canceled: "已取消", archived: "已归档" };
+  var PLAN_TASK_TONE = { doing: "tag-info", test: "tag-info", testing: "tag-info", done: "tag-success", canceled: "ghost", archived: "ghost" };
+  var PLAN_TYPE = { story: "需求", task: "任务", bug: "缺陷", epic: "主题" };
+  function psText(v, fallback) { return v == null || v === "" ? (fallback || "—") : String(v); }
+  function psTime(v) { return v ? String(v).replace("T", " ").slice(0, 16) : "未定时间"; }
+  function psDate(v) { return v ? String(v).slice(0, 10) : "—"; }
+  function psNo(n) { return n == null ? "" : "PL-" + ("00" + n).slice(-3); }
+  function psTag(tone, text) { return '<span class="tag ' + (tone || "ghost") + '">' + esc(text) + "</span>"; }
+  function bootPlan(token) {
+    fetch(API.base + "/api/share/release-plan?token=" + encodeURIComponent(token), { credentials: "omit" })
+      .then(function (r) { return r.text(); })
+      .then(function (txt) { return JSON.parse(txt); })
+      .then(function (j) {
+        if (!j || j.code !== 0) throw new Error((j && j.message) || "链接无效或已停止分享");
+        renderPlan(j.data);
+      })
+      .catch(function (ex) {
+        showShareError({
+          detail: ex.message || "网络异常",
+          hint: "链接可能已被分享者停止，或网络暂时不可用；可稍后重试或向分享者重新获取链接。",
+          retry: true
+        });
+      });
+  }
+  function renderPlan(d) {
+    d = d || {};
+    $("view-gantt").classList.remove("on");
+    $("view-plan-share").classList.add("on");
+    var title = d.title || (d.planNo != null ? "发布计划 " + psNo(d.planNo) : "发布计划");
+    $("planShareTitle").textContent = title;
+    document.title = title + " · 只读分享";
+
+    var meta = [];
+    if (d.workspaceName) meta.push(d.workspaceName);
+    if (d.planNo != null) meta.push(psNo(d.planNo));
+    if (d.status) meta.push(psTag(PLAN_TONE[d.status], PLAN_STATUS[d.status] || d.status));
+    meta.push("计划时间 " + psTime(d.plannedAt));
+    meta.push(psText(PLAN_ENV[d.environment], d.environment) + " · " + psText(PLAN_COVERAGE[d.coverage], d.coverage));
+    if (d.ownerName) meta.push("负责人 " + d.ownerName);
+    $("planShareMeta").innerHTML = meta.join('<span class="ps-dot">·</span>');
+
+    var versions = d.versions || [], released = Number(d.releasedCount) || 0;
+    $("planShareStats").innerHTML =
+      '<span class="ps-stat"><b>' + versions.length + '</b>覆盖版本</span>'
+      + '<span class="ps-stat"><b>' + released + " / " + versions.length + '</b>本计划已发布</span>'
+      + '<span class="ps-stat"><b>' + (Number(d.taskCount) || 0) + '</b>计划范围工作项</span>';
+
+    $("planShareVersionCount").textContent = versions.length ? versions.length + " 个版本" : "暂无版本";
+    $("planShareVersions").innerHTML = '<thead><tr><th>版本</th><th>项目</th><th>状态</th><th>目标日期</th><th>本计划发布</th></tr></thead><tbody>'
+      + (versions.length ? versions.map(function (v) {
+        return '<tr><td><b>' + esc(psText(v.versionName)) + '</b></td>'
+          + '<td>' + esc(psText(v.projectName)) + '</td>'
+          + '<td>' + psTag(PLAN_VERSION_TONE[v.status], PLAN_VERSION_STATUS[v.status] || psText(v.status)) + '</td>'
+          + '<td>' + esc(psDate(v.targetDate)) + '</td>'
+          + '<td>' + (v.released ? '<span class="ps-ok">已发布</span>' : '<span class="ps-wait">未发布</span>') + '</td></tr>';
+      }).join("") : '<tr><td colspan="5" class="ps-empty">该计划还没有覆盖版本。</td></tr>')
+      + "</tbody>";
+
+    var tasks = d.tasks || [];
+    $("planShareTaskCount").textContent = tasks.length
+      ? tasks.length + " 项" + (Number(d.taskCount) > tasks.length ? "（记录 " + d.taskCount + " 项）" : "")
+      : "暂无工作项";
+    $("planShareTasks").innerHTML = '<thead><tr><th>编号</th><th>工作项</th><th>类型</th><th>状态</th><th>负责人</th><th>项目</th><th class="ps-col-v">版本</th><th class="ps-col-d">截止</th></tr></thead><tbody>'
+      + (tasks.length ? tasks.map(function (t) {
+        return '<tr><td class="ps-no">' + esc(t.itemNo == null ? "—" : "#" + t.itemNo) + '</td>'
+          + '<td class="ps-title">' + esc(psText(t.title)) + '</td>'
+          + '<td>' + esc(PLAN_TYPE[t.itemType] || psText(t.itemType)) + '</td>'
+          + '<td>' + psTag(PLAN_TASK_TONE[t.boardColumn], PLAN_TASK_STATUS[t.boardColumn] || psText(t.boardColumn)) + '</td>'
+          + '<td>' + esc(psText(t.ownerName, "未指派")) + '</td>'
+          + '<td>' + esc(psText(t.projectName)) + '</td>'
+          + '<td class="ps-col-v">' + esc(psText(t.versionNames)) + '</td>'
+          + '<td class="ps-col-d">' + esc(psDate(t.dueDate)) + '</td></tr>';
+      }).join("") : '<tr><td colspan="8" class="ps-empty">这份计划还没有纳入工作项；范围由负责人在系统内维护。</td></tr>')
+      + "</tbody>";
+
+    $("planShareFoot").textContent = "生成时间 " + psTime(d.generatedAt)
+      + " · 只读链接，计划内容随负责人修改实时更新 · 不含备注、风险与内部检查。"
+      + "计划只是意图，实际发布以发布记录为准。";
+  }
 
   $("shareScale").addEventListener("change", function () {
     state.scale = this.value === "week" || this.value === "month" ? this.value : "day";

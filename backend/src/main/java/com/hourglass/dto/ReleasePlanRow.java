@@ -18,12 +18,20 @@ public class ReleasePlanRow {
     private String projectName;
     /** 计划包含的全部版本/项目（多版本计划用 / 连接）；first version 字段仍保留用于打开入口。 */
     private String versionNames;
+    /** 与 versionNames 同序的逐版本项目名（可重复），用于「项目 · 版本」逐枚配对；projectNames 是去重串，位置不能对齐。 */
+    private String versionProjectNames;
     /** 与 versionNames 同序（ORDER BY r2.name, v2.name, v2.id）的逗号串，供前端逐枚接线跳转；旧客户端忽略。 */
     private String versionIds;
     private String versionReqIds;
     private String projectNames;
     private Integer versionCount;
+    private Integer planNo;
     private LocalDateTime plannedAt;
+    private LocalDateTime updatedAt;
+    /** 就绪检查：pass / warn / block；null 表示草稿未检查或超出列表检查预算。覆盖版本取最差结论。 */
+    private String checkVerdict;
+    private Integer checkBlockers;
+    private Integer checkReminders;
     private String ownerUserId;
     private String ownerName;
     private String environment;

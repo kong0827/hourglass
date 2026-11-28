@@ -834,7 +834,7 @@ function routeNotificationLink(kind, refId, type){
     API.get("/api/release-plans/" + encodeURIComponent(refId) + "/prep").then(function(rs){
       var plan = (rs && rs.plan) || {};
       if(!plan.versionId){
-        toast("该计划缺少版本关联，请到发布日程查看", "warn");
+        toast("该计划缺少版本关联，请到发布计划查看", "warn");
         return;
       }
       return import("../views/release.js").then(function(m){

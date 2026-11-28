@@ -32,35 +32,88 @@
     DELETE FROM delivery_note WHERE workspace_id = #{workspaceId}
   </delete>
 
+  <select id="selectPlanByPlan" resultType="DeliveryNotePlan">
+    SELECT workspace_id, plan_id, audience, support_contact, options, narratives, confirmed,
+           acceptance, updated_by, revision, created_at, updated_at
+    FROM delivery_note_plan
+    WHERE workspace_id = #{workspaceId} AND plan_id = #{planId}
+  </select>
+
+  <select id="selectPlanByPlanForUpdate" resultType="DeliveryNotePlan">
+    SELECT workspace_id, plan_id, audience, support_contact, options, narratives, confirmed,
+           acceptance, updated_by, revision, created_at, updated_at
+    FROM delivery_note_plan
+    WHERE workspace_id = #{workspaceId} AND plan_id = #{planId} FOR UPDATE
+  </select>
+
+  <insert id="upsertPlan">
+    INSERT INTO delivery_note_plan (workspace_id, plan_id, audience, support_contact, options,
+      narratives, confirmed, acceptance, updated_by, revision)
+    VALUES (#{workspaceId}, #{planId}, #{audience}, #{supportContact}, #{options},
+      #{narratives}, #{confirmed}, #{acceptance}, #{updatedBy}, 1)
+    ON DUPLICATE KEY UPDATE
+      audience = VALUES(audience), support_contact = VALUES(support_contact),
+      options = VALUES(options), narratives = VALUES(narratives), confirmed = VALUES(confirmed),
+      acceptance = VALUES(acceptance), updated_by = VALUES(updated_by), revision = revision + 1
+  </insert>
+
+  <delete id="deletePlanNotesByWorkspace">
+    DELETE FROM delivery_note_plan WHERE workspace_id = #{workspaceId}
+  </delete>
+
   <insert id="insertSnapshot">
-    INSERT INTO delivery_note_snapshot (id, workspace_id, version_id, req_id, release_id, seq, doc_no,
-      tone, title, payload, content_hash, created_by, created_by_name)
-    VALUES (#{id}, #{workspaceId}, #{versionId}, #{reqId}, #{releaseId}, #{seq}, #{docNo},
-      #{tone}, #{title}, #{payload}, #{contentHash}, #{createdBy}, #{createdByName})
+    INSERT INTO delivery_note_snapshot (id, workspace_id, scope_type, scope_id, scope_name,
+      version_id, req_id, release_id, seq, doc_no, tone, title, payload, content_hash,
+      created_by, created_by_name)
+    VALUES (#{id}, #{workspaceId}, #{scopeType}, #{scopeId}, #{scopeName},
+      #{versionId}, #{reqId}, #{releaseId}, #{seq}, #{docNo}, #{tone}, #{title}, #{payload}, #{contentHash},
+      #{createdBy}, #{createdByName})
   </insert>
 
   <select id="selectSnapshotById" resultType="DeliveryNoteSnapshot">
-    SELECT id, workspace_id, version_id, req_id, release_id, seq, doc_no, tone, title, payload,
-      content_hash, created_by, created_by_name, created_at
+    SELECT id, workspace_id, scope_type, scope_id, scope_name, version_id, req_id, release_id,
+      seq, doc_no, tone, title, payload, content_hash, created_by, created_by_name, created_at
     FROM delivery_note_snapshot WHERE id = #{id}
   </select>
 
   <select id="selectSnapshotsByVersion" resultType="DeliveryNoteSnapshot">
-    SELECT id, workspace_id, version_id, req_id, release_id, seq, doc_no, tone, title,
-      content_hash, created_by, created_by_name, created_at
+    SELECT id, workspace_id, scope_type, scope_id, scope_name, version_id, req_id, release_id,
+      seq, doc_no, tone, title, content_hash, created_by, created_by_name, created_at
     FROM delivery_note_snapshot
     WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}
+      AND scope_type = 'version'
     ORDER BY seq DESC
   </select>
 
   <select id="selectMaxSeq" resultType="java.lang.Integer">
     SELECT MAX(seq) FROM delivery_note_snapshot
     WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}
+      AND scope_type = 'version'
   </select>
 
   <select id="selectSnapshotIdsByVersion" resultType="java.lang.String">
     SELECT id FROM delivery_note_snapshot
     WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}
+      AND scope_type = 'version'
+    ORDER BY id FOR UPDATE
+  </select>
+
+  <select id="selectSnapshotsByScope" resultType="DeliveryNoteSnapshot">
+    SELECT id, workspace_id, scope_type, scope_id, scope_name, version_id, req_id, release_id,
+      seq, doc_no, tone, title, content_hash, created_by, created_by_name, created_at
+    FROM delivery_note_snapshot
+    WHERE workspace_id = #{workspaceId} AND scope_type = #{scopeType} AND scope_id = #{scopeId}
+    ORDER BY seq DESC
+  </select>
+
+  <select id="selectMaxSeqByScope" resultType="java.lang.Integer">
+    SELECT MAX(seq) FROM delivery_note_snapshot
+    WHERE workspace_id = #{workspaceId} AND scope_type = #{scopeType} AND scope_id = #{scopeId}
+  </select>
+
+  <select id="selectSnapshotIdsByScope" resultType="java.lang.String">
+    SELECT id FROM delivery_note_snapshot
+    WHERE workspace_id = #{workspaceId} AND scope_type = #{scopeType} AND scope_id = #{scopeId}
     ORDER BY id FOR UPDATE
   </select>
 

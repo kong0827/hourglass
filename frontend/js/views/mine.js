@@ -1803,7 +1803,7 @@ function wsNameById(id) {
 function openRow(kind, id, ws, reqId, title, versionId) {
   if (!id) return;
   if (kind === "release") {
-    if (!versionId) { toast("该计划缺少版本关联，请到发布日程查看", "warn"); return; }
+    if (!versionId) { toast("该计划缺少版本关联，请到发布计划查看", "warn"); return; }
     import("./release.js").then(function (m) {
       m.openReleasePage({ id: versionId, reqId: reqId, tab: "plan", planId: id });
     }).catch(function () { toast("发布计划打开失败", "bad"); });
