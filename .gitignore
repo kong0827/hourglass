@@ -7,6 +7,9 @@ bin-release/
 [Oo]bj/
 [Bb]in/
 
+# Node 依赖（MCP 侧车）
+node_modules/
+
 # IDE
 .idea/
 *.iml

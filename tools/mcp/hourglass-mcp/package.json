@@ -1,0 +1,18 @@
+{
+  "name": "hourglass-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "沙漏只读 MCP 侧车（P0-2）",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js",
+    "e2e": "node test/live.e2e.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2"
+  }
+}

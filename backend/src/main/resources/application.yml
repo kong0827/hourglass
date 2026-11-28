@@ -84,6 +84,14 @@ app:
   auth:
     username: ${AUTH_USER:admin}
     password: ${AUTH_PASSWORD:}
+  # 对外只读 API：个人访问令牌（P0 只签发 read）
+  api:
+    # 令牌默认有效期（天）；创建时可填 1–3650
+    token-days: ${API_TOKEN_DAYS:90}
+    rate:
+      # 每个令牌的滑动窗口限流（每分钟），单实例内存实现
+      read-per-minute: ${API_RATE_READ_PER_MINUTE:120}
+      write-per-minute: ${API_RATE_WRITE_PER_MINUTE:30}
   attach:
     # 附件存储目录（相对工作目录或绝对路径）
     dir: ${ATTACH_DIR:./data/attachments}
@@ -119,3 +127,29 @@ app:
     from-name: ${MAIL_FROM_NAME:沙漏}
     # 站点根地址，含 context-path（如 https://host/hourglass/）；用于通知邮件里的任务/登录链接，留空则不附链接
     base-url: ${MAIL_BASE_URL:}
+
+# 对外只读 OpenAPI：全局只收白名单路径（默认文档端点 /v3/api-docs），Swagger UI 关闭；
+# 文档端点需登录（会话或令牌），非 GET 操作由 OpenApiConfig 裁掉。
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: false
+  paths-to-match:
+    - /api/workspaces
+    - /api/projects
+    - /api/projects/*
+    - /api/tasks/list
+    - /api/task/*
+    - /api/tasks/*/logs
+    - /api/demands
+    - /api/demands/*
+    - /api/demands/*/tasks
+    - /api/req-docs
+    - /api/req-docs/*
+    - /api/test-cases
+    - /api/test-cases/*
+    - /api/versions
+    - /api/my-tasks
+    - /api/search
+    - /api/auth/me

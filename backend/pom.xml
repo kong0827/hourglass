@@ -62,6 +62,12 @@
       <artifactId>jsoup</artifactId>
       <version>1.23.2</version>
     </dependency>
+    <!-- 对外只读 OpenAPI 文档：1.7.x 是最后支持 Boot 2.7 / javax 的版本线 -->
+    <dependency>
+      <groupId>org.springdoc</groupId>
+      <artifactId>springdoc-openapi-ui</artifactId>
+      <version>1.7.0</version>
+    </dependency>
     <!-- OPS-2：AI / webhook 出站请求共用连接池（版本由 Spring Boot 管理） -->
     <dependency>
       <groupId>org.apache.httpcomponents</groupId>

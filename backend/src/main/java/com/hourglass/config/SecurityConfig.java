@@ -1,6 +1,7 @@
 package com.hourglass.config;
 
 import com.hourglass.common.LoginUser;
+import com.hourglass.service.ApiTokenService;
 import com.hourglass.service.AuditService;
 import com.hourglass.service.SessionEpochService;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,6 +13,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.FilterSecurityInterceptor;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 
@@ -37,9 +39,16 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http, SessionEpochService epochs,
-                                           AuditService audit) throws Exception {
+                                           AuditService audit, ApiTokenService apiTokens,
+                                           ApiTokenRateLimiter rateLimiter) throws Exception {
         http
+            // 令牌请求不落会话：避免 Bearer 调用把 HttpSession 建起来
+            .securityContext()
+                .securityContextRepository(new BearerAwareSecurityContextRepository())
+                .and()
             .addFilterAfter(new SessionEpochFilter(epochs), UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(new ApiTokenRateLimitFilter(rateLimiter), FilterSecurityInterceptor.class)
+            .addFilterBefore(new ApiTokenAuthFilter(apiTokens), ApiTokenRateLimitFilter.class)
             .authorizeRequests()
                 .antMatchers("/api/health").permitAll()
                 // 邀请链接：访客可查看邀请信息（join 加入需登录，走下方 authenticated）
@@ -48,7 +57,14 @@ public class SecurityConfig {
                 .antMatchers(HttpMethod.GET, "/api/share/**").permitAll()
                 // 交付说明密码解锁与下载留痕：同样凭 token，不碰账号数据
                 .antMatchers(HttpMethod.POST, "/api/share/**").permitAll()
-                .antMatchers("/api/admin/**").hasRole("ADMIN")
+                // 管理接口不接受令牌（令牌不能提权到管理员）
+                .antMatchers("/api/admin/**").access("hasRole('ADMIN') and !hasAuthority('API_TOKEN')")
+                // 令牌管理自身只能会话操作，防止令牌自续期 / 自撤销
+                .antMatchers("/api/auth/tokens", "/api/auth/tokens/**")
+                    .access("isAuthenticated() and !hasAuthority('API_TOKEN')")
+                // 开放文档带全量接口结构，需登录后查看
+                .antMatchers("/v3/api-docs", "/v3/api-docs/**", "/v3/api-docs.yaml",
+                        "/swagger-ui.html", "/swagger-ui/**").authenticated()
                 .antMatchers("/api/**").authenticated()
                 .anyRequest().permitAll()
             .and()
@@ -92,7 +108,7 @@ public class SecurityConfig {
                     if (uri != null && ctx != null && !ctx.isEmpty() && uri.startsWith(ctx)) {
                         uri = uri.substring(ctx.length());
                     }
-                    if (uri != null && uri.startsWith("/api/")) {
+                    if (uri != null && (uri.startsWith("/api/") || uri.startsWith("/v3/api-docs"))) {
                         writeJson(res, 401, "{\"code\":401,\"message\":\"未登录或登录已过期\"}");
                     } else {
                         res.sendRedirect(loginPage.startsWith("http") ? loginPage : (ctx + loginPage));
@@ -100,7 +116,8 @@ public class SecurityConfig {
                 })
                 .accessDeniedHandler((req, res, ex) -> writeJson(res, 200, "{\"code\":403,\"message\":\"没有权限执行该操作\"}"))
             .and()
-            .csrf().ignoringAntMatchers("/api/share/**")
+            .csrf().requireCsrfProtectionMatcher(new TokenAwareCsrfRequestMatcher())
+                .ignoringAntMatchers("/api/share/**")
                 .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse());
         return http.build();
     }
