@@ -2521,6 +2521,222 @@ function closeRrdFind(){
   rrdFindIdx = -1;
   rrdUpdateFindCount();
 }
+/* ---------- 编辑页查找替换：富文本走 mark 高亮，Markdown 走选区；表格 / Univer 暂不支持 ---------- */
+var reqFindHits = [];   /* 富文本：mark 元素数组；Markdown：{start,end} 区间数组 */
+var reqFindIdx = -1;
+var reqFindQuery = "";
+var reqFindInMd = false;
+function reqFindSupported(){
+  return isMarkdownDoc() || (!isUniverDoc() && !isSheetDoc());
+}
+function reqFindRichRoot(){
+  return document.querySelector("#reqDocEditPage .sun-editor-editable");
+}
+function reqFindMdTa(){
+  return $("reqDocMdCanvas");
+}
+/* 查找高亮是临时 DOM，保存 / 导出 / AI 读正文前必须摘掉，mark 不能落库 */
+function reqFindUnwrap(){
+  var root = reqFindRichRoot();
+  if(!root) return;
+  root.querySelectorAll("mark.req-hit").forEach(function(m){
+    m.replaceWith(document.createTextNode(m.textContent));
+  });
+  root.normalize();
+  reqFindHits = [];
+}
+function reqFindClearMarks(){
+  if(!reqFindInMd) reqFindUnwrap();
+  else reqFindHits = [];
+}
+/* 替换后统一走：脏标记 + 草稿备份 + 预览，并向编辑器派发 input 让 SunEditor 感知 */
+function reqFindAfterEdit(){
+  markReqDocDirty();
+  scheduleDraftSave();
+  if(reqFindInMd){
+    scheduleMdPreview();
+  }else{
+    var root = reqFindRichRoot();
+    if(root) root.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+}
+function reqRunFind(query){
+  reqFindQuery = String(query || "").trim();
+  reqFindClearMarks();
+  reqFindIdx = -1;
+  if(!reqFindQuery) { reqFindUpdateCnt(); return; }
+  reqFindInMd = isMarkdownDoc();
+  if(reqFindInMd) reqFindRunMd();
+  else reqFindRunRich();
+  reqFindIdx = reqFindHits.length ? 0 : -1;
+  reqFindUpdateCnt();
+  reqFindFocusHit();
+}
+function reqFindRunRich(){
+  var root = reqFindRichRoot();
+  if(!root) return;
+  var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: function(n){
+      if(!n.nodeValue || !n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+      var p = n.parentNode;
+      if(p && p.nodeType === 1 && (p.closest("mark.req-hit") || p.closest("script,style"))) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  });
+  var nodes = [], n;
+  while((n = walker.nextNode())) nodes.push(n);
+  var q = reqFindQuery.toLowerCase();
+  nodes.forEach(function(node){
+    var text = node.nodeValue, idx = text.toLowerCase().indexOf(q);
+    if(idx < 0) return;
+    var frag = document.createDocumentFragment(), last = 0;
+    while(idx >= 0){
+      if(idx > last) frag.appendChild(document.createTextNode(text.slice(last, idx)));
+      var mark = document.createElement("mark");
+      mark.className = "req-hit";
+      mark.textContent = text.slice(idx, idx + reqFindQuery.length);
+      frag.appendChild(mark);
+      reqFindHits.push(mark);
+      last = idx + reqFindQuery.length;
+      idx = text.toLowerCase().indexOf(q, last);
+    }
+    if(last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+    node.parentNode.replaceChild(frag, node);
+  });
+}
+function reqFindRunMd(){
+  var ta = reqFindMdTa();
+  if(!ta) return;
+  var v = ta.value, q = reqFindQuery.toLowerCase();
+  var i = v.toLowerCase().indexOf(q), hits = [];
+  while(i >= 0){
+    hits.push({ start: i, end: i + reqFindQuery.length });
+    i = v.toLowerCase().indexOf(q, i + reqFindQuery.length);
+  }
+  reqFindHits = hits;
+}
+/* 聚焦命中处：Markdown 不抢查找框焦点，按行高滚进可视区；富文本高亮当前并滚动 */
+function reqFindFocusHit(){
+  if(reqFindIdx < 0 || !reqFindHits.length) return;
+  if(reqFindInMd){
+    var ta = reqFindMdTa(), h = reqFindHits[reqFindIdx];
+    if(!ta || !h) return;
+    ta.setSelectionRange(h.start, h.end);
+    var row = ta.value.slice(0, h.start).split("\n").length;
+    var lh = parseFloat(window.getComputedStyle(ta).lineHeight) || 22;
+    ta.scrollTop = Math.max(0, (row - 3) * lh);
+  }else{
+    reqFindHits.forEach(function(m, i){ m.classList.toggle("on", i === reqFindIdx); });
+    try{ reqFindHits[reqFindIdx].scrollIntoView({ block: "center", behavior: "auto" }); }catch(e){ /* 忽略 */ }
+  }
+}
+function reqFindUpdateCnt(replaced){
+  var cnt = $("reqFindCount");
+  if(!cnt) return;
+  cnt.textContent = replaced != null ? "已替换 " + replaced + " 处"
+    : (reqFindHits.length ? (reqFindIdx + 1) + " / " + reqFindHits.length : (reqFindQuery ? "无结果" : ""));
+}
+function reqStepFind(delta){
+  if(!reqFindHits.length) return;
+  reqFindIdx = (reqFindIdx + delta + reqFindHits.length) % reqFindHits.length;
+  reqFindUpdateCnt();
+  reqFindFocusHit();
+}
+function reqReplaceHit(){
+  if(reqFindIdx < 0 || !reqFindHits.length) return;
+  var repl = ($("reqFindRepl") || {}).value || "";
+  if(reqFindInMd){
+    var ta = reqFindMdTa(), h = reqFindHits[reqFindIdx];
+    if(!ta || !h) return;
+    ta.value = ta.value.slice(0, h.start) + repl + ta.value.slice(h.end);
+  }else{
+    var m = reqFindHits[reqFindIdx];
+    if(!m || !m.parentNode) return;
+    m.replaceWith(document.createTextNode(repl));
+    var root = reqFindRichRoot();
+    if(root) root.normalize();
+  }
+  reqFindAfterEdit();
+  /* 重新扫描：后续命中位置已位移 */
+  var q = reqFindQuery, idx = Math.max(0, reqFindIdx);
+  reqRunFind(q);
+  if(reqFindHits.length) reqFindIdx = Math.min(idx, reqFindHits.length - 1);
+  reqFindUpdateCnt();
+  reqFindFocusHit();
+}
+function reqReplaceAll(){
+  if(!reqFindQuery) return;
+  if(!reqFindHits.length) reqRunFind(reqFindQuery);
+  if(!reqFindHits.length) return;
+  var repl = ($("reqFindRepl") || {}).value || "";
+  var n = reqFindHits.length, i;
+  if(reqFindInMd){
+    var ta = reqFindMdTa();
+    if(!ta) return;
+    var v = ta.value, q = reqFindQuery.toLowerCase(), out = "", last = 0;
+    i = v.toLowerCase().indexOf(q);
+    while(i >= 0){
+      out += v.slice(last, i) + repl;
+      last = i + reqFindQuery.length;
+      i = v.toLowerCase().indexOf(q, last);
+    }
+    ta.value = out + v.slice(last);
+    reqFindHits = [];
+  }else{
+    for(i = 0; i < reqFindHits.length; i++){
+      var m = reqFindHits[i];
+      if(m && m.parentNode) m.replaceWith(document.createTextNode(repl));
+    }
+    var root = reqFindRichRoot();
+    if(root) root.normalize();
+    reqFindHits = [];
+  }
+  reqFindIdx = -1;
+  reqFindAfterEdit();
+  reqFindUpdateCnt(n);
+}
+function openReqFind(){
+  if(!isReqDocEditorOpen()) return;
+  if(!reqFindSupported()){ toast("表格 / Univer 文档暂不支持查找替换", "warn"); return; }
+  var bar = $("reqFindBar");
+  if(!bar) return;
+  bar.hidden = false;
+  /* 只读：可以查找定位，不允许替换 */
+  var ro = !!reqDocReadOnly;
+  ["repl", "replall"].forEach(function(act){
+    var b = bar.querySelector('[data-req-find="' + act + '"]');
+    if(b) b.disabled = ro;
+  });
+  var input = $("reqFindInput");
+  if(!input) return;
+  /* 带上编辑器当前选区，省一次输入 */
+  var sel = "";
+  if(isMarkdownDoc()){
+    var ta = reqFindMdTa();
+    if(ta && ta.selectionStart !== ta.selectionEnd) sel = ta.value.slice(ta.selectionStart, ta.selectionEnd).trim();
+  }else{
+    var root = reqFindRichRoot();
+    try{
+      var s = window.getSelection();
+      if(s && s.rangeCount && root && root.contains(s.anchorNode)) sel = String(s).trim();
+    }catch(e){ sel = ""; }
+  }
+  if(sel && sel.length <= 60){
+    input.value = sel;
+    reqRunFind(sel);
+  }
+  input.focus();
+  input.select();
+}
+function closeReqFind(){
+  var bar = $("reqFindBar");
+  if(bar) bar.hidden = true;
+  reqFindInMd = isMarkdownDoc();
+  reqFindClearMarks();
+  reqFindQuery = "";
+  reqFindIdx = -1;
+  reqFindUpdateCnt();
+}
 /* 表格按单元格批注，正文类文档划线；阅读页里 univer 已转成 HTML，同样可选正文 */
 function rrdCommentActTip(doc){
   return doc && doc.format === "sheet" ? "选中单元格可批注" : "选中正文可划线";
@@ -5230,6 +5446,7 @@ function finishNewReqDocImport(doc, fileName, format){
 }
 function openReqDocEditor(id){
   var seq = ++reqDocOpenSeq;
+  closeReqFind();
   setReqDocHydrating(false);
   API.get("/api/req-docs/" + encodeURIComponent(id)).then(function(doc){
     if(seq !== reqDocOpenSeq) return;   // 连续点开多份：丢弃过期的响应
@@ -5282,6 +5499,7 @@ function openReqDocEditor(id){
 }
 function closeReqDocEditor(){
   setReqDocHydrating(false);
+  closeReqFind();
   disposeReqUniver();
   disposeReqSheet();
   if($("reqDocEditPage")) $("reqDocEditPage").hidden = true;
@@ -7747,6 +7965,7 @@ function currentReqDocContent(){
   if(isMarkdownDoc()) return $("reqDocMdCanvas") ? $("reqDocMdCanvas").value : "";
   if(isUniverDoc()) return reqUniverView ? JSON.stringify(reqUniverView.getSnapshot()) : "";
   if(isSheetDoc()) return reqSheetView ? JSON.stringify(reqSheetView.getSnapshot()) : "";
+  reqFindUnwrap();
   return reqEditor ? reqDocHtmlStripImg(reqEditor.getContents(true)) : "";
 }
 /* 409 时默认保留本地草稿；只有用户二次确认才加载服务器版本 */
@@ -9630,6 +9849,37 @@ function populateReqDocSelect(keep){
       scheduleMdPreview();
     });
   }
+  /* 编辑页查找替换：输入即扫、Enter 下一处 / Shift+Enter 上一处、替换框 Enter 替换当前 */
+  (function(){
+    var bar = $("reqFindBar");
+    if(!bar || bar.dataset.reqFindBound) return;
+    bar.dataset.reqFindBound = "1";
+    bar.addEventListener("click", function(e){
+      var b = e.target.closest("[data-req-find]");
+      if(!b || b.disabled) return;
+      var act = b.dataset.reqFind;
+      if(act === "close") closeReqFind();
+      else if(act === "prev") reqStepFind(-1);
+      else if(act === "next") reqStepFind(1);
+      else if(act === "repl") reqReplaceHit();
+      else if(act === "replall") reqReplaceAll();
+    });
+    var fi = $("reqFindInput");
+    if(fi){
+      fi.addEventListener("input", function(){ reqRunFind(fi.value); });
+      fi.addEventListener("keydown", function(e){
+        if(e.key === "Enter"){ e.preventDefault(); reqStepFind(e.shiftKey ? -1 : 1); }
+        else if(e.key === "Escape"){ e.preventDefault(); closeReqFind(); }
+      });
+    }
+    var fr = $("reqFindRepl");
+    if(fr){
+      fr.addEventListener("keydown", function(e){
+        if(e.key === "Enter"){ e.preventDefault(); reqReplaceHit(); }
+        else if(e.key === "Escape"){ e.preventDefault(); closeReqFind(); }
+      });
+    }
+  })();
   if($("reqDocMdPreview")){
     $("reqDocMdPreview").addEventListener("scroll", function(){ refreshTocActive(); }, { passive: true });
   }
@@ -9734,14 +9984,26 @@ function populateReqDocSelect(keep){
     if($("dlgReqDocNotify") && $("dlgReqDocNotify").classList.contains("open")){ UI.closeModal($("dlgReqDocNotify")); return; }
     if($("dlgReqDocTrash") && $("dlgReqDocTrash").classList.contains("open")){ UI.closeModal($("dlgReqDocTrash")); return; }
     if($("rrdFindBar") && !$("rrdFindBar").hidden){ closeRrdFind(); return; }
+    if($("reqFindBar") && !$("reqFindBar").hidden){ closeReqFind(); return; }
     if(activeView === "requirements" && $("reqDocEditPage") && !$("reqDocEditPage").hidden){ tryCloseReqDocEditor(); }
+  });
+
+  /* Ctrl/Cmd+F：编辑页打开时走编辑页查找替换，不弹浏览器原生查找条 */
+  document.addEventListener("keydown", function(e){
+    if(!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+    if(String(e.key).toLowerCase() !== "f") return;
+    if(activeView !== "requirements" || !isReqDocEditorOpen()) return;
+    var t = e.target;
+    if(!t || !t.closest || !t.closest("#reqDocEditPage")) return;
+    e.preventDefault();
+    openReqFind();
   });
 
   /* Ctrl/Cmd+F：阅读页走文档内查找，不弹浏览器原生查找条 */
   document.addEventListener("keydown", function(e){
     if(!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
     if(String(e.key).toLowerCase() !== "f") return;
-    if(activeView !== "requirements" || isReqDocEditing()) return;
+    if(activeView !== "requirements" || isReqDocEditorOpen()) return;
     var t = e.target;
     if(t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
     var bar = $("rrdFindBar");

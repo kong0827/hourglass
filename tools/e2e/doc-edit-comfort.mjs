@@ -390,6 +390,90 @@ try{
     assert((await titleNow()) === "文档 · 沙漏", "关闭编辑页后标题还原视图标题");
   });
 
+  await section("[D] 编辑页查找替换（富文本 + Markdown）", async () => {
+    const closeEditorDiscard = async () => {
+      await evaluate(`import("./js/views/requirements.js").then(m => m.tryCloseReqDocEditor()); true`);
+      await sleep(400);
+      await evaluate(`(() => { const b = document.getElementById("dlgReqDocCloseDiscard"); if(b && !b.hidden) b.click(); return true; })()`);
+      await waitFor(`document.getElementById("reqDocEditPage").hidden`, "编辑页已关闭", 10000);
+    };
+    /* Markdown 路径：查找 → 替换当前 → 全部替换 */
+    await evaluate(`import("./js/views/requirements.js").then(m => m.openReqDocAndJump(${JSON.stringify(created.md)}))`);
+    await waitFor(`!document.getElementById("reqDocEditPage").hidden && (document.getElementById("reqDocMdCanvas") || {}).value
+      && document.getElementById("reqDocMdCanvas").value.indexOf("快捷键样本正文") !== -1`, "markdown 编辑器就绪", 20000);
+    await evaluate(`(() => {
+      const ta = document.getElementById("reqDocMdCanvas");
+      ta.dispatchEvent(new KeyboardEvent("keydown", { key: "f", ctrlKey: true, bubbles: true, cancelable: true }));
+      return true;
+    })()`);
+    await sleep(300);
+    assert(await evaluate(`!document.getElementById("reqFindBar").hidden`), "Ctrl+F 打开查找条（md）");
+    const mdFind = await evaluate(`(() => {
+      const fi = document.getElementById("reqFindInput");
+      fi.value = "正文";
+      fi.dispatchEvent(new Event("input", { bubbles: true }));
+      const ta = document.getElementById("reqDocMdCanvas");
+      return { cnt: document.getElementById("reqFindCount").textContent,
+        selStart: ta.selectionStart, selEnd: ta.selectionEnd,
+        selText: ta.value.slice(ta.selectionStart, ta.selectionEnd) };
+    })()`);
+    assert(mdFind.cnt === "1 / 1" && mdFind.selText === "正文", "md 查找命中 1 处并选中（" + JSON.stringify(mdFind) + "）");
+    const mdRepl = await evaluate(`(() => {
+      const fr = document.getElementById("reqFindRepl");
+      fr.value = "文字";
+      fr.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+      return document.getElementById("reqDocMdCanvas").value;
+    })()`);
+    assert(mdRepl.indexOf("快捷键样本文字") !== -1, "替换当前（Enter）生效");
+    const mdAll = await evaluate(`(() => {
+      const fi = document.getElementById("reqFindInput");
+      fi.value = "标题";
+      fi.dispatchEvent(new Event("input", { bubbles: true }));
+      document.querySelector('[data-req-find="replall"]').click();
+      return { v: document.getElementById("reqDocMdCanvas").value,
+        cnt: document.getElementById("reqFindCount").textContent };
+    })()`);
+    assert(mdAll.v.indexOf("# 主题") !== -1, "全部替换生效（# 主题）");
+    assert(mdAll.cnt.indexOf("已替换 1 处") !== -1, "全部替换计数提示");
+    await evaluate(`document.querySelector('[data-req-find="close"]').click(); true`);
+    await sleep(200);
+    assert(await evaluate(`document.getElementById("reqFindBar").hidden`), "关闭查找条（md）");
+    await closeEditorDiscard();
+
+    /* 富文本路径：查找 mark 高亮 → 全部替换 → 高亮不残留 */
+    await evaluate(`import("./js/views/requirements.js").then(m => m.openReqDocAndJump(${JSON.stringify(created.html)}))`);
+    await waitFor(`!!document.querySelector("#reqDocEditPage .sun-editor-editable") && !document.getElementById("reqDocEditPage").hidden`, "富文本编辑器就绪", 25000);
+    await evaluate(`(() => {
+      const ed = document.querySelector("#reqDocEditPage .sun-editor-editable");
+      ed.dispatchEvent(new KeyboardEvent("keydown", { key: "f", metaKey: true, bubbles: true, cancelable: true }));
+      return true;
+    })()`);
+    await sleep(300);
+    assert(await evaluate(`!document.getElementById("reqFindBar").hidden`), "⌘+F 打开查找条（富文本）");
+    const richFind = await evaluate(`(() => {
+      const fi = document.getElementById("reqFindInput");
+      fi.value = "样本";
+      fi.dispatchEvent(new Event("input", { bubbles: true }));
+      return { hits: document.querySelectorAll("#reqDocEditPage .sun-editor-editable mark.req-hit").length,
+        cnt: document.getElementById("reqFindCount").textContent };
+    })()`);
+    assert(richFind.hits === 1 && richFind.cnt === "1 / 1", "富文本查找 mark 高亮 1 处（" + JSON.stringify(richFind) + "）");
+    const richAll = await evaluate(`(() => {
+      const fr = document.getElementById("reqFindRepl");
+      fr.value = "示例";
+      document.querySelector('[data-req-find="replall"]').click();
+      const ed = document.querySelector("#reqDocEditPage .sun-editor-editable");
+      return { text: ed.textContent, marks: ed.querySelectorAll("mark.req-hit").length,
+        cnt: document.getElementById("reqFindCount").textContent };
+    })()`);
+    assert(richAll.text.indexOf("E2E 粘贴示例正文") !== -1, "富文本全部替换生效");
+    assert(richAll.marks === 0, "替换后高亮 mark 不残留");
+    assert(richAll.cnt.indexOf("已替换 1 处") !== -1, "富文本替换计数提示");
+    await shot("find-replace");
+    await closeEditorDiscard();
+    assert(await evaluate(`document.getElementById("reqFindBar").hidden`), "关闭编辑页后查找条一并关闭");
+  });
+
   /* 收尾：删样本文档并回读基线 */
   await section("[收尾] 清理与基线", async () => {
     const ids = testDocIds();

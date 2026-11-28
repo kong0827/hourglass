@@ -747,6 +747,12 @@
 .rrd-find-cnt{flex:0 0 auto;min-width:44px;text-align:right;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;}
 mark.rrd-hit{background:var(--warning-border);color:inherit;border-radius:2px;}
 mark.rrd-hit.on{background:var(--warning);color:#fff;}
+/* 编辑页查找替换条：复用 .rrd-find 布局，多一个替换输入框；mark 高亮与阅读口径一致 */
+.req-find{position:sticky;top:0;z-index:20;margin:0 0 10px;}
+.req-find input.req-find-repl{flex:0 1 160px;border-bottom:1px dashed var(--border);}
+.req-find .btn{flex:0 0 auto;height:24px;padding:0 8px;font-size:12px;}
+mark.req-hit{background:var(--warning-border);color:inherit;border-radius:2px;}
+mark.req-hit.on{background:var(--warning);color:#fff;}
 .rrd-body{font-size:14px;line-height:1.85;min-height:200px;}
 /* 阅读页：正文 + 右侧大纲（大纲沿用编辑页那套 .reqdoc-toc，只是外层改为网格） */
 .rrd-docwrap{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:22px;align-items:start;}

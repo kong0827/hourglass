@@ -1355,6 +1355,17 @@
 
         <!-- 编辑页：从列表点进来，顶部可返回 -->
         <div class="reqdoc-editpage" id="reqDocEditPage" hidden>
+          <div class="rrd-find req-find" id="reqFindBar" hidden>
+            <span class="rrd-find-ico"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="4.5"/><path d="m12 12 4 4"/></svg></span>
+            <input type="search" id="reqFindInput" placeholder="在正文中查找" aria-label="在正文中查找" autocomplete="off" />
+            <input type="text" id="reqFindRepl" class="req-find-repl" placeholder="替换为" aria-label="替换为" autocomplete="off" />
+            <span class="rrd-find-cnt" id="reqFindCount" aria-live="polite"></span>
+            <button class="icon-btn sm" type="button" data-req-find="prev" aria-label="上一处" title="上一处（Shift+Enter）"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5-5 5 5"/></svg></button>
+            <button class="icon-btn sm" type="button" data-req-find="next" aria-label="下一处" title="下一处（Enter）"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 5 5 5-5"/></svg></button>
+            <button class="btn sm ghost" type="button" data-req-find="repl">替换</button>
+            <button class="btn sm ghost" type="button" data-req-find="replall">全部替换</button>
+            <button class="icon-btn sm" type="button" data-req-find="close" aria-label="关闭查找替换" title="关闭（Esc）"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5 5 15"/></svg></button>
+          </div>
           <div class="reqdoc-editbar">
             <button class="icon-btn sm" type="button" id="reqDocBack" title="返回文档列表" aria-label="返回文档列表">
               <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.6 6.6 10 12 15.4"/></svg>
