@@ -77,6 +77,10 @@ public class ChangeBroadcastFilter extends OncePerRequestFilter {
         if (uri.startsWith("/api/ai/") && !uri.endsWith("/tasks")) {
             return;
         }
+        /* 相似条目检查是建单时的高频只读查询：不改任何数据，不能让全空间跟着刷新 */
+        if (uri.startsWith("/api/similar/")) {
+            return;
+        }
         int status = response.getStatus();
         if (status < 200 || status >= 300) {
             return;

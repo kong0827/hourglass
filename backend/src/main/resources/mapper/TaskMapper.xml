@@ -60,6 +60,21 @@
     ORDER BY t.board_column, t.sort_order, t.id
   </select>
 
+  <!-- 新建缺陷时的相似度候选：与看板同一可见口径，连带看板列名用于展示状态 -->
+  <select id="selectSimilarDefects" resultType="com.hourglass.dto.SimilarSourceRow">
+    SELECT t.id, t.item_no AS itemNo, t.title, LEFT(t.description, 400) AS description,
+           t.req_id AS projectId, r.name AS projectName,
+           t.board_column AS status, COALESCE(bc.name, t.board_column) AS statusName
+    FROM task t
+    LEFT JOIN requirement r ON r.workspace_id = t.workspace_id AND r.id = t.req_id
+    LEFT JOIN board_column bc ON bc.workspace_id = t.workspace_id AND bc.id = t.board_column
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.item_type = 'bug'
+    <include refid="visibleProject"/>
+    <if test="excludeId != null"> AND t.id != #{excludeId} </if>
+    ORDER BY t.updated_at DESC, t.id
+    LIMIT #{limit}
+  </select>
+
   <select id="selectColumnTasks" resultType="Task">
     SELECT <include refid="cols"/> FROM task
     WHERE workspace_id = #{workspaceId} AND board_column = #{column} AND deleted_at IS NULL

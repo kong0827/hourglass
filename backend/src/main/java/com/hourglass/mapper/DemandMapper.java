@@ -15,6 +15,12 @@ public interface DemandMapper {
 
     List<Demand> selectByWorkspace(@Param("workspaceId") String workspaceId);
 
+    /** 新建需求时的相似度候选：只取可见项目、按更新时间倒序限量，描述截 400 字 */
+    List<com.hourglass.dto.SimilarSourceRow> selectSimilarSources(@Param("workspaceId") String workspaceId,
+                                                                  @Param("viewerId") String viewerId,
+                                                                  @Param("excludeId") String excludeId,
+                                                                  @Param("limit") int limit);
+
     /** 分页：筛选/排序/LIMIT 全在 SQL 完成 */
     List<Demand> selectPage(@Param("q") DemandQuery query);
 

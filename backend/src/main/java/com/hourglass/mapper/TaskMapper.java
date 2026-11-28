@@ -22,6 +22,12 @@ public interface TaskMapper {
     List<Task> selectAllVisible(@Param("workspaceId") String workspaceId,
                                 @Param("viewerId") String viewerId);
 
+    /** 新建缺陷时的相似度候选：只看未删除的缺陷，按更新时间倒序限量，描述截 400 字 */
+    List<com.hourglass.dto.SimilarSourceRow> selectSimilarDefects(@Param("workspaceId") String workspaceId,
+                                                                  @Param("viewerId") String viewerId,
+                                                                  @Param("excludeId") String excludeId,
+                                                                  @Param("limit") int limit);
+
     /** 只取某一列的任务（拖拽排序用，避免整空间 selectAll） */
     List<Task> selectColumnTasks(@Param("workspaceId") String workspaceId,
                                  @Param("column") String column);

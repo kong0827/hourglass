@@ -257,6 +257,26 @@
     ORDER BY FIELD(status, 'review', 'pass', 'plan', 'done', 'closed', 'rej', 'canceled'), created_at DESC, id
   </select>
 
+  <!-- 新建需求时的相似度候选：与列表同一可见口径（项目 access='none' 排除），只取比对所需列 -->
+  <select id="selectSimilarSources" resultType="com.hourglass.dto.SimilarSourceRow">
+    SELECT d.id, d.demand_no AS itemNo, d.title, LEFT(d.description, 400) AS description,
+           d.req_id AS projectId, r.name AS projectName, d.status AS status
+    FROM demand d
+    LEFT JOIN requirement r ON r.workspace_id = d.workspace_id AND r.id = d.req_id
+    WHERE d.workspace_id = #{workspaceId}
+      AND d.title IS NOT NULL AND d.title != ''
+      <if test="viewerId != null">
+        AND NOT EXISTS (SELECT 1 FROM project_member pm
+                        WHERE pm.workspace_id = d.workspace_id
+                          AND pm.project_id = d.req_id
+                          AND pm.user_id = #{viewerId}
+                          AND pm.access = 'none')
+      </if>
+      <if test="excludeId != null"> AND d.id != #{excludeId} </if>
+    ORDER BY d.updated_at DESC, d.id
+    LIMIT #{limit}
+  </select>
+
   <!-- 分页查询的共享 WHERE：看板单列 / 列表筛选 / 计数复用同一口径 -->
   <sql id="pageWhere">
     WHERE d.workspace_id = #{q.workspaceId}
