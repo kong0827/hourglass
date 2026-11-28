@@ -54,6 +54,8 @@ public class Task {
     private String testOwner;
     /** 提测时间：进入「待测试」或新一轮直接进入「测试中」时记录 */
     private LocalDateTime testRequestedAt;
+    /** 本轮提测时间：进入「待测试」（测试中退回队列除外）或跳过待测试直接进「测试中」时写入；空回退 test_requested_at */
+    private LocalDateTime testRoundRequestedAt;
     /** 进入「测试中」的时间（可重复测试，每轮重新记录开始时刻） */
     private LocalDateTime testStartedAt;
     /** 离开「测试中」的时间：测试通过或退回 / 重开时记录 */

@@ -6,7 +6,7 @@
     id, workspace_id, title, description, priority, owner, owner_user_id, category_id, board_column, start_date, due_date, req_id, req_doc_id, branch_id,
     progress, is_milestone, estimate_minutes, test_estimate_minutes, is_blocked AS blocked, blocked_reason, blocked_by_task_id, note, completed_at,
     canceled_at, cancel_reason, cancel_from,
-    test_owner_user_id, test_owner, test_requested_at, test_started_at, test_finished_at, recur_type, recur_next_id,
+    test_owner_user_id, test_owner, test_requested_at, test_round_requested_at, test_started_at, test_finished_at, recur_type, recur_next_id,
     remind_at, remind_target, remind_sent, deleted_at, sort_order, created_at, updated_at,
     item_type AS itemType, item_no AS itemNo, epic_id AS epicId, demand_id AS demandId,
     severity, environment, reproduce_steps, found_version_id, regression_status
@@ -514,12 +514,12 @@
     INSERT INTO task (id, workspace_id, title, description, priority, owner, owner_user_id, created_by_user_id, category_id, board_column,
                       start_date, due_date, req_id, req_doc_id, branch_id, progress, is_milestone, estimate_minutes, test_estimate_minutes, is_blocked, blocked_reason, blocked_by_task_id, note, completed_at,
                       canceled_at, cancel_reason, cancel_from,
-                      test_owner_user_id, test_owner, test_requested_at, test_started_at, test_finished_at,
+                      test_owner_user_id, test_owner, test_requested_at, test_round_requested_at, test_started_at, test_finished_at,
                       recur_type, remind_at, remind_target, remind_sent, sort_order, item_type, item_no, epic_id, demand_id,
                       severity, environment, reproduce_steps, found_version_id, regression_status, created_at)
     VALUES (#{id}, #{workspaceId}, #{title}, #{description}, #{priority}, #{owner}, #{ownerUserId}, #{createdByUserId}, #{categoryId},
             #{boardColumn}, #{startDate}, #{dueDate}, #{reqId}, #{reqDocId}, #{branchId}, #{progress}, #{isMilestone}, #{estimateMinutes}, #{testEstimateMinutes}, #{blocked}, #{blockedReason}, #{blockedByTaskId},
-            #{note}, #{completedAt}, #{canceledAt}, #{cancelReason}, #{cancelFrom}, #{testOwnerUserId}, #{testOwner}, #{testRequestedAt}, #{testStartedAt}, #{testFinishedAt}, #{recurType}, #{remindAt}, #{remindTarget}, #{remindSent}, #{sortOrder}, COALESCE(#{itemType}, 'task'), #{itemNo}, #{epicId}, #{demandId},
+            #{note}, #{completedAt}, #{canceledAt}, #{cancelReason}, #{cancelFrom}, #{testOwnerUserId}, #{testOwner}, #{testRequestedAt}, #{testRoundRequestedAt}, #{testStartedAt}, #{testFinishedAt}, #{recurType}, #{remindAt}, #{remindTarget}, #{remindSent}, #{sortOrder}, COALESCE(#{itemType}, 'task'), #{itemNo}, #{epicId}, #{demandId},
             #{severity}, #{environment}, #{reproduceSteps}, #{foundVersionId}, #{regressionStatus},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP))
   </insert>
@@ -530,7 +530,7 @@
                       start_date, due_date, req_id, req_doc_id, branch_id, progress, is_milestone, estimate_minutes, test_estimate_minutes,
                       is_blocked, blocked_reason, blocked_by_task_id, note, completed_at,
                       canceled_at, cancel_reason, cancel_from,
-                      test_owner_user_id, test_owner, test_requested_at, test_started_at, test_finished_at,
+                      test_owner_user_id, test_owner, test_requested_at, test_round_requested_at, test_started_at, test_finished_at,
                       recur_type, remind_at,
                       remind_target, remind_sent, sort_order, item_type, item_no, epic_id, demand_id,
                       severity, environment, reproduce_steps, found_version_id, regression_status, created_at, deleted_at)
@@ -539,7 +539,7 @@
       (#{t.id}, #{t.workspaceId}, #{t.title}, #{t.description}, #{t.priority}, #{t.owner}, #{t.ownerUserId},
        #{t.categoryId}, #{t.boardColumn}, #{t.startDate}, #{t.dueDate}, #{t.reqId}, #{t.reqDocId}, #{t.branchId},
        #{t.progress}, #{t.isMilestone}, #{t.estimateMinutes}, #{t.testEstimateMinutes}, #{t.blocked}, #{t.blockedReason}, #{t.blockedByTaskId},
-       #{t.note}, #{t.completedAt}, #{t.canceledAt}, #{t.cancelReason}, #{t.cancelFrom}, #{t.testOwnerUserId}, #{t.testOwner}, #{t.testRequestedAt}, #{t.testStartedAt}, #{t.testFinishedAt}, #{t.recurType}, #{t.remindAt}, #{t.remindTarget}, #{t.remindSent},
+       #{t.note}, #{t.completedAt}, #{t.canceledAt}, #{t.cancelReason}, #{t.cancelFrom}, #{t.testOwnerUserId}, #{t.testOwner}, #{t.testRequestedAt}, #{t.testRoundRequestedAt}, #{t.testStartedAt}, #{t.testFinishedAt}, #{t.recurType}, #{t.remindAt}, #{t.remindTarget}, #{t.remindSent},
        #{t.sortOrder}, COALESCE(#{t.itemType}, 'task'), #{t.itemNo}, #{t.epicId}, #{t.demandId},
        #{t.severity}, #{t.environment}, #{t.reproduceSteps}, #{t.foundVersionId}, #{t.regressionStatus},
        COALESCE(#{t.createdAt}, CURRENT_TIMESTAMP), #{t.deletedAt})
@@ -575,6 +575,8 @@
       test_owner_user_id = #{testOwnerUserId},
       test_owner = #{testOwner},
       test_requested_at = #{testRequestedAt},
+      /* 旧版前端不认识该列会回传 null：本轮起点只增不清，避免整对象更新把它抹掉 */
+      test_round_requested_at = COALESCE(#{testRoundRequestedAt}, test_round_requested_at),
       test_started_at = #{testStartedAt},
       test_finished_at = #{testFinishedAt},
       recur_type = #{recurType},

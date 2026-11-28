@@ -396,6 +396,8 @@ function renderReadTestCard(){
   var t = readTask();
   var col = (iCol && iCol.value) || t.boardColumn || "";
   var requested = t.testRequestedAt || "", start = t.testStartedAt || "", end = t.testFinishedAt || "";
+  /* 读态「已等待」跟随看板：本轮起点优先，存量回退首次提测时间 */
+  var roundRequested = t.testRoundRequestedAt || requested;
   var tester = t.testOwner || t.testOwnerUserId || "";
   var visible = col === "test" || col === "testing" || !!(requested || start || end || t.testOwnerUserId);
   card.hidden = !visible;
@@ -439,7 +441,7 @@ function renderReadTestCard(){
   var dur = "", durSub = "";
   if(end){ dur = "历时 " + spanText(start || requested, end); durSub = (start ? "开始" : "提测") + " → 结束"; }
   else if(start){ dur = "已测 " + elapsedText(start); durSub = "开始 → 现在"; }
-  else if(requested){ dur = "已等待 " + elapsedText(requested); durSub = "提测 → 现在"; }
+  else if(requested){ dur = "已等待 " + elapsedText(roundRequested); durSub = "提测 → 现在"; }
   var testEst = Math.max(0, Number(t.testEstimateMinutes) || 0);
   if(testEst){
     var estText = "测试预估 " + fmtMinutesShort(testEst);

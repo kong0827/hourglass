@@ -57,6 +57,7 @@ class TaskWorkflowServiceTestFlowTest {
         LocalDateTime now = LocalDateTime.now().withSecond(0).withNano(0);
         assertEquals(now, task.getTestStartedAt());
         assertEquals(now, task.getTestRequestedAt());
+        assertEquals(now, task.getTestRoundRequestedAt());
         assertNull(task.getTestFinishedAt());
     }
 
@@ -66,7 +67,9 @@ class TaskWorkflowServiceTestFlowTest {
 
         service.applyTestTimestamps(task, Consts.COL_DOING, Consts.COL_TEST);
 
-        assertEquals(LocalDateTime.now().withSecond(0).withNano(0), task.getTestRequestedAt());
+        LocalDateTime now = LocalDateTime.now().withSecond(0).withNano(0);
+        assertEquals(now, task.getTestRequestedAt());
+        assertEquals(now, task.getTestRoundRequestedAt());
         assertNull(task.getTestStartedAt());
     }
 
@@ -95,11 +98,14 @@ class TaskWorkflowServiceTestFlowTest {
     void requeueFromTestingKeepsOriginalRequestTime() {
         Task task = new Task();
         task.setTestRequestedAt(LocalDateTime.of(2026, 11, 1, 9, 0));
+        task.setTestRoundRequestedAt(LocalDateTime.of(2026, 11, 1, 9, 0));
         task.setTestStartedAt(LocalDateTime.of(2026, 11, 1, 9, 30));
 
         service.applyTestTimestamps(task, Consts.COL_TESTING, Consts.COL_TEST);
 
         assertEquals(LocalDateTime.of(2026, 11, 1, 9, 0), task.getTestRequestedAt());
+        /* 退回队列不是重新提测：本轮排队起点不变，看板等待时长延续 */
+        assertEquals(LocalDateTime.of(2026, 11, 1, 9, 0), task.getTestRoundRequestedAt());
         assertEquals(LocalDateTime.now().withSecond(0).withNano(0), task.getTestFinishedAt());
     }
 
@@ -114,6 +120,7 @@ class TaskWorkflowServiceTestFlowTest {
         LocalDateTime now = LocalDateTime.now().withSecond(0).withNano(0);
         assertEquals(now, task.getTestStartedAt());
         assertEquals(now, task.getTestRequestedAt());
+        assertEquals(now, task.getTestRoundRequestedAt());
         assertNull(task.getTestFinishedAt());
     }
 
@@ -122,14 +129,34 @@ class TaskWorkflowServiceTestFlowTest {
         Task task = new Task();
         LocalDateTime resubmitted = LocalDateTime.of(2026, 11, 3, 9, 0);
         task.setTestRequestedAt(resubmitted);
+        task.setTestRoundRequestedAt(resubmitted);
         task.setTestStartedAt(LocalDateTime.of(2026, 11, 1, 9, 30));
         task.setTestFinishedAt(LocalDateTime.of(2026, 11, 2, 10, 0));
 
         service.applyTestTimestamps(task, Consts.COL_TEST, Consts.COL_TESTING);
 
         assertEquals(resubmitted, task.getTestRequestedAt());
+        /* 认领沿用进入队列时写入的本轮起点，不被认领时刻覆盖 */
+        assertEquals(resubmitted, task.getTestRoundRequestedAt());
         assertEquals(LocalDateTime.now().withSecond(0).withNano(0), task.getTestStartedAt());
         assertNull(task.getTestFinishedAt());
+    }
+
+    @Test
+    void secondRoundQueueEntryResetsRoundRequestedTime() {
+        Task task = new Task();
+        task.setTestRequestedAt(LocalDateTime.of(2026, 11, 3, 9, 0));
+        task.setTestRoundRequestedAt(LocalDateTime.of(2026, 11, 3, 9, 0));
+        task.setTestStartedAt(LocalDateTime.of(2026, 11, 1, 9, 30));
+        task.setTestFinishedAt(LocalDateTime.of(2026, 11, 2, 10, 0));
+
+        service.applyTestTimestamps(task, Consts.COL_DONE, Consts.COL_TEST);
+
+        LocalDateTime now = LocalDateTime.now().withSecond(0).withNano(0);
+        assertEquals(now, task.getTestRequestedAt());
+        assertEquals(now, task.getTestRoundRequestedAt());
+        assertEquals(LocalDateTime.of(2026, 11, 1, 9, 30), task.getTestStartedAt());
+        assertEquals(LocalDateTime.of(2026, 11, 2, 10, 0), task.getTestFinishedAt());
     }
 
     @Test
@@ -204,6 +231,7 @@ class TaskWorkflowServiceTestFlowTest {
         LocalDateTime now = LocalDateTime.now().withSecond(0).withNano(0);
         assertEquals(now, task.getTestStartedAt());
         assertEquals(now, task.getTestRequestedAt());
+        assertEquals(now, task.getTestRoundRequestedAt());
         /* 认领测试负责人属于测试链路：项目「可测试」即可，不要求工作项写权限 */
         verify(projectAccess).assertTestForUpdate("w1", "u1", null);
         verify(audit).log("u1", "w1", "t1", "update", "认领测试负责人，开始测试");

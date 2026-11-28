@@ -159,6 +159,8 @@ public class TaskWorkflowService {
         /* 从「测试中」退回待测队列不是重新提测：保留原提测时间，等待时长才不会被清零 */
         if (Consts.COL_TEST.equals(to) && !Consts.COL_TESTING.equals(from)) {
             task.setTestRequestedAt(now);
+            /* 本轮排队起点与进度同步刷新：看板等待/3 天预警只看本轮 */
+            task.setTestRoundRequestedAt(now);
         }
         if (Consts.COL_TESTING.equals(to)) {
             if (task.getTestStartedAt() == null || newRound) {
@@ -168,6 +170,7 @@ public class TaskWorkflowService {
                 if (task.getTestRequestedAt() == null
                         || (newRound && !Consts.COL_TEST.equals(from))) {
                     task.setTestRequestedAt(now);
+                    task.setTestRoundRequestedAt(now);
                 }
             }
             task.setTestFinishedAt(null);
@@ -394,6 +397,8 @@ public class TaskWorkflowService {
         }
         if (task.getTestRequestedAt() == null) {
             task.setTestRequestedAt(now);
+            /* 历史/导入数据直接在「测试中」认领：本轮起点同步补上，看板才不用回退 */
+            task.setTestRoundRequestedAt(now);
         }
         if (task.getUpdatedAt() != null) {
             task.setVersionCheck(Boolean.TRUE);

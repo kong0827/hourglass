@@ -478,6 +478,8 @@ function testStripHTML(t, editable){
   var col = t.boardColumn;
   var tester = t.testOwner || t.testOwnerUserId || "";
   var isDone = col === "done";
+  /* 排队时长看本轮起点；存量任务没有本轮字段时回退首次提测时间 */
+  var since = t.testRoundRequestedAt || t.testRequestedAt || "";
   if(col !== "test" && col !== "testing" && !(isDone && tester)) return "";
   var claimBtn = '<button type="button" class="ct-claim" data-test-claim="' + esc(t.id) + '">开始测试</button>';
   if(col === "test"){
@@ -485,10 +487,10 @@ function testStripHTML(t, editable){
       return '<div class="card-test"><span class="ct-lbl">测试</span>' +
         '<span class="ct-who">' + avatarHTML(tester) + esc(tester) + '</span>' +
         '<span class="ct-tag">等待验证</span>' +
-        '<span class="ct-since">' + (t.testRequestedAt ? "提测 " + esc(elapsedText(t.testRequestedAt)) + "前" : "") + '</span></div>';
+        '<span class="ct-since">' + (since ? "提测 " + esc(elapsedText(since)) + "前" : "") + '</span></div>';
     }
-    var waited = elapsedText(t.testRequestedAt);
-    var hot = t.testRequestedAt && (Date.now() - new Date(t.testRequestedAt).getTime()) >= 3 * 86400000;
+    var waited = elapsedText(since);
+    var hot = since && (Date.now() - new Date(since).getTime()) >= 3 * 86400000;
     return '<div class="card-test"><span class="ct-wait' + (hot ? " hot" : "") + '">待领取' +
       (waited ? ' · 已等待 ' + esc(waited) : "") + '</span>' +
       (editable ? claimBtn : '') + '</div>';
