@@ -1374,7 +1374,11 @@
             <button class="icon-btn sm" type="button" id="reqDocBack" title="返回文档列表" aria-label="返回文档列表">
               <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.6 6.6 10 12 15.4"/></svg>
             </button>
-            <span class="reqdoc-crumb" id="reqDocCrumb"></span>
+            <span class="reqdoc-crumb" id="reqDocCrumb">
+              <span class="reqdoc-crumb-proj" id="reqDocCrumbProj"></span>
+              <span class="reqdoc-crumb-sep" aria-hidden="true">/</span>
+              <input id="reqDocTitle" class="reqdoc-title" type="text" maxlength="100" autocomplete="off" spellcheck="false" placeholder="未命名文档" aria-label="文档标题">
+            </span>
             <span class="reqdoc-fmt" id="reqDocFormat" hidden></span>
             <label class="reqdoc-parent" title="文档分类（决定归属项目 / 空间级与树中位置）">
               <span>分类</span>

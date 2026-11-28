@@ -127,8 +127,26 @@
 .reqdoc-editpage{max-width:1480px;margin:0 auto;width:100%;padding:14px var(--content-pad) 0;cursor:text;}
 .reqdoc-editbar{display:flex;align-items:center;gap:10px;padding-bottom:8px;flex-wrap:wrap;}
 .reqdoc-crumb{
-  font-size:13px;font-weight:600;color:var(--text);max-width:420px;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  display:inline-flex;align-items:center;gap:6px;min-width:0;max-width:470px;
+  font-size:13px;font-weight:600;color:var(--text);
+}
+.reqdoc-crumb-proj{
+  max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:var(--text-2);font-weight:500;
+}
+.reqdoc-crumb-sep{flex:none;color:var(--text-3);}
+/* 标题就地编辑：平时看着像正文，悬停/聚焦才露出输入框边框（随「保存」落库） */
+.reqdoc-title{
+  width:260px;max-width:100%;height:26px;padding:0 6px;margin-left:-2px;
+  border:1px solid transparent;border-radius:var(--r-xs);background:transparent;
+  font:inherit;font-weight:600;color:var(--text);text-overflow:ellipsis;
+}
+.reqdoc-title:hover:not(:disabled){background:var(--surface-sunken);border-color:var(--border);}
+.reqdoc-title:focus{outline:none;background:var(--surface);border-color:var(--border-strong);}
+.reqdoc-title:disabled{color:var(--text-3);cursor:default;}
+@media (max-width:640px){
+  .reqdoc-crumb{flex:1 1 100%;max-width:100%;}
+  .reqdoc-title{width:100%;flex:1 1 auto;}
 }
 /* 保存状态：圆点 + 文本双编码（原型 EDIT-3），绿=已保存、橙=有未保存修改 */
 .reqdoc-saved{font-size:12px;color:var(--text-3);display:inline-flex;align-items:center;gap:6px;}

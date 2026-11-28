@@ -99,6 +99,11 @@ function applyReqDocReadOnly(on){
     var el = $(id);
     if(el) el.disabled = on;
   });
+  var titleInput = $("reqDocTitle");
+  if(titleInput){
+    titleInput.disabled = on;
+    titleInput.title = on ? "你对该项目只有查看权限" : "文档标题（随「保存」生效）";
+  }
   /* 分类下拉：只读时禁用；可写时也要看该范围有没有分类（无分类仍禁用，避免空下拉误导） */
   var catSel = $("reqDocCategory");
   if(catSel){
@@ -1253,6 +1258,33 @@ function syncRrdDocTitle(){
   }
   document.title = (t ? t + " · " : VIEWS.requirements.title + " · ") + "沙漏";
   syncDocTitle();
+}
+/* 编辑页头部：项目名只读，标题就地编辑；保存返回后以服务端标题为准回填 */
+function syncReqDocEditHead(doc){
+  if($("reqDocCrumbProj")) $("reqDocCrumbProj").textContent = reqDocProjectName(doc.reqId);
+  var input = $("reqDocTitle");
+  if(input && document.activeElement !== input){
+    input.value = doc.title || "";
+    editingMeta.title = doc.title || "";
+  }
+}
+/* 标题输入框失焦/回车提交：只改本地编辑态，随「保存」与正文一起落库；Esc 由 keydown 还原 */
+function commitReqDocTitle(){
+  var input = $("reqDocTitle");
+  if(!input || input.disabled) return;
+  var next = (input.value || "").trim();
+  var old = editingMeta.title || "";
+  if(!next){
+    input.value = old;
+    if(old) toast("文档标题不能为空", "warn");
+    return;
+  }
+  input.value = next;
+  if(next === old) return;
+  editingMeta.title = next;
+  markReqDocDirty();
+  syncRrdDocTitle();
+  syncReqDocPageHead();
 }
 function renderReqDocMode(){
   syncReqDocFilterUI();
@@ -5652,7 +5684,6 @@ function openReqDocEditor(id){
     syncReqDocPageHead();
     syncRrdDocTitle();
     setTocVisible(tocVisiblePref());
-    if($("reqDocCrumb")) $("reqDocCrumb").textContent = reqDocProjectName(doc.reqId) + " / " + (doc.title || "未命名文档");
     activityUI.loadInto($("reqDocActivityList"), "/api/req-docs/" + encodeURIComponent(doc.id) + "/activities");
     loadReqDocTasks(doc.id);
     loadReqDocDemands(doc.id);
@@ -6626,6 +6657,7 @@ function fillReqDocEditor(doc, opts){
   };
   refreshReqDocPublishBtn();
   refreshReqDocShareBtn();
+  syncReqDocEditHead(doc);
   setDocFormatUI(editingMeta.format);
   fillDocTypeSelect("reqDocType", editingMeta.docType);
   fillDocParentSelect(doc);
@@ -7168,7 +7200,7 @@ function scheduleDraftSave(){
         return;
       }
       var ts = Date.now();
-      localStorage.setItem(key, JSON.stringify({ content: content, ts: ts, format: editingMeta.format }));
+      localStorage.setItem(key, JSON.stringify({ content: content, title: editingMeta.title || "", ts: ts, format: editingMeta.format }));
       var saved = $("reqDocSaved");
       if(saved && reqDocDirty){
         /* 只在本机落草稿后追加暂存时间，让用户看得见「丢了也没丢太多」 */
@@ -7194,6 +7226,16 @@ function checkDraftRecovery(docId){
         /* 在线文档是异步挂载：要等挂载完成再置脏，否则会被 mountReqUniver 里的复位清掉 */
         Promise.resolve(setEditorContent(draft.content, draft.format || editingMeta.format)).then(function(){
           if(isUniverDoc() && !reqUniverView) return;
+          /* 草稿里带了未保存的标题（旧草稿没有该字段）：一并恢复，保存时随正文落库 */
+          if(draft.title && draft.title !== editingMeta.title){
+            var titleInput = $("reqDocTitle");
+            if(titleInput && !titleInput.disabled){
+              titleInput.value = draft.title;
+              editingMeta.title = draft.title;
+              syncRrdDocTitle();
+              syncReqDocPageHead();
+            }
+          }
           markReqDocDirty();
           toast("已恢复草稿，记得保存", "fs");
         });
@@ -8156,10 +8198,14 @@ function saveReqDoc(opts){
   var silent = !!(opts && opts.silent);
   if(reqDocReadOnly){ toast("你对该项目只有查看权限", "warn"); return Promise.resolve(null); }
   if(reqDocSaving) return reqDocSavePromise || Promise.resolve(null);
+  /* 焦点还在标题框时直接点保存：以输入框当前值为准，不依赖 blur 已提交 */
+  var titleInput = $("reqDocTitle");
+  if(titleInput && !titleInput.disabled) editingMeta.title = titleInput.value;
   var title = (editingMeta.title || "").trim();
   var reqId = editingMeta.reqId;
   if(!title){
-    toast("这份文档缺少标题，请回到列表重新创建", "warn");
+    toast("文档标题不能为空，请填写后再保存", "warn");
+    if(titleInput) titleInput.focus();
     return Promise.resolve(null);
   }
   var md = isMarkdownDoc();
@@ -8228,7 +8274,7 @@ function saveReqDoc(opts){
       clearDraftOnSave(doc.id);
       fillReqDocEditor(doc, { keepBody: isUniverDoc() || isSheetDoc() });
     }
-    if($("reqDocCrumb")) $("reqDocCrumb").textContent = reqDocProjectName(doc.reqId) + " / " + (doc.title || "未命名文档");
+    syncReqDocEditHead(doc);
     refreshReqDocPublishBtn();
     syncReqDocPageHead();
     syncRrdDocTitle();
@@ -10001,6 +10047,19 @@ function populateReqDocSelect(keep){
     });
   }
   if($("reqDocSave")) $("reqDocSave").addEventListener("click", saveReqDoc);
+  if($("reqDocTitle")){
+    var reqDocTitleInput = $("reqDocTitle");
+    reqDocTitleInput.addEventListener("blur", commitReqDocTitle);
+    reqDocTitleInput.addEventListener("keydown", function(e){
+      if(e.isComposing || e.keyCode === 229) return;
+      if(e.key === "Enter"){ e.preventDefault(); this.blur(); }
+      else if(e.key === "Escape"){
+        e.preventDefault();
+        this.value = editingMeta.title || "";
+        this.blur();
+      }
+    });
+  }
   if($("reqDocDelete")) $("reqDocDelete").addEventListener("click", deleteReqDoc);
   if($("reqDocPrint")) $("reqDocPrint").addEventListener("click", printReqDoc);
   if($("reqDocAttachUpload")) $("reqDocAttachUpload").addEventListener("click", function(){ if($("reqDocAttachFile")) $("reqDocAttachFile").click(); });

@@ -429,6 +429,8 @@ try{
       const fi = document.getElementById("reqFindInput");
       fi.value = "标题";
       fi.dispatchEvent(new Event("input", { bubbles: true }));
+      /* 全部替换读的是「替换为」输入框：上一段填过「文字」，这里显式改成「主题」 */
+      document.getElementById("reqFindRepl").value = "主题";
       document.querySelector('[data-req-find="replall"]').click();
       return { v: document.getElementById("reqDocMdCanvas").value,
         cnt: document.getElementById("reqFindCount").textContent };
