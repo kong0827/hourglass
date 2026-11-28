@@ -128,8 +128,8 @@
 
   <div class="er-head">
     <h1>沙漏 · 核心 ER 图</h1>
-    <p>105 张表中的核心 25 张 · 实线为外键关联，⊸ 为快照 / 派生关系</p>
-    <p class="er-scope">范围说明：只画协作主链路。评审人（<code>demand.reviewer_user_id</code>）、测试计划执行人（<code>test_plan.executor_user_id</code>）、发布准备的关注 / 推送 / 逐项确认五表、周五补记四表与未处理承接、自动化规则与报告订阅三表、任务创建人（<code>task.created_by_user_id</code>）、文档收藏、AI 用量日聚合、交付说明计划草稿、文档引用与发布计划分享、企业微信多企业免登（<code>wecom_*</code> 五表）、API 个人访问令牌（<code>api_token</code>）等 113–142 增量未在图中展开，字段与表结构见<a href="../管理员指南.md">管理员指南</a>与 SQL 脚本。</p>
+    <p>106 张表中的核心 25 张 · 实线为外键关联，⊸ 为快照 / 派生关系</p>
+    <p class="er-scope">范围说明：只画协作主链路。评审人（<code>demand.reviewer_user_id</code>）、测试计划执行人（<code>test_plan.executor_user_id</code>）、发布准备的关注 / 推送 / 逐项确认五表、周五补记四表与未处理承接、自动化规则与报告订阅三表、任务创建人（<code>task.created_by_user_id</code>）、文档收藏、AI 用量日聚合、交付说明计划草稿、文档引用与发布计划分享、企业微信多企业免登（<code>wecom_*</code> 五表与群机器人）、API 个人访问令牌（<code>api_token</code>）等 113–145 增量未在图中展开，字段与表结构见<a href="../管理员指南.md">管理员指南</a>与 SQL 脚本。</p>
   </div>
 
   <div class="er-grid">
@@ -351,7 +351,7 @@
     </div>
   </div>
 
-  <div class="er-foot"><b>全库 105 张表 · 每张事实表都带 workspace_id</b> —— 这是备份按空间导出/导入的物理基础；项目拆分映射另存 project_split_map，发布证据以 MySQL 备份为准</div>
+  <div class="er-foot"><b>全库 106 张表 · 每张事实表都带 workspace_id</b> —— 这是备份按空间导出/导入的物理基础；项目拆分映射另存 project_split_map，发布证据以 MySQL 备份为准</div>
 </div>
 </body>
 </html>

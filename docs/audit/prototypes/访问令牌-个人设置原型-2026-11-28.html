@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="zh-CN" data-layout="desktop">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>个人设置 · 访问令牌原型（2026-11-28）</title>
+<!-- 复用真实前端样式：令牌、基础、布局、组件与设置页 -->
+<link rel="stylesheet" href="../../../frontend/css/tokens.css" />
+<link rel="stylesheet" href="../../../frontend/css/base.css" />
+<link rel="stylesheet" href="../../../frontend/css/layout.css" />
+<link rel="stylesheet" href="../../../frontend/css/components.css" />
+<link rel="stylesheet" href="../../../frontend/css/views-projects-settings.css" />
+<link rel="stylesheet" href="../../../frontend/css/mobile.css" />
+<style>
+/* ===== 原型舞台（仅原型用） ===== */
+body{margin:0;background:var(--bg);color:var(--text);font-size:13px;}
+.proto-wrap{max-width:1080px;margin:0 auto;padding:20px 24px 60px;}
+.proto-title{font-size:16px;font-weight:650;margin:0 0 2px;}
+.proto-sub{font-size:12px;color:var(--text-3);margin:0 0 10px;}
+
+/* ===== 待落地的访问令牌样式（候选） ===== */
+.token-list{border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;}
+.token-head,.token-row{
+  display:grid;grid-template-columns:minmax(0,1.5fr) 64px 82px 108px 108px 64px;
+  align-items:center;gap:var(--space-3);padding:9px 14px;
+}
+.token-head{background:var(--surface-sunken);font-size:12px;font-weight:600;color:var(--text-2);}
+.token-row{border-top:1px solid var(--border);font-size:13px;}
+.t-name{display:flex;flex-direction:column;justify-content:center;gap:3px;min-width:0;}
+.t-name b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.t-name small{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--text-3);}
+.t-scope{font-size:12px;color:var(--text-2);white-space:nowrap;}
+.t-state{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text-2);white-space:nowrap;}
+.t-state::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--success);}
+.t-state.is-off{color:var(--text-3);}
+.t-state.is-off::before{background:var(--text-3);}
+.t-time{font-size:12px;color:var(--text-2);font-variant-numeric:tabular-nums;white-space:nowrap;}
+.t-time.is-muted{color:var(--text-3);}
+.t-act{text-align:right;}
+.t-act .btn{height:28px;padding:0 10px;font-size:12px;}
+.token-empty{padding:22px 14px;text-align:center;font-size:13px;color:var(--text-3);}
+.token-new{margin-top:16px;}
+.token-reveal{
+  margin-top:16px;padding:12px 14px;border:1px solid var(--success-border);
+  border-radius:var(--r-md);background:var(--success-soft);
+}
+.token-reveal-head{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:650;color:var(--success-fg);}
+.token-reveal-row{display:flex;align-items:center;gap:var(--space-2);margin-top:8px;}
+.token-reveal-row code{
+  flex:1 1 auto;min-width:0;overflow:auto;padding:8px 10px;border:1px solid var(--success-border);
+  border-radius:var(--r-sm);background:var(--surface);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:12px;white-space:nowrap;color:var(--text);
+}
+.token-reveal .foot-note{margin-top:8px;}
+[data-layout="mobile"] .token-head{display:none;}
+[data-layout="mobile"] .token-row{
+  grid-template-columns:minmax(0,1fr) auto;
+  grid-template-areas:"name act" "scope scope" "state state" "exp exp" "last last";
+  gap:5px var(--space-3);padding:12px 14px;
+}
+[data-layout="mobile"] .t-name{grid-area:name;}
+[data-layout="mobile"] .t-scope{grid-area:scope;}
+[data-layout="mobile"] .t-state{grid-area:state;}
+[data-layout="mobile"] .t-exp{grid-area:exp;}
+[data-layout="mobile"] .t-last{grid-area:last;}
+[data-layout="mobile"] .t-act{grid-area:act;}
+[data-layout="mobile"] .t-scope::before{content:"权限 ";color:var(--text-3);}
+[data-layout="mobile"] .token-reveal-row{flex-direction:column;align-items:stretch;}
+</style>
+</head>
+<body>
+<div class="proto-wrap">
+  <h1 class="proto-title">个人设置 · 访问令牌（原型）</h1>
+  <p class="proto-sub">1440 桌面；390 时表格改为两列卡片。数据为合成示例。</p>
+  <div class="set-layout">
+    <nav class="set-anchor" aria-label="个人设置分区">
+      <a href="#">基本信息</a>
+      <a href="#">计时设置</a>
+      <a href="#">消息通知</a>
+      <a href="#">企业微信</a>
+      <a href="#" class="on">访问令牌</a>
+      <a href="#">外观</a>
+      <a href="#">AI 设置</a>
+      <a href="#">修改密码</a>
+    </nav>
+    <div class="set-panels">
+      <div class="panel">
+        <div class="panel-head">
+          <h3>访问令牌</h3>
+          <span class="meta-right">等同你的账号凭据</span>
+        </div>
+        <p class="set-hint">供 Qoder（MCP 侧车）、脚本等外部工具以你的身份访问：只读令牌只能查询；读写令牌额外可建工作项、移动工作列、提需求与做需求流转。不能代替登录界面操作。完整令牌只在创建时显示一次；修改密码、重置密码或角色变更后，所有旧令牌立即失效。</p>
+        <div class="token-list" role="table" aria-label="访问令牌列表">
+          <div class="token-head" role="row">
+            <span>名称 / 前缀</span><span>权限</span><span>状态</span><span>到期</span><span>最近使用</span><span></span>
+          </div>
+          <div class="token-row" role="row">
+            <div class="t-name"><b>Qoder 本机</b><small>hg_7Kd2mQp9…</small></div>
+            <span class="t-scope">读写</span>
+            <span class="t-state">有效</span>
+            <span class="t-time t-exp">2027-02-26</span>
+            <span class="t-time t-last">11-28 16:42</span>
+            <div class="t-act"><button class="btn ghost" type="button">撤销</button></div>
+          </div>
+          <div class="token-row" role="row">
+            <div class="t-name"><b>CI 只读脚本</b><small>hg_Wm3xTa8c…</small></div>
+            <span class="t-scope">只读</span>
+            <span class="t-state is-off">已过期</span>
+            <span class="t-time t-exp is-muted">2026-11-01</span>
+            <span class="t-time t-last is-muted">10-28 09:03</span>
+            <div class="t-act"><button class="btn ghost" type="button">撤销</button></div>
+          </div>
+          <div class="token-row" role="row">
+            <div class="t-name"><b>旧笔记本</b><small>hg_Lp0vNb6r…</small></div>
+            <span class="t-scope">只读</span>
+            <span class="t-state is-off">已撤销</span>
+            <span class="t-time t-exp is-muted">2026-12-20</span>
+            <span class="t-time t-last is-muted">11-20 22:11</span>
+            <div class="t-act"></div>
+          </div>
+        </div>
+        <div class="token-new">
+          <div class="set-grid four">
+            <div class="field">
+              <label for="pName">名称</label>
+              <input id="pName" type="text" maxlength="64" placeholder="例如 Qoder 本机" />
+            </div>
+            <div class="field">
+              <label for="pScope">权限</label>
+              <select id="pScope">
+                <option selected>只读</option>
+                <option>读写</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="pDays">有效期</label>
+              <select id="pDays">
+                <option>30 天</option>
+                <option selected>90 天</option>
+                <option>180 天</option>
+                <option>1 年</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="pPwd">当前密码</label>
+              <input id="pPwd" type="password" maxlength="64" placeholder="校验后才会创建" />
+            </div>
+          </div>
+          <div class="set-actions">
+            <button class="btn primary" type="button">创建令牌</button>
+            <span class="foot-note">读写令牌只开放建工作项、列流转、提需求与需求流转；只读每分钟 120 次、读写 30 次请求。</span>
+          </div>
+        </div>
+        <div class="token-reveal">
+          <div class="token-reveal-head">令牌已创建，只显示这一次</div>
+          <div class="token-reveal-row">
+            <code>hg_9fQ2xLm4pR7sVb1nKd8wTa3cYe6uHj0z</code>
+            <button class="btn ghost" type="button">复制</button>
+          </div>
+          <p class="foot-note">离开本页后无法再查看；请立即保存到 Qoder 的 MCP 配置或密码管理器。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+if(location.search.indexOf("mobile=1") >= 0) document.documentElement.dataset.layout = "mobile";
+</script>
+<script>
+window.addEventListener('load', function(){
+  var w = document.documentElement.clientWidth;
+  var out = ['inner:'+w+' scroll:'+document.documentElement.scrollWidth];
+  document.querySelectorAll('*').forEach(function(el){
+    var r = el.getBoundingClientRect();
+    if(r.right > w + 1 && r.width > 0){
+      out.push((el.id||el.className||el.tagName)+' right='+Math.round(r.right)+' w='+Math.round(r.width));
+    }
+  });
+  document.body.setAttribute('data-dbg', out.slice(0,15).join(' | '));
+});
+</script>
+
+</body>
+</html>

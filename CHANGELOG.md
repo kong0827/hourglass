@@ -6,6 +6,16 @@
 >
 > 发布状态：条目只描述该次变更，不代表已上线。SW v142–v145 批次已于 2026-11-11 06:47 随 `fa8c2ec` 发布（SW v145，库 54 表）；SW v146 前端批次已于 2026-11-11 08:05 随 `0d0298f` 发布；SW v149 前端批次已于 2026-11-11 15:19 随 `60cf3b5` 发布；SW v150 前后端批次已于 2026-11-11 19:55 随 `47d5b3e` 发布，20:03 由 `3f175ba` 补发后端审计修正；SW v155 前后端批次（含 SQL 68，库 55 表）已于 2026-11-12 00:40 随 `94ef4e2` 发布；线上巡检第 1 轮修复（SW v156，jar+前端）已于 06:24 随 `6e4d7e7` 发布，第 2 轮修复（SW v157，仅前端）已于 06:51 随 `d60c6b1` 发布；SW v159 前后端批次（含 SQL 69，库 56 表）已于 2026-11-12 08:46 随 `08c317c` 发布；SW v197 前后端批次（含 SQL 70–83，库 64 表）已于 2026-11-14 09:59 随 `3014125` 发布，并重灌全量模拟数据；SW v204 前后端批次（含 SQL 84–89，库 66 表）已于 2026-11-14 15:31 随 `9086f6d` 部署（该提交仅在本地，尚未推送远端）；SW v235 前后端批次（计时明细项目跳转、文档深链修复）已于 2026-11-15 07:52 随 `52b55c9` 发布，生产库按 72 表基线重建并重灌演示数据（旧库与附件备份在 `/opt/hourglass/backup/pre-rebuild-20261115-003748.*`）；SW v242 前后端批次（文档可见范围 + 交互审计六场景，含 SQL 98–99，库 72 → 75 表）已于 2026-11-15 13:41 随 `7b9b8ce`/`9a8e478` 部署上线（部署前整库备份 `/opt/hourglass/backup/hourglass-pre-deploy-20261115T054113-*.sql.gz`），两远端 main 已同步。回读结果见本节及「线上 payload 校正」节的发布记录；SW v243 前后端批次（项目目录多级与嵌套分组、文档分类默认可见范围、选区 AI，含 SQL 100–101）已于 2026-11-15 18:52 随 `24ad84f` 部署上线，线上回读 SW v243、jar 时间 18:53，库 75 表且 100 / 101 的列均存在；SW v256 前后端批次（用例列表 IA、Excel 导入导出、投入结构正名与清单筛选，无 SQL）已于 2026-11-15 23:35 随 `e46faf2` 部署上线，两远端 main 已同步；SW v257 前后端批次（首屏加载优化、模板预置目录、文档口径同步，无 SQL）已于 2026-11-16 07:28 随 `e60d7f1` 部署上线，两远端 main 已同步；本轮前后端批次（导航 P0/P1、沙漏说、审计 P1/P2、发布准备推送预览与消息行密度，含 SQL 115–123，库 80 → 94 表）已于 2026-11-24 08:28 随 `c72e2cc` 部署上线（SW 内容哈希 `hourglass-shell-1f19fe8af8f5`），并重灌 2026-11-24 版模拟数据；「我发起的并入工作项 + 摆件让位修复」批次（含 SQL 124，库保持 94 表）已于 2026-11-24 12:56 随 `d46bdfa` 部署上线（SW 内容哈希 `hourglass-shell-24abcf91ab34`）；「行内直改扩展 / 需求类型与评审人 / 周回顾明细抽屉 / 指派邮件快照」批次（无 SQL）已于 2026-11-24 16:03 随 `66eae59` 部署上线、16:13 由 `c17869c` 补发 jar（邮件摘要缩短），SW 内容哈希 `hourglass-shell-1abb31ec88a1`；18:51 又随 `ac4fa90` 补发 jar（指派邮件去掉类型与优先级），前端随文档提交整包重传，SW 未变；「全链路可追溯文案 / 多产品接入与对外 API 设计附件 / 全局搜索最近访问」批次（含 SQL 137–139，库保持 99 表）已于 2026-11-28 17:14 随 `6f09c26` 部署上线（SW 内容哈希 `hourglass-shell-a9ed64adf166`，部署前整库备份 `/opt/hourglass/backup/hourglass-pre-deploy-20261128T091231-*.sql.gz`，回读三列均存在；该提交仅在本地，尚未推送远端）。此后如再改动工作区，以最近一条发布记录为准。
 
+## 2026-11-28 · 对外 API 写接口第一批（前后端，无 SQL）
+
+- **令牌权限**：`scope` 可选 `read` / `write`；`write` 只开放正向白名单 12 个写接口——建工作项（`POST /api/tasks`）、工作项列流转（`POST /api/tasks/{id}/move`）、提需求（`POST /api/demands`）与需求流转（`pass` / `rej` / `plan` / `replan` / `unpass` / `unplan` / `cancel` / `restore` / `reopen`）。删除、清空回收站、分类、自动化、令牌管理仍 403；白名单由 `ApiTokenWritePolicy` 单点维护，鉴权过滤器与 OpenAPI 共用。只读令牌写操作仍返回「只读令牌不能执行写操作」，白名单外返回「令牌无权执行该写操作」。
+- **限流**：读写分桶，每令牌读 120 次 / 分钟、写 30 次 / 分钟。
+- **受控 OpenAPI**：`paths-to-match` 扩到 `/api/task/*`、`/api/tasks/**`、`/api/demands/**`，customiser 只保留白名单 POST；实测 70 个路径 / 12 个 POST；POST 上的 `@CurrentWorkspace` 不会产生参数，customiser 单独补 `workspace`，外部按文档传参即可指定空间。
+- **前端**：个人设置 → 访问令牌新增「权限」选择（只读 / 读写）与列表权限列；提示文案说明读写令牌的开放范围；390 卡片行增加「权限」标签。
+- **MCP 侧车**：新增 `create_task`、`move_task`、`create_demand`、`update_demand` 四个写工具，共 18 个；排期类需求动作先读需求取 `revision` 再提交；写工具与后端白名单同源，只读令牌调用仍由后端 403。
+- **验证**：令牌相关 41 项单测（新增 6 项）与全量 1894 项后端回归通过（JDK 8）；侧车 18 项单测与 20 项真实链路 E2E 通过（含读写令牌真实建工作项并移列，验收数据删除并清空回收站）；`tools/e2e/token-page.mjs` 10 项断言通过；OpenAPI 实测 70 路径 / 12 POST 且写接口带 `workspace`；`check-docs.py` 与 `check-assets.js` 全绿。
+- 未提交、未部署；`sw.js` 未 bump（部署前需重跑 `tools/stamp-sw.js`）。
+
 ## 2026-11-28 · 发布计划向导：发布内容全选 / 下钻与统一输入组件（前端）
 
 - **全选**：发布内容表头新增全选框，支持全选 / 取消全选与半选态（indeterminate）；卡片右上「已选 N 个需求 · M 个项目」随勾选实时更新。
@@ -22,8 +32,15 @@
 - **受控 OpenAPI**：`GET /v3/api-docs` 需登录（会话或令牌），只输出白名单只读路径并裁掉非 GET，Swagger UI 关闭；修正 springdoc 把 `@CurrentWorkspace` / `@BoardFilter` 展开成必填 `ctx` / `query` 的问题。
 - **MCP 侧车**：`tools/mcp/hourglass-mcp/`（Node ≥20）把同一批只读能力封成 14 个工具，Streamable HTTP，默认 `127.0.0.1:8788/mcp`；未设 `HG_MCP_KEY` 时只接受回环来源，非回环监听且无密钥拒绝启动；nginx `/mcp` 反代与 IP 限流见 `deploy/nginx-hourglass.conf`。
 - **验证**：后端新增 35 项单测（含 OpenAPI 定制 3 项），本批提交树全量 1839 项通过（JDK 8）；侧车 15 项单测与 15 项真实链路 E2E 通过（9 个空间、82 个未完成项、191 条需求、文档正文、撤销令牌后 401）。
-- **文档**：新增《对外 API 与 MCP P0 实施设计》，接口契约「对外只读 API」、管理员指南 3.9 / 3.11、常见问题与 README 同步；`check-docs.py` 与基线校验全绿。
-- 未部署；前端令牌管理页、写接口与飞书 / 企微适配仍属后续批次。
+- **文档**：新增《对外 API 与 MCP P0 实施设计》，接口契约「对外 API」、管理员指南 3.9 / 3.11、常见问题与 README 同步；`check-docs.py` 与基线校验全绿。
+- 未部署；飞书 / 企微适配仍属后续批次。
+
+## 2026-11-28 · 个人设置「访问令牌」页（前端，含令牌上下文修复）
+
+- **页面**：个人设置新增「访问令牌」分区：列表给出名称、前缀、状态（有效 / 已过期 / 已撤销）、到期日与最近使用，可撤销；创建需名称、有效期（30 / 90 / 180 / 365 天）与当前密码，空值就地提示，密码错误提示「当前密码不正确」；完整令牌只展示一次并可复制，撤销走二次确认、记录保留。桌面为表格，390 走卡片化（到期 / 最近使用带行内标签），无横向溢出。
+- **安全修复**：`ApiTokenAuthFilter` 原先直接改写当前 `SecurityContext`，带 `JSESSIONID` 的同源 Bearer 请求会把会话里存的那份上下文一起换成 `API_TOKEN` 身份，此后令牌管理与管理员接口按令牌身份被拒（实测 403）。改为每个令牌请求新建空 `SecurityContext`，新增回归单测 `tokenRequestDoesNotMutateSessionSecurityContext`（该类 7 项）。
+- **验证**：隔离副本构建（JDK 8）+ 8082 后端 / 8083 预览代理上跑 `tools/e2e/token-page.mjs`，9 项断言全过（列表、空值校验、错误密码、创建后明文与列表前缀一致、Bearer 读取 200、重进不展示明文、撤销后 401、390 布局）；令牌相关 4 个测试类 17 项单测通过；原型与实现截图在 `docs/audit/prototypes/token-page-2026-11-28/`，`check-docs.py` 全绿。
+- 未提交、未部署；`sw.js` 未 bump（部署前需重跑 `tools/stamp-sw.js`）。
 
 ## 2026-11-28 · 版本列表显示「交付说明已确认」（前后端）
 
@@ -32,17 +49,27 @@
 - **验证**：本地库 Xkv16（已发布、四段已确认）返回 true，Xkv14（未确认）/ Xkv10（未发布）返回 false；1440 截图确认绿字只出现在已确认行；`version-detail.mjs` 全过、`check-assets.js` 全绿。
 - 未提交、未部署；`phase.js` 有改动，部署前需重跑 `tools/stamp-sw.js`（现为 v300）。
 
+## 2026-11-28 · 企业微信群机器人按企业配置（前后端，含 SQL 145）
+
+- **数据模型**：sql/145 新建 `wecom_group_robot`（105 → 106 表），按 `workspace_id + corp_id + name` 唯一；Webhook 只存 AES-GCM 密文，接口只回 `webhookMasked`；已收敛进 `sql/baseline/01_schema_full.sql`，`check_baseline_drift.py` 全绿。
+- **安全校验**：Webhook 必须与 `app.wecom.api-base-url` 同协议 / 主机 / 端口，路径固定 `/cgi-bin/webhook/send` 且 key 非空，非官方地址直接 400；企微错误原因落库与展示前截掉 `hint` / 出口 IP / 排查链接，页面再按 100 字截断。
+- **路由**：发布准备「企业微信群」渠道按收件人绑定的企业逐个找该企业的启用机器人发送，甲方群不会收到供应商的消息；该企业没有机器人时退回空间级群机器人地址；同一企业多个群全部发送，部分失败提示具体群名。停用空间企业前必须先删除其群机器人（服务层与页面提示双重拦截）。
+- **界面**：空间设置 → 通知与集成新增「企业微信群机器人」表（企业 / 群名称 / 掩码 Webhook / 状态 / 最近结果）与新增、编辑、启停、删除、测试；`GET /api/wecom/workspace` 的 `enabledCorps` 补真实 `corpId`，修掉下拉值为空导致新增报 400 的问题；停用被守卫拦截时重新拉取，勾选框回到服务端状态。
+- **验证**：`WeComGroupRobotServiceTest` 8 项、`WeComCorpServiceTest` 11 项（含「有群机器人不能删企业 / 不能停用企业」两项守卫）通过，全量 1894 项后端回归通过（JDK 8）；浏览器在真实页面走查新增、改名、启停、删除、失败原因截断与掩码显示、停用企业被拦并回显；验收数据已删除（机器人、测试企业、空间启用与绑定均为 0）。`check-docs.py`、`check-assets.js` 与 `check_baseline_drift.py`（129 个脚本）全绿。
+- 未提交、未部署；SW `CACHE_NAME` 升至 v304。
+
 ## 2026-11-28 · 企业微信多企业接入与独立通知渠道（前后端，含 SQL 142–143）
 
-- **多企业模型**：一个空间可能同时有甲方与多家供应商，各自属于不同企业微信企业。部署级 `wecom_corp` 登记每家的 CorpID、AgentId、Secret 密文与回调根地址，`wecom_corp_space` 决定本空间启用哪些企业，`wecom_user_bind` 做显式身份绑定，`wecom_oauth_state` 落一次性 state，`wecom_msg_log` 记录消息发送。Secret 只存 AES-GCM 密文，接口只回显 `hasSecret`；不引入 Redis，state 与消息队列都在 MySQL。
+- **多企业模型**：一个空间里可能同时有甲方和多家供应商，各方有各自的企业微信企业与自建应用。部署级 `wecom_corp` 登记每家的 CorpID、AgentId、Secret 密文与回调根地址，`wecom_corp_space` 决定本空间启用哪些企业，`wecom_user_bind` 做显式身份绑定，`wecom_oauth_state` 落一次性 state，`wecom_msg_log` 记录消息发送。Secret 只存 AES-GCM 密文，接口只回显 `hasSecret`；不引入 Redis，state 与消息队列都在 MySQL。
 - **免登**：公开入口 `GET /wecom/entry` 按企业跳转 `snsapi_base` 授权，回调原子消费 state 后走与密码登录相同的容器会话；未绑定用户回登录页提示先密码登录再绑定，已有绑定时在个人设置发起绑定，也可由平台管理员代绑。
 - **推送**：指派、测试指派、发布准备三类事件按接收人绑定的企业分组入队，定时任务用对应企业的 token 发送，失败退避重试、无效成员标为部分失败，可在空间设置按企业重发。
 - **独立通知渠道**：sql/143 给 `user_notification_preference` 加可空 `wecom_enabled`，企微不再由「站内或邮件已送达」隐式触发，改为与两者并列的逐人逐事件开关；只覆盖上述三类事件（缺省开，NULL 视为开，升级后行为不变），其余事件设置页该列显示「—」。设置页消息通知改为「事件 / 站内 / 邮件 / 企业微信」四列，桌面 104px×3、手机 56px×3，390 无横向溢出。
-- **管理界面**：平台管理员可登记、启停、删除企业（有绑定只允许停用）、重置入口短键、代绑定与连通性测试；企业表新增「回调地址」与「入口链接」两列，入口链接可直接复制到企微应用主页或工作台菜单，重置短键后提示旧链接失效；空间主启用企业与重发消息；个人设置展示绑定状态与解绑。
+- **管理界面**：平台管理员可登记、启停、删除企业（有绑定只允许停用）、重置入口短键、按企业查看 / 添加 / 解绑成员与连通性测试；企业表新增「回调地址」「入口链接」与「成员数」，入口链接可直接复制到企微应用主页或工作台菜单，重置短键后提示旧链接失效；空间主启用企业与重发消息；个人设置展示绑定状态与解绑。
 - **投递细节**：无效成员（部分失败）重试到 `WECOM_SEND_MAX_ATTEMPTS` 即停止，不再无限占用队列；`deploy/nginx-hourglass.conf` 新增 `/hourglass/wecom/` 反代与 30r/m 限流，修掉生产只代理 `/hourglass/api/` 时免登入口与回调 404 的缺口。
-- **数据库**：sql/142 新建 5 张表（100 → 105 表），sql/143 只增可空列（表数不变），均已收敛进 `sql/baseline/01_schema_full.sql`；`check_baseline_drift.py` 127 个脚本全绿。
-- **验证**：`NotificationEventServiceTest` 14 项、`UserNotificationPreferenceServiceTest` 3 项、`WeComCorpServiceTest` 9 项、`WeComNotifyServiceTest` 3 项（入队 URL、三类事件边界、部分失败重试上限）全过（JDK 8）；浏览器走查创建/启用/删除企业、一次性 state、绑定与 push 入队，并逐页核对偏好保存后 `GET /api/auth/notification-preferences` 回读；`check-docs.py`、`check-assets.js` 全绿（顺带把 `js/lib/wecom.js` 补进 SW SHELL，修掉离线白屏缺口）。
-- 未提交、未部署，SW `CACHE_NAME` 升至 v300。
+- **手动推送按人企微**：发布准备「立即推送」在站内 / 邮件 / 企业微信群之外新增「企业微信（按人）」渠道，按收件人绑定企业分别入队，受个人该事件企微开关与空间启用范围约束；只有真的入队才标记已发，推送记录显示「企微入队 N 人」与逐人状态（sql/144 `wecom_at`）。
+- **数据库**：sql/142 新建 5 张表（100 → 105 表），sql/143 与 sql/144 只增可空列（表数不变），均已收敛进 `sql/baseline/01_schema_full.sql`；`check_baseline_drift.py` 128 个脚本全绿。
+- **验证**：`NotificationEventServiceTest` 14 项、`UserNotificationPreferenceServiceTest` 4 项、`WeComCorpServiceTest` 9 项、`WeComNotifyServiceTest` 4 项（入队 URL、三类事件边界、部分失败重试上限、按企业启用范围计数）全过（JDK 8）；浏览器走查创建/启用/删除企业、按企业查看与添加成员、一次性 state、绑定与 push 入队，并逐页核对偏好保存后 `GET /api/auth/notification-preferences` 回读；`check-docs.py`、`check-assets.js` 全绿（顺带把 `js/lib/wecom.js` 补进 SW SHELL，修掉离线白屏缺口）。
+- 未提交、未部署，SW `CACHE_NAME` 升至 v302。
 
 ## 2026-11-28 · 测试报告 KPI 卡下钻（纯前端）
 

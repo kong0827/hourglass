@@ -1,8 +1,8 @@
 -- ============================================================================
 -- sql/baseline/01_schema_full.sql · 沙漏 Hourglass 完整基线 DDL（MySQL 8，utf8mb4）
--- Updated 2026-11-28: full schema after migrations 01-143 (105 tables；107/108/130 为数据回填、110/116/117/118/122/124/126/127/128/129/132/137/138/139/140/143 为列变更，均不改表数；123 新增周五补记承接表、131 新增文档收藏表、133 新增 AI 用量日聚合表、134 新增交付说明计划草稿表并扩展快照范围列、135 新增文档引用表、136 新增发布计划分享表、141 新增 API 个人访问令牌表、142 新增企业微信多企业免登与消息 5 张表；138 发布计划名称列、139 用例集示例包标记列、140 需求业务提出日期列）。
+-- Updated 2026-11-28: full schema after migrations 01-145 (106 tables；107/108/130 为数据回填、110/116/117/118/122/124/126/127/128/129/132/137/138/139/140/143/144 为列变更，均不改表数；123 新增周五补记承接表、131 新增文档收藏表、133 新增 AI 用量日聚合表、134 新增交付说明计划草稿表并扩展快照范围列、135 新增文档引用表、136 新增发布计划分享表、141 新增 API 个人访问令牌表、142 新增企业微信多企业免登与消息 5 张表、145 新增企业微信群机器人表；138 发布计划名称列、139 用例集示例包标记列、140 需求业务提出日期列、143 通知企微开关列、144 发布准备按人企微入队时间列）。
 --
--- 完整结构与 sql/01-70、71-89 增量链等效（含 64 测试流程、65 计划-版本关联、66 新成员默认不参与、68 成员公司与项目角色标注、69 成员职能与标签选项、70 项目手动排序、71 富文本描述、74 用例编号、76 需求人工交付判定、77 测试负责人、78 版本终态、79 承诺基线、80 项目里程碑、81 交付说明、82 工作项编号、83 发布条目编号、84 需求编号、85 发布计划编号、86 快照需求编号、87 编号序列、88 用例-工作项追溯、89 发布测试检查策略、93 模块目录层级与用例集、94 文档分类树与空间级文档、95 团队共享 AI 配置、96 动态分组与指定成员可见、97 子任务排序、98 项目多仓库 Git 只读同步、99 文档可见范围、100 用例目录合并与嵌套分组、101 文档分类默认可见范围、102 工作项历史发布人工标记、103 需求池评论、104 需求关注人、105 需求已完成主状态、106 项目集与项目拆分、109 工作项终态已取消、110 评论正文放宽 2000 字、113 需求评审人、114 测试计划执行人、115 发布准备与计划关注、116 推送补充说明、117 企业微信群发送结果、118 保存视图参数放宽、119 交付说明分享补强、120 周五补记、121 轻量自动化与定时报告、123 周五补记未处理项承接、124 工作项创建人、125 文档表格格式、126 发布制品摘要选填、127 发布维护权限范围、128 文档回收站与分享复制开关、129 人工标记发布的空间可配置、130 已有列偏好补入发布态列、131 文档收藏、132 用例执行逐步结果、133 AI 用量日聚合、134 交付说明按发布计划生成、135 文档引用与反链、136 发布计划只读分享、137 本轮提测时间、140 需求业务提出日期、141 API 个人访问令牌）；不包含历史业务数据回填。
+-- 完整结构与 sql/01-70、71-89 增量链等效（含 64 测试流程、65 计划-版本关联、66 新成员默认不参与、68 成员公司与项目角色标注、69 成员职能与标签选项、70 项目手动排序、71 富文本描述、74 用例编号、76 需求人工交付判定、77 测试负责人、78 版本终态、79 承诺基线、80 项目里程碑、81 交付说明、82 工作项编号、83 发布条目编号、84 需求编号、85 发布计划编号、86 快照需求编号、87 编号序列、88 用例-工作项追溯、89 发布测试检查策略、93 模块目录层级与用例集、94 文档分类树与空间级文档、95 团队共享 AI 配置、96 动态分组与指定成员可见、97 子任务排序、98 项目多仓库 Git 只读同步、99 文档可见范围、100 用例目录合并与嵌套分组、101 文档分类默认可见范围、102 工作项历史发布人工标记、103 需求池评论、104 需求关注人、105 需求已完成主状态、106 项目集与项目拆分、109 工作项终态已取消、110 评论正文放宽 2000 字、113 需求评审人、114 测试计划执行人、115 发布准备与计划关注、116 推送补充说明、117 企业微信群发送结果、118 保存视图参数放宽、119 交付说明分享补强、120 周五补记、121 轻量自动化与定时报告、123 周五补记未处理项承接、124 工作项创建人、125 文档表格格式、126 发布制品摘要选填、127 发布维护权限范围、128 文档回收站与分享复制开关、129 人工标记发布的空间可配置、130 已有列偏好补入发布态列、131 文档收藏、132 用例执行逐步结果、133 AI 用量日聚合、134 交付说明按发布计划生成、135 文档引用与反链、136 发布计划只读分享、137 本轮提测时间、140 需求业务提出日期、141 API 个人访问令牌、142 企业微信多企业免登与消息五表、145 企业微信群机器人）；不包含历史业务数据回填。
 -- 全新部署执行本文件即可，无需再跑 sql/ 目录；已有库的日常升级仍使用 sql/ 增量脚本。
 -- 可重复执行（DROP TABLE IF EXISTS + CREATE TABLE）。
 -- ⚠ 本文件含 USE hourglass 与 DROP TABLE，只适用于目标库就是 hourglass 的全新部署。
@@ -1631,6 +1631,7 @@ CREATE TABLE `version_release_plan_push_recipient` (
   `user_id` varchar(32) NOT NULL,
   `in_app_at` datetime DEFAULT NULL,
   `email_at` datetime DEFAULT NULL,
+  `wecom_at` datetime DEFAULT NULL COMMENT '按人企业微信入队时间；NULL 表示本批未走企微',
   `acked_at` datetime DEFAULT NULL COMMENT '回执时间；回执只表示收到本次提醒',
   PRIMARY KEY (`push_id`, `user_id`),
   KEY `idx_rppr_user` (`workspace_id`, `user_id`, `acked_at`),
@@ -2081,6 +2082,26 @@ CREATE TABLE `wecom_msg_log` (
   KEY `idx_wecom_msg_corp_created` (`corp_id`,`created_at`),
   KEY `idx_wecom_msg_status_retry` (`status`,`next_retry_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='企业微信应用消息发送日志';;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `wecom_group_robot`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `wecom_group_robot` (
+  `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '群机器人配置ID',
+  `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '空间ID',
+  `corp_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '所属企业 CorpID（本空间已启用）',
+  `name` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '群名称，便于区分',
+  `webhook_cipher` varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '群机器人 Webhook 密文（AES-GCM，v1: 前缀）',
+  `status` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active' COMMENT 'active/disabled',
+  `last_sent_at` datetime DEFAULT NULL COMMENT '最近一次发送时间',
+  `last_result` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '最近一次发送结果摘要',
+  `created_by` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '创建人',
+  `created_at` datetime NOT NULL,
+  `updated_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_wecom_group_robot_name` (`workspace_id`,`corp_id`,`name`),
+  KEY `idx_wecom_group_robot_ws` (`workspace_id`,`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='空间按企业配置的企业微信群机器人';
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
