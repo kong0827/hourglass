@@ -1495,6 +1495,7 @@ function openBranchDrawer(id){
     var taskOn = $("taskDrawer") && $("taskDrawer").classList.contains("on");
     if(d) d.style.zIndex = taskOn ? String(UI.topOverlayZ() + 1) : "";
     if(d) d.classList.add("on");
+    if(d) UI.syncDrawerFull(d);
     loadBranchLogs(b.id);
     loadBranchTasks(b.id);
   }).catch(function(ex){ toast(ex.message || "分支加载失败", "bad"); });

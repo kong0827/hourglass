@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>抽屉放大全屏 · 原型</title>
+<style>
+  :root{
+    --bg:#F2F4F7; --surface:#fff; --line:#E4E7EC; --text:#101828; --text-2:#475467; --text-3:#667085;
+    --primary:#2563EB; --primary-soft:#EFF4FF; --primary-fg:#1D4ED8;
+    --success-soft:#ECFDF3; --success-fg:#067647;
+    --warning-soft:#FFFAEB; --warning-fg:#B54708;
+    --scrim:rgba(16,24,40,.32);
+    --shadow-xl:0 24px 48px -12px rgba(16,24,40,.18);
+    --app-foot-h:26px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;}
+  body{background:var(--bg);}
+  /* 模拟应用底：侧栏 + 内容区，证明全屏抽屉盖到哪里 */
+  .app{position:fixed;inset:0;display:flex;}
+  .side{width:216px;flex:none;background:#1A222D;color:#98A2B3;padding:18px 14px;font-size:13px;}
+  .side b{display:block;color:#fff;font-size:15px;margin-bottom:22px;}
+  .side .mi{padding:8px 10px;border-radius:8px;margin-bottom:4px;font-size:13px;}
+  .side .mi.on{background:rgba(255,255,255,.08);color:#fff;}
+  .main{flex:1 1 auto;padding:26px 32px;min-width:0;}
+  .main h1{font-size:18px;color:var(--text);margin-bottom:6px;}
+  .main p{font-size:13px;color:var(--text-3);margin-bottom:22px;}
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;max-width:860px;}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;font-size:12.5px;color:var(--text-2);}
+  .card b{display:block;font-size:13px;color:var(--text);margin-bottom:8px;}
+  .scrim{position:fixed;inset:0;background:var(--scrim);}
+  .footbar{position:fixed;left:0;right:0;bottom:0;height:var(--app-foot-h);background:#1A222D;z-index:5;display:flex;align-items:center;padding:0 14px;color:#667085;font-size:11px;gap:12px;}
+
+  /* ---- 抽屉本体：复刻 components.css 结构 ---- */
+  .drawer{
+    position:fixed;top:0;right:0;bottom:var(--app-foot-h);
+    width:1080px;max-width:100vw;background:var(--surface);
+    border-left:1px solid var(--line);box-shadow:var(--shadow-xl);
+    display:flex;flex-direction:column;
+    transition:width var(--dur-slow,240ms) cubic-bezier(.4,0,.2,1);
+  }
+  /* 新增：放大态。宽度过渡动画，左边线保留作分隔 */
+  .drawer.on-full{width:100vw;}
+  .drawer-head{
+    flex:0 0 auto;height:56px;display:flex;align-items:center;gap:12px;
+    padding:0 16px 0 24px;border-bottom:1px solid var(--line);
+  }
+  .drawer-head h2{font-size:16px;font-weight:650;flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .icon-btn{
+    flex:0 0 auto;width:32px;height:32px;border-radius:8px;border:1px solid transparent;
+    background:transparent;color:var(--text-3);cursor:pointer;
+    display:inline-flex;align-items:center;justify-content:center;
+  }
+  .icon-btn:hover{background:var(--bg);color:var(--text-2);}
+  /* 原型高亮：标出新增按钮 */
+  .icon-btn.new{outline:2px solid var(--primary);outline-offset:1px;color:var(--primary-fg);}
+  .status-pill{font-size:11px;border-radius:99px;padding:2px 9px;background:var(--primary-soft);color:var(--primary-fg);font-weight:600;flex:0 0 auto;}
+  .drawer-body{flex:1 1 auto;min-height:0;overflow-y:auto;padding:20px 24px 32px;}
+  .cols{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:28px;height:100%;}
+  .sect{border-top:1px solid var(--line);padding-top:14px;margin-top:18px;font-size:12.5px;color:var(--text-2);line-height:1.7;}
+  .sect:first-child{border-top:none;margin-top:0;padding-top:0;}
+  .sect h3{font-size:14px;font-weight:650;color:var(--text);margin-bottom:10px;}
+  .chip{display:inline-block;font-size:11px;border-radius:6px;padding:2px 8px;background:var(--success-soft);color:var(--success-fg);margin:0 6px 6px 0;}
+  .chip.w{background:var(--warning-soft);color:var(--warning-fg);}
+  .meta{font-size:12px;color:var(--text-3);line-height:2;}
+  .cmt{background:var(--bg);border-radius:10px;padding:10px 12px;font-size:12.5px;color:var(--text-2);margin-bottom:10px;}
+  .cmt b{color:var(--text);font-size:12.5px;}
+  .cmt span{display:block;font-size:11px;color:var(--text-3);margin-top:4px;}
+  .drawer-foot{flex:0 0 auto;height:64px;display:flex;align-items:center;gap:10px;padding:0 24px;border-top:1px solid var(--line);}
+  .drawer-foot .hint{margin-right:auto;font-size:12px;color:var(--text-3);}
+  .btn{height:34px;padding:0 14px;border-radius:8px;border:1px solid var(--line);background:#fff;font-size:13px;color:var(--text-2);cursor:pointer;}
+  .btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="side"><b>⌛ 沙漏</b><div class="mi">我的工作</div><div class="mi">需求池</div><div class="mi">项目</div><div class="mi">版本</div><div class="mi">工作项</div><div class="mi on">测试 · 用例</div></div>
+  <div class="main">
+    <h1>工作项</h1>
+    <p>全部 1,214 · 进行中 386 · 本周新增 42</p>
+    <div class="cards"><div class="card"><b>登录链路回归</b>测试 · P1 · 孔祥金</div><div class="card"><b>导出报表超时</b>缺陷 · P0 · 周金松</div><div class="card"><b>文档收藏同步</b>需求 · P2 · admin</div></div>
+  </div>
+</div>
+<div class="scrim"></div>
+<div class="footbar">沙漏 · 运营研发中心<span style="margin-left:auto">SW v295</span></div>
+
+<div class="drawer" id="dw">
+  <div class="drawer-head">
+    <span class="status-pill">进行中</span>
+    <h2>登录链路回归：失败步骤与修复验证</h2>
+    <!-- 新增：放大/还原按钮，位置在关闭 × 左侧 -->
+    <button class="icon-btn new" id="btnFull" type="button" aria-label="放大为全屏">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <path class="ic-expand" d="M6 2H2v4M10 2h4v4M6 14H2v-4M10 14h4v-4"/>
+      </svg>
+    </button>
+    <button class="icon-btn" type="button" aria-label="关闭">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body">
+    <div class="cols">
+      <div>
+        <div class="sect"><h3>描述</h3>登录页改版后全链路回归：覆盖密码错误提示、正确登录跳转、会话保持与退出四个场景。需要在 Chrome / Safari 双浏览器各跑一轮，失败步骤直接关联缺陷单。</div>
+        <div class="sect"><h3>评论 <span style="color:var(--text-3);font-weight:400">3</span></h3>
+          <div class="cmt"><b>周金松</b> · 昨天 18:22：第 2 步提示文案已按视觉稿更新，可以回归。<span>附件：提示文案-新.png</span></div>
+          <div class="cmt"><b>孔祥金</b> · 今天 09:41：收到，上午跑一轮并把步骤结果记到用例上。</div>
+        </div>
+      </div>
+      <div>
+        <div class="sect"><h3>属性</h3>
+          <div class="meta">负责人：孔祥金<br>项目：消息中心<br>优先级：P1<br>迭代：V2.3 第三轮<br>工时：预估 8h / 实际 5.5h</div>
+        </div>
+        <div class="sect"><h3>标签</h3><span class="chip">回归</span><span class="chip w">阻塞中</span><span class="chip">登录模块</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="drawer-foot">
+    <span class="hint">负责人可在状态胶囊流转 · 改动自动保存草稿</span>
+    <button class="btn" type="button">取消</button>
+    <button class="btn primary" type="button">保存</button>
+  </div>
+</div>
+
+<script>
+  /* 原型交互：#full 打开即为放大态；按钮图标随状态切换（实施时同逻辑） */
+  const dw = document.getElementById('dw');
+  const btn = document.getElementById('btnFull');
+  function apply(full){
+    dw.classList.toggle('on-full', full);
+    btn.classList.remove('new');
+    btn.setAttribute('aria-label', full ? '还原宽度' : '放大为全屏');
+    btn.title = full ? '还原宽度' : '放大为全屏';
+    btn.querySelector('svg').innerHTML = full
+      ? '<path d="M2 6h4V2M14 6h-4V2M2 10h4v4M14 10h-4v4"/>'
+      : '<path d="M6 2H2v4M10 2h4v4M6 14H2v-4M10 14h4v-4"/>';
+  }
+  if(location.hash === '#full') apply(true);
+  btn.addEventListener('click', () => apply(!dw.classList.contains('on-full')));
+</script>
+</body>
+</html>

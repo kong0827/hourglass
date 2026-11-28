@@ -326,6 +326,8 @@ body.mob-sheet-open{overflow:hidden;}
   transform:translateY(24px);
 }
 [data-layout="mobile"] .drawer#taskForm{width:100%;}
+/* 移动端抽屉已全宽，放大按钮没有意义 */
+[data-layout="mobile"] .drawer-full-btn{display:none;}
 [data-layout="mobile"] .drawer-layer.on .drawer{transform:none;}
 [data-layout="mobile"] .drawer.is-create{
   top:auto;height:78vh;border-radius:24px 24px 0 0;

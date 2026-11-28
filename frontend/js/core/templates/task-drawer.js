@@ -62,6 +62,10 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
             </button>
           </div>
         </div>
+        <button class="icon-btn drawer-full-btn" type="button" data-drawer-full="task" aria-pressed="false" aria-label="放大为全屏" title="放大为全屏">
+          <svg class="ic-expand" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
+          <svg class="ic-contract" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.4H3.4V9"/><path d="M3.4 3.4 9 9"/><path d="M11 16.6h5.6V11"/><path d="M16.6 16.6 11 11"/></svg>
+        </button>
         <button class="icon-btn" type="button" id="btnCloseTask" aria-label="关闭">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
         </button>

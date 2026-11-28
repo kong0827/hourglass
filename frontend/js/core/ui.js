@@ -136,6 +136,40 @@ import { icon } from "./icons.js";
     }
     return focusables(m)[0];
   }
+  /* 抽屉放大全屏：头部 [data-drawer-full] 按钮统一接线，每类抽屉的本机偏好独立记忆。
+     目标默认取按钮最近的 .drawer/.sheet，也可用 data-drawer-target 指定。 */
+  var DRAWER_FULL_NS = "hg.drawerFull.v1.";
+  function drawerFullTarget(btn){
+    var sel = btn.getAttribute("data-drawer-target");
+    return sel ? document.querySelector(sel) : btn.closest(".drawer, .sheet");
+  }
+  function syncDrawerFullBtn(btn){
+    var t = drawerFullTarget(btn);
+    if(!t) return;
+    var on = false;
+    try{ on = localStorage.getItem(DRAWER_FULL_NS + btn.getAttribute("data-drawer-full")) === "1"; }catch(e){}
+    t.classList.toggle("on-full", on);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+    btn.setAttribute("aria-label", on ? "还原宽度" : "放大为全屏");
+    btn.title = on ? "还原宽度" : "放大为全屏";
+  }
+  /* 打开抽屉/弹窗时按本机偏好还原宽度；root 传抽屉层或弹窗层 */
+  function syncDrawerFull(root){
+    var scope = root && root.querySelectorAll ? root : document;
+    var btns = scope.querySelectorAll ? scope.querySelectorAll("[data-drawer-full]") : [];
+    for (var i = 0; i < btns.length; i++) syncDrawerFullBtn(btns[i]);
+  }
+  document.addEventListener("click", function(e){
+    var btn = e.target.closest("[data-drawer-full]");
+    if(!btn) return;
+    var t = drawerFullTarget(btn);
+    if(!t) return;
+    var on = !t.classList.contains("on-full");
+    t.classList.toggle("on-full", on);
+    try{ localStorage.setItem(DRAWER_FULL_NS + btn.getAttribute("data-drawer-full"), on ? "1" : "0"); }catch(err){}
+    /* 同一抽屉的多个头部按钮（阅读态/编辑态）一起刷 */
+    syncDrawerFull(document);
+  });
   function openModal(m, focusSel) {
     if (!m) return;
     /* 静态弹窗写在某个 .view 里时只在该视图激活时可见。从别的视图打开（版本详情 → 编辑版本、
@@ -152,6 +186,7 @@ import { icon } from "./icons.js";
     m.__prevFocus = lastFocus;
     m.style.zIndex = String(topOverlayZ() + 1);
     m.classList.add("open");
+    syncDrawerFull(m);
     /* 打开位置固定在顶部：上一次滚到哪里都不能带进来 */
     m.scrollTop = 0;
     var body = m.querySelector(".sheet-body");
@@ -686,6 +721,7 @@ import { icon } from "./icons.js";
     skeletonRows: skeletonRows,
     syncBusy: syncBusy,
     chunkBusy: chunkBusy,
+    syncDrawerFull: syncDrawerFull,
     markFiltered: markFiltered,
     copyText: copyText
 };

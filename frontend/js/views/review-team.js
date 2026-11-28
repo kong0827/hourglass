@@ -288,6 +288,7 @@ function openDetailDrawer(key, trigger) {
   renderDetailBody();
   syncDetailAria();
   drawer.classList.add("on");
+  UI.syncDrawerFull(drawer);
   var close = $("rvDetailClose");
   if (close) setTimeout(function () { try { close.focus({ preventScroll: true }); } catch (e) { /* noop */ } }, 40);
   if (detailLoading) fetchDetail();
