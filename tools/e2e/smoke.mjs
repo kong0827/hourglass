@@ -264,13 +264,13 @@ async function main(){
     await waitFor(`document.body.dataset.view === "portfolio"`, "项目列表");
     await waitFor(`(() => { const row = document.querySelector('[data-open-project="${created.id}"]'); if(row) row.click(); return !!row; })()`, "临时项目行");
     await waitFor(`document.body.dataset.view === "project"`, "项目驾驶舱");
-    await waitFor(`document.querySelectorAll(".project-delivery-card").length === 3`, "交付卡片");
+    await waitFor(`document.querySelectorAll(".project-delivery-card").length === 4`, "交付卡片");
     await waitFor(`[...document.querySelectorAll(".project-delivery-card b")].every(b => b.textContent !== "—")`, "交付卡片数据", 15000);
     const cards = await evaluate(`[...document.querySelectorAll(".project-delivery-card")].map(b => b.textContent.replace(/\\s+/g, " ").trim())`);
-    assert(cards.length === 3, "交付卡片应为 3 张");
+    assert(cards.length === 4, "交付卡片应为 4 张");
     pass("驾驶舱交付卡片：" + cards.join(" / "));
 
-    for(const [kind, expected] of [["docs", "requirements"], ["tests", "testcases"], ["versions", "phase"]]){
+    for(const [kind, expected] of [["docs", "requirements"], ["tests", "testcases"], ["versions", "phase"], ["branches", "branches"]]){
       const view = await evaluate("document.body.dataset.view");
       if(view !== "project"){
         await evaluate("location.hash = '#/portfolio'");
@@ -289,8 +289,7 @@ async function main(){
     await waitFor(`!!document.querySelector("#alertPanel [data-ap-all]")`, "通知面板出口");
     await evaluate(`document.querySelector("#alertPanel [data-ap-all]").click()`);
     await waitFor(`document.body.dataset.view === "messages"`, "消息页");
-    const footerGone = await evaluate(`!document.querySelector("#alertPanel [data-ap-all]")`);
-    assert(footerGone, "消息页不应再显示「查看全部消息」");
+    await waitFor(`!document.querySelector("#alertPanel [data-ap-all]")`, "消息页关闭通知面板", 5000);
     pass("通知中心 → 消息页");
 
     /* 5. 导航使用记录：只写本机 localStorage，设置页提供导出入口 */
