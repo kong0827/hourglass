@@ -188,8 +188,8 @@ try{
       sticky:cs.position, border:cs.borderBottomWidth, chip:!!chip,
       token:getComputedStyle(document.documentElement).getPropertyValue("--primary").trim() };
   })()`);
-  ok(cssOk.loaded === 9 && cssOk.sticky === "sticky" && cssOk.border === "1px" && !!cssOk.token,
-    "真实 CSS 生效：9 份样式表、页头 sticky、设计令牌 --primary=" + cssOk.token);
+  ok(cssOk.loaded === 15 && cssOk.sticky === "sticky" && cssOk.border === "1px" && !!cssOk.token,
+    "真实 CSS 生效：15 份样式表（views.css 已拆为 7 份）、页头 sticky、设计令牌 --primary=" + cssOk.token);
   await overflow("桌面 1440 概览");
   const hues = await ev(`(() => {
     const track = getComputedStyle(document.querySelector(".vd-dist-bar")).backgroundColor;

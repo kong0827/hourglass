@@ -207,6 +207,14 @@ async function main(){
     await waitFor(`location.pathname.indexOf("/login") === -1 && document.body && document.body.dataset.view`, "登录完成", 25000);
     await waitFor(`import("./js/core/state.js").then(({rt}) => !!rt.currentUser && !!rt.currentWs && rt.reqsLoaded)`, "应用初始化", 25000);
     pass("登录 " + USER);
+    /* 演示库按空间隔离：走查要选内容最全的共享空间，否则会落到只有 1 个空版本的空间 */
+    const WS = process.env.E2E_WS || "";
+    if(WS){
+      await evaluate(`import("./js/core/api.js").then(({API}) => API.post("/api/workspaces/${WS}/select", {})).then(() => true)`);
+      await navigate(BASE + "/index.html");
+      await waitFor(`import("./js/core/state.js").then(({rt}) => !!rt.currentWs && rt.currentWs.id === ${JSON.stringify(WS)} && rt.reqsLoaded)`, "切换空间 " + WS, 25000);
+      pass("切换到空间 " + WS);
+    }
 
     /* 2. 挑一个内容最全的版本作为主用例，另挑一个已发布版本验证交付事实 */
     const pick = await evaluate(`(async () => {
@@ -503,7 +511,10 @@ async function main(){
     }
     assert(toneProbe.stray === 0, "仍有指标数字用裸 vd-warn / vd-bad 类：" + toneProbe.stray);
     pass("偏差指标三档色调只改颜色，盒模型与无色调数字一致（未继承错误横幅的边框 / 底色 / 小字号）");
-    assert(head.panels.length >= 7, "概览面板不足：" + head.panels.join(","));
+    /* 工时与构成深页固定 6 块；「版本生命周期」只在可写且未结束时出现（已发布 / 关闭 / 只读查看者没有） */
+    const CORE_PANELS = ["工时", "范围进度", "承诺基线", "里程碑", "分支进度", "实际交付事实"];
+    const missingPanels = CORE_PANELS.filter(t => head.panels.indexOf(t) === -1);
+    assert(!missingPanels.length, "工时与构成缺少面板：" + missingPanels.join(",") + "（实际：" + head.panels.join(",") + "）");
     await layout("桌面概览");
     await shot("02-详情概览");
     const progress = await evaluate(`(() => {
@@ -1440,17 +1451,24 @@ async function main(){
         const b = document.querySelector("#versionBody [data-vd-desc-toggle]");
         return !!p && !!b && !b.hidden;
       })()`, "长说明展开入口", 25000);
-      const descBefore = await evaluate(`(() => {
-        const p = document.querySelector("#versionBody [data-vd-desc]");
-        return { h: p.getBoundingClientRect().height, clamp: getComputedStyle(p).webkitLineClamp };
-      })()`);
-      await evaluate(`document.querySelector("#versionBody [data-vd-desc-toggle]").click()`);
-      await sleep(150);
-      const descAfter = await evaluate(`(() => {
-        const p = document.querySelector("#versionBody [data-vd-desc]");
-        const b = document.querySelector("#versionBody [data-vd-desc-toggle]");
-        return { open: p.classList.contains("open"), text: b.textContent.trim(), h: p.getBoundingClientRect().height };
-      })()`);
+      /* 首帧之后，发布计划 / 记录 / 检查等侧栏数据陆续到达会整页重画，
+         点在一次旧节点上的展开会随重画一起丢掉；等到侧栏安静再点，仍被冲掉就重试。 */
+      let descBefore = null, descAfter = null;
+      for(let i = 0; i < 5; i++){
+        await sleep(i === 0 ? 600 : 300);
+        descBefore = await evaluate(`(() => {
+          const p = document.querySelector("#versionBody [data-vd-desc]");
+          return { h: p.getBoundingClientRect().height, clamp: getComputedStyle(p).webkitLineClamp };
+        })()`);
+        await evaluate(`document.querySelector("#versionBody [data-vd-desc-toggle]").click()`);
+        await sleep(160);
+        descAfter = await evaluate(`(() => {
+          const p = document.querySelector("#versionBody [data-vd-desc]");
+          const b = document.querySelector("#versionBody [data-vd-desc-toggle]");
+          return { open: p.classList.contains("open"), text: b.textContent.trim(), h: p.getBoundingClientRect().height };
+        })()`);
+        if(descAfter.open) break;
+      }
       assert(descBefore.clamp === "2", "长说明默认不是两行折叠：" + descBefore.clamp);
       assert(descAfter.open && descAfter.text === "收起说明" && descAfter.h > descBefore.h + 2,
         "长说明展开失败：" + JSON.stringify({ descBefore, descAfter }));
