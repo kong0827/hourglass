@@ -2,7 +2,7 @@
 
 **English** | [简体中文](README.md)
 
-> A self-hosted lightweight project management tool for small and medium R&D teams: low-cost onboarding, work as record, progress visible automatically.
+> A self-hosted lightweight project management tool for small and medium R&D teams: low-cost onboarding, work as record, progress visible automatically, and full traceability from requirement to release.
 
 **In one sentence**: Hourglass packs the entire R&D collaboration pipeline into a system you can deploy yourself:
 

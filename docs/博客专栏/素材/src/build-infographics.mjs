@@ -218,7 +218,7 @@ pages['07-four-questions'] = page({
     ${card('03', '实际发布什么？', '按人工确认的发布记录核对环境、范围与逐项处置；系统不执行部署、不独立验证 SHA。', '发布记录 · 人工确认')}
     ${card('04', '投入怎么算？', '自动计时按工作日、个人时段和日额度；默认 9–18 / 8h 可配。补记单条 1min–24h，不裁剪。', '工时明细 · 可校正')}
   </div>
-  <div class="bottom"><b>「交付账本」只是关联记录的比喻。</b>工时不是财务结算，发布不是客户签认；按对象核对明细，不承诺所有指标均可下钻。</div>`,
+  <div class="bottom"><b>关联记录用于解释投入与交付，不是财务账本。</b>工时不是财务结算，发布不是客户签认；按对象核对明细，不承诺所有指标均可下钻。</div>`,
   foot: '沙漏博客专栏 · 第 6 篇'
 });
 
@@ -275,14 +275,14 @@ pages['13-burden'] = page({
     ${card('02', '维护责任', '权限、升级、安全、审计保留与恢复演练需要负责人和交接机制。自托管不等于免维护。', '有人负责 · 可恢复')}
     ${card('03', '记录责任', '投入要核对，发布要人工确认。发布记录不执行部署、不独立验证 SHA，也不提供客户签认。', '记录边界 · 人工确认')}
   </div>
-  <div class="bottom"><b>导出不等于证据备份。</b>任务 JSON 不含正式发布证据，证据须全库数据库 + 附件备份；「交付账本」只是比喻，工时非财务结算。</div>`,
+  <div class="bottom"><b>导出不等于证据备份。</b>任务 JSON 不含正式发布证据，证据须全库数据库 + 附件备份；关联记录不是财务账本，工时非财务结算。</div>`,
   foot: '沙漏博客专栏 · 第 13 篇'
 });
 
 /* 14 */
 pages['14-path'] = page({
   accent: ACCENT.s5, kicker: '系列五 · 价值总结 ｜ 配图 01', brand: '沙漏 · HOURGLASS',
-  title: '从问题到验证：研发交付的阅读路径', sub: '面向小型项目制研发团队的自托管研发交付工作台。',
+  title: '从问题到验证：研发交付的阅读路径', sub: '低成本上手，干活即记录，进度自动可见，从需求到发布全链路可追溯。',
   body: `<div class="path">
     <div class="step"><div class="n">STEP 01</div><div class="h">问题</div><p class="p">识别可能的重复整理与信息断点</p><div class="r">第 1 篇</div></div>
     <div class="step"><div class="n">STEP 02</div><div class="h">关联</div><p class="p">围绕交付链路做减法，保留必要控制</p><div class="r">第 2 篇</div></div>
@@ -290,7 +290,7 @@ pages['14-path'] = page({
     <div class="step"><div class="n">STEP 04</div><div class="h">场景</div><p class="p">在项目团队的一周里核对记录与责任</p><div class="r">第 9–10 篇</div></div>
     <div class="step"><div class="n">STEP 05</div><div class="h">验证</div><p class="p">逐项验证选型、容量、审计与恢复边界</p><div class="r">第 11–13 篇</div></div>
   </div>
-  <div class="bottom"><b>让投入可解释，让交付可追溯。</b>不是财务结算或客户签认承诺，而是通过关联记录、口径核对与责任确认来解释工作。</div>`,
+  <div class="bottom"><b>低成本上手，干活即记录，进度自动可见，从需求到发布全链路可追溯。</b><br>不是财务结算或客户签认承诺，而是通过关联记录、口径核对与责任确认来解释工作。</div>`,
   foot: '沙漏博客专栏 · 第 13 篇'
 });
 

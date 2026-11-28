@@ -9,7 +9,13 @@
 <link rel="stylesheet" href="../../../frontend/css/base.css" />
 <link rel="stylesheet" href="../../../frontend/css/layout.css" />
 <link rel="stylesheet" href="../../../frontend/css/components.css" />
-<link rel="stylesheet" href="../../../frontend/css/views.css" />
+<link rel="stylesheet" href="../../../frontend/css/views-workitems.css" />
+<link rel="stylesheet" href="../../../frontend/css/views-projects-settings.css" />
+<link rel="stylesheet" href="../../../frontend/css/views-drawer-blocks.css" />
+<link rel="stylesheet" href="../../../frontend/css/views-req-docs.css" />
+<link rel="stylesheet" href="../../../frontend/css/views-analysis-branches.css" />
+<link rel="stylesheet" href="../../../frontend/css/views-phase-demands.css" />
+<link rel="stylesheet" href="../../../frontend/css/views-testcases.css" />
 <link rel="stylesheet" href="../../../frontend/css/version.css" />
 <link rel="stylesheet" href="../../../frontend/css/workcolumn.css" />
 <link rel="stylesheet" href="../../../frontend/css/delivery.css" />
@@ -51,6 +57,32 @@ body.flat .vd-head{position:static;}
 body.flat .annot-box{position:static;width:auto;max-height:none;margin:0 var(--content-pad) 24px;box-shadow:none;}
 /* ① 标在分布行左端，别压住行尾的漏斗按钮 */
 body.annot .vd-dist-row > .annot-point{left:-9px;right:auto;top:-7px;}
+
+/* ===== 工时分布（2026-11-17 起该块已从产品 version.css 移除，原型保留当年实现以保证静态可读） ===== */
+.vd-dist{display:flex;flex-direction:column;gap:8px;}
+.vd-dist-row{display:flex;align-items:center;gap:10px;min-width:0;font-size:12.5px;}
+.vd-dist-name{flex:0 0 200px;display:flex;align-items:center;gap:6px;min-width:0;color:var(--text-2);}
+.vd-dist-name > i{width:8px;height:8px;border-radius:2px;flex:0 0 auto;}
+.vd-dist-name > small{flex:0 0 auto;font-size:10.5px;color:var(--text-3);}
+.vd-dist-bar{flex:1 1 auto;min-width:40px;height:8px;border-radius:var(--r-pill);background:var(--surface-sunken);overflow:hidden;}
+.vd-dist-bar > i{display:block;height:100%;border-radius:var(--r-pill);}
+.vd-dist-row > b{flex:0 0 auto;min-width:64px;text-align:right;font-variant-numeric:tabular-nums;color:var(--text);}
+.vd-dist-share{flex:0 0 auto;min-width:88px;text-align:right;font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.vd-dist-open{display:inline-flex;align-items:center;gap:2px;min-width:0;padding:0;border:0;background:none;font:inherit;color:var(--text-2);cursor:pointer;}
+.vd-dist-open > span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* 箭头常驻半透明：这是「点名字看明细」的唯一可见提示，全隐藏会让人以为分布行只是文字 */
+.vd-dist-open > svg{flex:0 0 auto;opacity:.45;transition:opacity .14s ease,transform .14s ease;}
+.vd-dist-open:hover{color:var(--primary-fg);}
+.vd-dist-open:hover > svg{opacity:1;transform:translateX(2px);}
+.vd-dist-open:focus-visible{outline:2px solid var(--ring-focus);outline-offset:2px;border-radius:var(--r-xs);}
+@media (max-width:1023px){ .vd-dist-name{flex-basis:150px;} }
+@media (max-width:700px){
+  .vd-dist-row{flex-wrap:wrap;row-gap:4px;}
+  .vd-dist-name{flex:1 1 100%;}
+  .vd-dist-bar{flex:1 1 auto;}
+  .vd-dist-share{min-width:0;}
+  .vd-dist-open{min-height:32px;}
+}
 
 /* ===== 原型控制条 / 标注（截图时 ?shot=1 隐藏） ===== */
 .proto-bar{position:fixed;left:16px;top:14px;z-index:400;width:392px;background:rgba(255,255,255,.97);border:1px solid var(--border);border-radius:12px;padding:9px 10px;box-shadow:var(--shadow-lg);display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
@@ -117,7 +149,7 @@ body.annot .annot-point{display:flex;}
   <span class="lbl">场景</span>
   <div class="pseg" id="segScene">
     <button type="button" data-s="init">初始</button>
-    <button type="button" data-s="cat">模块</button>
+    <button type="button" data-s="cat">分类</button>
     <button type="button" data-s="branch">分支</button>
     <button type="button" data-s="demand">需求</button>
     <button type="button" data-s="stage">阶段</button>
@@ -137,7 +169,7 @@ body.annot .annot-point{display:flex;}
   <h3>一个关联项，两条路</h3>
   <p class="sub">点<b>名字</b>开它的详情（离开本页语境）；点<b>漏斗</b>把本页明细联动到它（留在本页收窄）。两者共用同一份筛选状态与同一串 hash，分享出去能还原同一份明细。</p>
   <ol>
-    <li><span class="n">1</span><span><b>工时分布</b>：行名与行尾漏斗都下钻。模块 / 负责人 / 阶段三个维度共用一条路径，下钻后按实际工时降序，行数恒等于该行的「N 项」。</span></li>
+    <li><span class="n">1</span><span><b>工时分布</b>：行名与行尾漏斗都下钻。分类 / 负责人 / 阶段三个维度共用一条路径，下钻后按实际工时降序，行数恒等于该行的「N 项」。</span></li>
     <li><span class="n">2</span><span><b>分支进度</b>：chip 主体开分支抽屉，右侧漏斗只看本版本里挂这条分支的工作项——分支页看全量，这里只看本版本。</span></li>
     <li><span class="n">3</span><span><b>已排需求</b>：新增「本版本工作项」列。行名开需求详情，漏斗把明细收窄到该需求；没挂工作项时如实写「未挂工作项」，不给一个点了没反应的 0。</span></li>
     <li><span class="n">4</span><span><b>工作项行内</b>：标题下挂需求 / 分支 chip，直接开对应实体详情；行本身的点击仍然是开工作项，两者不抢。</span></li>
@@ -249,20 +281,20 @@ var LOGS = [
 var TYPE_LABEL = { story:["需求","tag-primary"], task:["任务","tag-info"], bug:["缺陷","tag-danger"], test:["测试","tag-plum"] };
 var NONE = "__none__";
 var TABS = [["overview","概览"],["scope","工作项"],["demands","需求"],["releases","发布"],["log","操作记录"]];
-var ROLL_DIMS = [["module","模块"],["owner","负责人"],["stage","阶段"]];
+var ROLL_DIMS = [["module","分类"],["owner","负责人"],["stage","阶段"]];
 var LINK_META = {
-  cat:{ field:"cat", icon:"tag", label:"模块" },
+  cat:{ field:"cat", icon:"tag", label:"分类" },
   branch:{ field:"branch", icon:"branch", label:"分支" },
   demand:{ field:"demand", icon:"demand", label:"需求" },
   stage:{ field:"stage", icon:"clock", label:"阶段" }
 };
-var LINK_LABEL = { cat:"模块", branch:"分支", demand:"需求", stage:"阶段", owner:"负责人" };
+var LINK_LABEL = { cat:"分类", branch:"分支", demand:"需求", stage:"阶段", owner:"负责人" };
 
 /* ==================== 状态 ==================== */
 function blankFilters(){ return { q:"", status:"", owner:"", type:"", sort:"default", cat:"", branch:"", demand:"", stage:"" }; }
 var st = { tab:"overview", rollDim:"module", filters:blankFilters() };
 
-function catName(id){ var h = CATS.filter(function(c){ return c.id === id; })[0]; return h ? h.name : "未指定模块"; }
+function catName(id){ var h = CATS.filter(function(c){ return c.id === id; })[0]; return h ? h.name : "未指定分类"; }
 function catColor(id){ var h = CATS.filter(function(c){ return c.id === id; })[0]; return (h && h.color) || "var(--palette-8)"; }
 function branchHit(id){ return BRANCHES.filter(function(b){ return b.id === id; })[0] || null; }
 function branchName(id){ var h = branchHit(id); return h ? h.name : "分支"; }
@@ -571,12 +603,12 @@ function filteredTasks(){
 function scopeHTML(){
   var f = st.filters;
   var ownerPairs = [["","全部负责人"],[NONE,"未指派"]].concat(owners().map(function(o){ return [o, o]; }));
-  var catPairs = [["","全部模块"],[NONE,"未指定模块"]].concat(CATS.map(function(c){ return [c.id, c.name]; }));
+  var catPairs = [["","全部分类"],[NONE,"未指定分类"]].concat(CATS.map(function(c){ return [c.id, c.name]; }));
   var filters = '<div class="vd-filters">'
     + '<label class="vd-search">' + icon("search", 13)
     + '<input type="search" data-filter="q" value="' + esc(f.q) + '" placeholder="搜索标题或负责人" aria-label="搜索版本工作项"></label>'
     + selectHTML("status", [["","全部状态"],["open","未完成"],["done","已完成"],["over","已逾期"]], f.status, "按状态筛选")
-    + selectHTML("cat", catPairs, f.cat, "按模块筛选")
+    + selectHTML("cat", catPairs, f.cat, "按分类筛选")
     + selectHTML("owner", ownerPairs, f.owner, "按负责人筛选")
     + selectHTML("type", [["","全部类型"],["story","需求"],["task","任务"],["bug","缺陷"],["test","测试"]], f.type, "按类型筛选")
     + selectHTML("sort", [["default","风险优先"],["actual","实际工时"],["estimate","预估工时"],["due","截止日期"],["title","标题"]], f.sort, "排序方式")
