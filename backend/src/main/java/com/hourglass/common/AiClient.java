@@ -10,18 +10,28 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.ClientHttpRequest;
+import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StreamUtils;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.ResponseExtractor;
 import org.springframework.web.client.RestTemplate;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * 调用 OpenAI 兼容的 /chat/completions。
@@ -100,6 +110,188 @@ public class AiClient {
             return call(cfg, url, systemPrompt, userPrompt, wantJson);
         } finally {
             AI_SLOTS.release();
+        }
+    }
+
+    /**
+     * 流式调用：上游按 SSE 逐段返回，onDelta 收到原始增量文本。
+     * 不支持的厂商若直接返回整段 JSON，会退化成一次回调，调用方无需区分。
+     */
+    public Reply chatStream(AiConfig cfg, String systemPrompt, String userPrompt, Consumer<String> onDelta) {
+        if (!cfg.usable()) {
+            throw AppException.badRequest(cfg.shared()
+                    ? cfg.getSourceLabel() + " 配置不完整：请联系平台管理员"
+                    : "AI 配置不完整：请先在「个人设置 → AI 设置」里填好模型和 API Key");
+        }
+        String url = endpoint(cfg.getBaseUrl());
+        try {
+            OutboundUrlGuard.validate(cfg.getBaseUrl(), allowPrivateNetwork || "ollama".equals(cfg.getProvider()));
+        } catch (IllegalArgumentException e) {
+            throw AppException.badRequest(e.getMessage());
+        }
+        if (!AI_SLOTS.tryAcquire()) {
+            throw new AppException(429, "AI 正忙（全平台同时最多 2 个生成任务，团队共用），请稍后再试");
+        }
+        try {
+            return callStream(cfg, url, systemPrompt, userPrompt, onDelta);
+        } finally {
+            AI_SLOTS.release();
+        }
+    }
+
+    private Reply callStream(AiConfig cfg, String url, String systemPrompt, String userPrompt,
+                             Consumer<String> onDelta) {
+        long startedAt = System.currentTimeMillis();
+        List<Map<String, String>> messages = new ArrayList<Map<String, String>>();
+        if (systemPrompt != null && !systemPrompt.isEmpty()) {
+            messages.add(msg("system", systemPrompt));
+        }
+        messages.add(msg("user", userPrompt));
+        try {
+            Reply reply = doStream(cfg, url, messages, onDelta);
+            logReply(cfg, url, reply, false, System.currentTimeMillis() - startedAt);
+            return reply;
+        } catch (HttpStatusCodeException e) {
+            String detail = upstreamMessage(e.getResponseBodyAsString(StandardCharsets.UTF_8));
+            log.warn("AI 流式上游返回 {}：model={} detail={}", e.getRawStatusCode(), cfg.getModel(), brief(detail));
+            throw new AppException(502, errorMessage(e.getRawStatusCode(),
+                    e.getResponseBodyAsString(StandardCharsets.UTF_8),
+                    cfg.shared() ? cfg.getSourceLabel() : null), e);
+        } catch (ResourceAccessException e) {
+            log.warn("AI 流式连接失败：model={} {}：{}", cfg.getModel(),
+                    e.getClass().getSimpleName(), brief(String.valueOf(e.getMessage())));
+            throw new AppException(504, DEFAULT_TIMEOUT_MSG + "，请检查网络或换更快的模型", e);
+        } catch (AppException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new AppException(502, "AI 请求失败（" + e.getClass().getSimpleName()
+                    + "）：请检查接口地址格式与网络连通性", e);
+        }
+    }
+
+    private Reply doStream(AiConfig cfg, String url, final List<Map<String, String>> messages,
+                           final Consumer<String> onDelta) {
+        final Map<String, Object> body = new LinkedHashMap<String, Object>();
+        body.put("model", cfg.getModel());
+        body.put("messages", messages);
+        body.put("temperature", 0.2);
+        body.put("stream", true);
+        body.put("stream_options", Collections.<String, Object>singletonMap("include_usage", true));
+        Map<String, Object> fmt = new LinkedHashMap<String, Object>();
+        fmt.put("type", "json_object");
+        body.put("response_format", fmt);
+
+        return rt.execute(url, HttpMethod.POST, new org.springframework.web.client.RequestCallback() {
+            @Override
+            public void doWithRequest(ClientHttpRequest request) throws IOException {
+                request.getHeaders().setContentType(MediaType.APPLICATION_JSON);
+                if (cfg.getApiKey() != null && !cfg.getApiKey().isEmpty()) {
+                    request.getHeaders().set("Authorization", "Bearer " + cfg.getApiKey());
+                }
+                om.writeValue(request.getBody(), body);
+            }
+        }, new ResponseExtractor<Reply>() {
+            @Override
+            public Reply extractData(ClientHttpResponse response) throws IOException {
+                MediaType ct = response.getHeaders().getContentType();
+                /* 部分中转或旧版本服务忽略 stream 参数，直接回整段 JSON：按非流式处理 */
+                if (ct != null && !ct.isCompatibleWith(MediaType.TEXT_EVENT_STREAM)
+                        && ct.isCompatibleWith(MediaType.APPLICATION_JSON)) {
+                    String raw = StreamUtils.copyToString(response.getBody(), StandardCharsets.UTF_8);
+                    Reply r = parseCompletion(cfg, raw, true);
+                    if (onDelta != null && r.content != null && !r.content.isEmpty()) {
+                        onDelta.accept(r.content);
+                    }
+                    return r;
+                }
+                return readStream(cfg, response.getBody(), onDelta);
+            }
+        });
+    }
+
+    private Reply readStream(AiConfig cfg, InputStream in, Consumer<String> onDelta) throws IOException {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
+        StringBuilder content = new StringBuilder();
+        int promptTokens = 0;
+        int completionTokens = 0;
+        String model = cfg.getModel();
+        String line;
+        while ((line = reader.readLine()) != null) {
+            String t = line.trim();
+            if (t.isEmpty() || t.startsWith(":") || t.startsWith("event:") || t.startsWith("id:")) {
+                continue;
+            }
+            if (!t.startsWith("data:")) {
+                continue;
+            }
+            String data = t.substring(5).trim();
+            if ("[DONE]".equals(data)) {
+                break;
+            }
+            JsonNode root;
+            try {
+                root = om.readTree(data);
+            } catch (Exception ignored) {
+                /* 心跳或厂商私有行：跳过，不因一行坏数据中断整段回答 */
+                continue;
+            }
+            if (root.path("error").isObject()) {
+                throw new AppException(502, "AI 服务返回错误：" + brief(upstreamMessage(data)));
+            }
+            model = root.path("model").asText(model);
+            JsonNode usage = root.path("usage");
+            if (usage.isObject()) {
+                promptTokens = usage.path("prompt_tokens").asInt(promptTokens);
+                completionTokens = usage.path("completion_tokens").asInt(completionTokens);
+            }
+            JsonNode delta = root.path("choices").path(0).path("delta").path("content");
+            if (delta.isTextual()) {
+                String s = delta.asText();
+                if (!s.isEmpty()) {
+                    content.append(s);
+                    if (onDelta != null) {
+                        onDelta.accept(s);
+                    }
+                }
+            }
+        }
+        if (content.length() == 0) {
+            throw new AppException(502, "AI 返回了空内容");
+        }
+        Reply r = new Reply();
+        r.content = content.toString();
+        r.model = model;
+        r.promptTokens = promptTokens;
+        r.completionTokens = completionTokens;
+        r.jsonModeUsed = true;
+        r.sourceLabel = cfg.usageLabel();
+        return r;
+    }
+
+    /** 非流式响应解析抽出来，流式中转返回整段 JSON 时复用 */
+    private Reply parseCompletion(AiConfig cfg, String raw, boolean jsonMode) {
+        try {
+            JsonNode root = om.readTree(raw == null ? "{}" : raw);
+            JsonNode choice = root.path("choices").path(0);
+            String content = choice.path("message").path("content").asText("");
+            if (content == null || content.trim().isEmpty()) {
+                String why = choice.path("finish_reason").asText("");
+                throw new AppException(502, "length".equals(why)
+                        ? "模型输出被截断（超出最大 token），请减少需求篇幅或换长上下文模型"
+                        : "AI 返回了空内容" + (why.isEmpty() ? "" : "（finish_reason=" + why + "）"));
+            }
+            Reply r = new Reply();
+            r.content = content;
+            r.model = root.path("model").asText(cfg.getModel());
+            r.promptTokens = root.path("usage").path("prompt_tokens").asInt(0);
+            r.completionTokens = root.path("usage").path("completion_tokens").asInt(0);
+            r.jsonModeUsed = jsonMode;
+            r.sourceLabel = cfg.usageLabel();
+            return r;
+        } catch (AppException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new AppException(502, "AI 返回内容解析失败：" + brief(raw), e);
         }
     }
 

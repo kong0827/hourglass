@@ -8,7 +8,7 @@
  *   5. 页面上下文（打开的工作项/需求 id）只是线索，服务端按可见范围重新解析。
  */
 
-import { API } from "./api.js";
+import { API, csrfCookie } from "./api.js";
 import { icon } from "./icons.js";
 import { VIEWS, activeView, showView } from "./router.js";
 import { UI, esc, toast } from "./ui.js";
@@ -17,6 +17,7 @@ import { loadView, viewModule } from "./view-loader.js";
 import { openTaskById } from "./task-actions.js";
 import { openTaskDrawer } from "./task-drawer.js";
 import { loadBoard, loadReqs } from "../views/board.js";
+import { initAiFields } from "./ai-field.js";
 
 var MAX_HISTORY = 8;
 var ACTION_INTENTS = { create_task: 1, create_demand: 1, demand_action: 1, move_task: 1, clarify: 1 };
@@ -29,13 +30,24 @@ var els = null;
 var boot = null;
 var bootPromise = null;
 var history = [];
+var transcript = [];
 var draft = null;
 var requestId = "";
 var missing = [];
 var busy = false;
 var abortCtrl = null;
+/* 每次发送/重置递增：迟到的回答按序号丢弃，避免清空会话后又插回旧内容 */
+var chatSeq = 0;
+var partialEl = null;
 var mdPromise = null;
 var open = false;
+/* 旧版只存 sessionStorage：保留读取，升级后第一次对话会转存到本机会话列表 */
+var HISTORY_KEY = "hg.ai.history.v1";
+var SESSION_KEY = "hg.ai.sessions.v1";
+var MAX_SESSIONS = 10;
+var sessionId = "";
+var historyOpen = false;
+var restoredOnce = false;
 
 /* ==================== 可见性偏好 ====================
    个人设置里的开关决定是否显示悬浮助手；默认显示，只有显式存 "off" 才隐藏。
@@ -66,6 +78,8 @@ function applyEnabled(){
   if(!els) return;
   els.fab.hidden = !enabled;
   if(!enabled && open) closePanel();
+  var bar = document.getElementById("pageActions");
+  if(bar) ensurePageEntry(bar);
 }
 
 /* 供顶栏「新建」菜单（移动端 AI 入口）调用 */
@@ -77,10 +91,206 @@ function toggleAssistant(){
 /* ==================== 初始化 ==================== */
 
 function initAssistant(){
+  initAiFields();
   if(els){ applyEnabled(); return; }
   buildDom();
   bind();
   applyEnabled();
+  restoreHistory();
+  mountPageEntry();
+  document.addEventListener("ds:view-change", function(){
+    if(els) renderSuggestions();
+  });
+}
+
+/* ==================== 本机会话留存 ====================
+   transcript 用于界面展示与恢复；history 只放可以再发给模型的消息，
+   查询类回答（可能含需求/版本标题）只进 transcript，不进 history。
+   最近 10 段会话存 localStorage，按「账号 + 空间」隔离，只在本机，不上传。 */
+function storeKey(){
+  var u = (rt.currentUser && rt.currentUser.id) || "anon";
+  var w = (rt.currentWs && rt.currentWs.id) || "none";
+  return SESSION_KEY + ":" + u + ":" + w;
+}
+function validSession(s){
+  return s && typeof s.id === "string" && s.id && Array.isArray(s.messages)
+    && typeof s.updatedAt === "number";
+}
+function readSessions(){
+  try{
+    var arr = JSON.parse(localStorage.getItem(storeKey()) || "[]");
+    if(!Array.isArray(arr)) return [];
+    return arr.filter(validSession).sort(function(a, b){ return b.updatedAt - a.updatedAt; }).slice(0, MAX_SESSIONS);
+  }catch(e){ return []; }
+}
+function writeSessions(list){
+  try{
+    localStorage.setItem(storeKey(), JSON.stringify(list.slice(0, MAX_SESSIONS)));
+  }catch(e){ /* 存不下就放弃本机留存，不影响对话 */ }
+}
+function sessionTitle(){
+  for(var i = 0; i < transcript.length; i++){
+    if(transcript[i].role === "user"){
+      var t = String(transcript[i].content || "").replace(/\s+/g, " ").trim();
+      if(t) return t.length > 40 ? t.slice(0, 40) + "…" : t;
+    }
+  }
+  return "";
+}
+function persistSession(){
+  var msgs = transcript.slice(-MAX_HISTORY * 2);
+  if(!msgs.length) return;
+  if(!sessionId) sessionId = "s" + Date.now() + Math.random().toString(36).slice(2, 6);
+  var list = readSessions();
+  var prev = null;
+  list.forEach(function(s){ if(s.id === sessionId) prev = s; });
+  var entry = {
+    id: sessionId,
+    /* 标题沿用这段会话最早的问题，不随 transcript 滚动而变 */
+    title: (prev && prev.title) || sessionTitle() || "未命名会话",
+    updatedAt: Date.now(),
+    messages: msgs
+  };
+  list = list.filter(function(s){ return s.id !== sessionId; });
+  list.unshift(entry);
+  writeSessions(list);
+}
+/* 兼容旧版 sessionStorage：升级后第一次对话会把这段历史续进本机会话 */
+function readLegacyHistory(){
+  try{
+    var arr = JSON.parse(sessionStorage.getItem(HISTORY_KEY) || "null");
+    if(!Array.isArray(arr)) return [];
+    return arr.filter(function(m){
+      return m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string";
+    }).slice(-MAX_HISTORY * 2).map(function(m){
+      return { role: m.role, content: m.content.slice(0, 2000), localOnly: !!m.localOnly };
+    });
+  }catch(e){ return []; }
+}
+function saveHistory(){
+  persistSession();
+}
+function restoreHistory(){
+  if(restoredOnce || transcript.length || !els) return;
+  /* 账号与空间是异步就绪的：没就绪先不读，等打开面板时再续上次 */
+  var uid = rt.currentUser && rt.currentUser.id;
+  var wid = rt.currentWs && rt.currentWs.id;
+  if(!uid || !wid) return;
+  restoredOnce = true;
+  var latest = readSessions()[0];
+  var stored = latest ? latest.messages : readLegacyHistory();
+  if(!stored.length) return;
+  if(latest) sessionId = latest.id;
+  transcript = stored;
+  history = stored.filter(function(m){ return !m.localOnly; }).slice(-MAX_HISTORY).map(function(m){
+    return { role: m.role, content: m.content };
+  });
+  els.welcome.hidden = true;
+  stored.forEach(function(m){
+    if(m.role === "user") appendUser(m.content);
+    else appendBot(m.content, []);
+  });
+  scrollBottom();
+}
+function resetChat(){
+  chatSeq++;
+  /* 在途请求必须真正停下：只清 DOM 的话，旧回答返回后还会插进新会话 */
+  if(abortCtrl){ try{ abortCtrl.abort(); }catch(e){ /* noop */ } }
+  abortCtrl = null;
+  busy = false;
+  if(els) setBusy(false);
+  /* 开新对话前把当前这段收进本机会话列表，之后仍可在历史里找回 */
+  persistSession();
+  sessionId = "";
+  history = [];
+  transcript = [];
+  clearDraft();
+  partialEl = null;
+  if(els){
+    els.msgs.innerHTML = "";
+    els.welcome.hidden = false;
+  }
+  renderSuggestions();
+  renderHistory();
+  if(els) els.input.focus();
+}
+
+function toggleHistory(force){
+  if(!els) return;
+  historyOpen = typeof force === "boolean" ? force : !historyOpen;
+  els.history.hidden = !historyOpen;
+  if(historyOpen) renderHistory();
+}
+
+function two(n){ return n < 10 ? "0" + n : "" + n; }
+function fmtWhen(ts){
+  var d = new Date(ts), now = new Date();
+  var hm = two(d.getHours()) + ":" + two(d.getMinutes());
+  if(d.toDateString() === now.toDateString()) return "今天 " + hm;
+  var yesterday = new Date(now.getTime() - 86400000);
+  if(d.toDateString() === yesterday.toDateString()) return "昨天 " + hm;
+  return (d.getMonth() + 1) + "月" + d.getDate() + "日 " + hm;
+}
+function renderHistory(){
+  if(!els) return;
+  var list = readSessions();
+  els.historyList.innerHTML = list.length
+    ? list.map(function(s){
+        return '<li><button type="button" class="ai-history-item' + (s.id === sessionId ? " on" : "")
+          + '" data-ai-session="' + esc(s.id) + '">'
+          + '<span class="t">' + esc(s.title || "未命名会话") + '</span>'
+          + '<span class="m">' + esc(fmtWhen(s.updatedAt)) + ' · ' + s.messages.length + ' 条</span>'
+          + '</button></li>';
+      }).join("")
+    : '<li class="ai-history-empty">还没有本机会话。问一次就会自动留在这里。</li>';
+}
+function openSession(sid){
+  var target = null;
+  readSessions().forEach(function(s){ if(s.id === sid) target = s; });
+  if(!target){
+    toast("这段会话已不在本机", "warn");
+    renderHistory();
+    return;
+  }
+  if(target.id === sessionId){ toggleHistory(false); return; }
+  if(busy){
+    toast("等当前回答结束后再切换会话", "warn");
+    return;
+  }
+  chatSeq++;
+  if(abortCtrl){ try{ abortCtrl.abort(); }catch(e){ /* noop */ } }
+  abortCtrl = null;
+  clearDraft();
+  partialEl = null;
+  /* 先把当前这段收起来，再换成选中的会话 */
+  persistSession();
+  sessionId = target.id;
+  transcript = target.messages.slice(-MAX_HISTORY * 2).map(function(m){
+    return { role: m.role, content: m.content, localOnly: !!m.localOnly };
+  });
+  history = transcript.filter(function(m){ return !m.localOnly; }).slice(-MAX_HISTORY).map(function(m){
+    return { role: m.role, content: m.content };
+  });
+  els.msgs.innerHTML = "";
+  els.welcome.hidden = transcript.length > 0;
+  transcript.forEach(function(m){
+    if(m.role === "user") appendUser(m.content);
+    else appendBot(m.content, []);
+  });
+  toggleHistory(false);
+  scrollBottom();
+  try{ els.input.focus(); }catch(e){ /* noop */ }
+}
+function clearLocalHistory(){
+  if(!readSessions().length){
+    toast("本机没有可清空的会话", "warn");
+    return;
+  }
+  if(!window.confirm("清空后，本机保存的助手会话会全部删除且无法恢复。继续？")) return;
+  try{ localStorage.removeItem(storeKey()); }catch(e){ /* 受限环境忽略 */ }
+  sessionId = "";
+  renderHistory();
+  toast("已清空本机会话", "fs");
 }
 
 function buildDom(){
@@ -107,8 +317,18 @@ function buildDom(){
         '<div class="ai-head-title">AI 助手</div>' +
         '<div class="ai-head-sub" id="aiHeadSub">正在读取当前空间…</div>' +
       '</div>' +
+      '<button class="ai-icon-btn" type="button" data-ai-history aria-label="历史会话" title="历史会话">' + icon("clock", 16) + '</button>' +
+      '<button class="ai-icon-btn" type="button" data-ai-reset aria-label="新对话" title="新对话">' + icon("plus", 16) + '</button>' +
       '<button class="ai-icon-btn" type="button" data-ai-close aria-label="关闭助手">' + icon("close", 16) + '</button>' +
     '</header>' +
+    '<div class="ai-history" id="aiHistory" hidden>' +
+      '<div class="ai-history-head"><b>本机会话</b><span>仅保存在本机浏览器，不上传</span></div>' +
+      '<ul class="ai-history-list" id="aiHistoryList"></ul>' +
+      '<div class="ai-history-foot">' +
+        '<span>最多保留最近 10 段</span>' +
+        '<button type="button" data-ai-clear-history>清空本机会话</button>' +
+      '</div>' +
+    '</div>' +
     '<div class="ai-body" id="aiBody">' +
       '<div class="ai-welcome" id="aiWelcome">' +
         '<p class="ai-welcome-title">可以帮你找到入口，也能按自然语言建工作项、提需求、推进需求状态和移动工作项。</p>' +
@@ -131,6 +351,8 @@ function buildDom(){
     fab: fab,
     panel: panel,
     sub: panel.querySelector("#aiHeadSub"),
+    history: panel.querySelector("#aiHistory"),
+    historyList: panel.querySelector("#aiHistoryList"),
     body: panel.querySelector("#aiBody"),
     msgs: panel.querySelector("#aiMsgs"),
     welcome: panel.querySelector("#aiWelcome"),
@@ -150,6 +372,15 @@ function bind(){
   });
   els.panel.addEventListener("click", function(e){
     if(e.target.closest("[data-ai-close]")){ closePanel(); return; }
+    if(e.target.closest("[data-ai-history]")){ toggleHistory(); return; }
+    var sess = e.target.closest("[data-ai-session]");
+    if(sess){ openSession(sess.getAttribute("data-ai-session")); return; }
+    if(e.target.closest("[data-ai-clear-history]")){ clearLocalHistory(); return; }
+    /* 点面板其他地方时收起历史浮层，但不影响这次点击本身 */
+    if(historyOpen && !e.target.closest(".ai-history")) toggleHistory(false);
+    if(e.target.closest("[data-ai-reset]")){ resetChat(); return; }
+    var fb = e.target.closest("[data-ai-fb]");
+    if(fb){ sendFeedback(fb); return; }
     var link = e.target.closest("[data-ai-href]");
     if(link){ e.preventDefault(); goHref(link.getAttribute("data-ai-href")); return; }
     var sug = e.target.closest("[data-ai-suggest]");
@@ -157,6 +388,12 @@ function bind(){
     if(e.target.closest("[data-ai-retry]")){
       bootPromise = null;
       loadBootstrap();
+      return;
+    }
+    if(e.target.closest("[data-ai-retry-answer]")){
+      var err = e.target.closest(".ai-msg.error");
+      if(err) err.parentNode.removeChild(err);
+      requestChat();
       return;
     }
     if(e.target.closest("[data-ai-discard]")){ clearDraft(); return; }
@@ -188,6 +425,7 @@ function openPanel(){
   els.panel.hidden = false;
   els.fab.setAttribute("aria-expanded", "true");
   document.body.classList.add("ai-open");
+  restoreHistory();
   loadBootstrap();
   /* 渲染库按需加载：开面板就预取，首条回答不必等两个脚本串行下载 */
   ensureMarkdown();
@@ -202,6 +440,7 @@ function closePanel(){
   els.panel.hidden = true;
   els.fab.setAttribute("aria-expanded", "false");
   document.body.classList.remove("ai-open");
+  toggleHistory(false);
   if(els.panel.contains(document.activeElement)){
     try{ els.fab.focus({preventScroll:true}); }catch(e){ /* noop */ }
   }
@@ -250,8 +489,29 @@ function renderHead(){
   }
 }
 
+/* 按当前页面给两三个更贴近场景的问题，服务端建议补足到 4 个 */
+function contextSuggestions(){
+  var v = activeView;
+  if(v === "version") return ["这个版本进度到哪了？", "现在能发了吗？"];
+  if(v === "project") return ["这个项目健康度怎么样？", "哪些需求还没排期？"];
+  if(v === "delivery" || v === "release") return ["发布还缺什么？", "这个版本进度到哪了？"];
+  if(v === "demands") return ["哪些需求没排期？", "最近改了什么？"];
+  if(v === "workload") return ["谁最忙？", "哪个项目风险最高？"];
+  if(v === "analysis") return ["最近改了什么？", "哪个项目风险最高？"];
+  if(v === "risks") return ["我手头还有哪些没完成的工作项？", "谁最忙？"];
+  if(v === "board" || v === "mine") return ["我手头还有哪些没完成的工作项？", "谁最忙？"];
+  return [];
+}
+
 function renderSuggestions(){
-  var list = (boot && boot.suggestions) || [];
+  if(!els) return;
+  var list = contextSuggestions().concat((boot && boot.suggestions) || []);
+  var seen = {};
+  list = list.filter(function(s){
+    if(!s || seen[s]) return false;
+    seen[s] = 1;
+    return true;
+  });
   els.suggest.innerHTML = list.slice(0, 4).map(function(s){
     return '<button type="button" data-ai-suggest="' + esc(s) + '">' + esc(s) + '</button>';
   }).join("");
@@ -265,6 +525,7 @@ function send(text){
   if(text.length > 2000) text = text.slice(0, 2000);
   els.welcome.hidden = true;
   appendUser(text);
+  transcript.push({ role: "user", content: text });
   history.push({ role: "user", content: text });
   trimHistory();
   els.input.value = "";
@@ -276,7 +537,9 @@ function requestChat(){
   busy = true;
   setBusy(true);
   var typing = appendTyping();
-  abortCtrl = window.AbortController ? new AbortController() : null;
+  var seq = ++chatSeq;
+  var ctrl = window.AbortController ? new AbortController() : null;
+  abortCtrl = ctrl;
 
   var body = {
     /* 服务端单条上限 2000 字：历史里的长回答必须截断，否则整轮会被 Bean Validation 拒掉 */
@@ -287,16 +550,162 @@ function requestChat(){
   };
   if(draft) body.draft = copyDraft();
 
-  API.postWithSignal("/api/ai/assistant/chat", body, abortCtrl && abortCtrl.signal).then(function(res){
-    typing.remove();
+  streamChat(body, seq, typing, ctrl);
+}
+
+/* 优先走 SSE；不支持流式、代理缓冲或旧版本服务端时，退回原来的整段接口 */
+function streamChat(body, seq, typing, ctrl){
+  if(!window.fetch || !window.ReadableStream || !window.TextDecoder){
+    plainChat(body, seq, typing, ctrl);
+    return;
+  }
+  var typingEl = typing;
+  var gotChunk = false;
+  var timer = null;
+  var timedOut = false;
+  var url = API.url("/api/ai/assistant/chat/stream");
+  var ws = window.CURRENT_WORKSPACE;
+  if(ws) url += (url.indexOf("?") === -1 ? "?" : "&") + "workspace=" + encodeURIComponent(ws);
+  var headers = {
+    "Content-Type": "application/json;charset=UTF-8",
+    "Accept": "text/event-stream",
+    "X-XSRF-TOKEN": csrfCookie(),
+    "X-Client-Id": window.DS_CLIENT_ID || ""
+  };
+  if(ctrl){
+    timer = setTimeout(function(){
+      timedOut = true;
+      try{ ctrl.abort(); }catch(e){ /* noop */ }
+    }, 180000);
+  }
+  (async function(){
+    try{
+      var res = await fetch(url, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: headers,
+        body: JSON.stringify(body),
+        signal: ctrl && ctrl.signal
+      });
+      if(res.status === 401){
+        window.location.href = API.loginUrl;
+        throw { message: "未登录或登录已过期", server: true };
+      }
+      var ct = res.headers.get("Content-Type") || "";
+      if(!res.ok || ct.indexOf("text/event-stream") < 0) throw { fallback: true };
+      var reader = res.body.getReader();
+      var dec = new TextDecoder();
+      var buf = "";
+      while(true){
+        var chunk = await reader.read();
+        if(chunk.done) break;
+        buf += dec.decode(chunk.value, { stream: true }).replace(/\r\n/g, "\n");
+        var idx;
+        while((idx = buf.indexOf("\n\n")) >= 0){
+          var block = buf.slice(0, idx);
+          buf = buf.slice(idx + 2);
+          var ev = parseSse(block);
+          if(!ev) continue;
+          if(ev.event === "delta"){
+            var d = safeJson(ev.data);
+            if(d && typeof d.text === "string"){
+              gotChunk = true;
+              if(typingEl){ typingEl.remove(); typingEl = null; }
+              showPartial(d.text);
+            }
+          } else if(ev.event === "final"){
+            var payload = safeJson(ev.data);
+            if(!payload) throw { message: "回答解析失败，请重试", server: true };
+            if(timer){ clearTimeout(timer); timer = null; }
+            if(seq !== chatSeq) return;
+            if(typingEl) typingEl.remove();
+            removePartial();
+            finishBusy();
+            handleResponse(payload);
+            return;
+          } else if(ev.event === "error"){
+            var err = safeJson(ev.data) || {};
+            throw { message: err.message || "助手暂时不可用，请稍后重试", server: true };
+          }
+        }
+      }
+      if(seq !== chatSeq) return;
+      if(!gotChunk) throw { fallback: true };
+      throw { message: "回答被中断，请重试" };
+    }catch(ex){
+      if(timer){ clearTimeout(timer); timer = null; }
+      if(seq !== chatSeq) return;
+      var aborted = !!(ex && (ex.aborted || ex.name === "AbortError"));
+      if(aborted){
+        if(typingEl) typingEl.remove();
+        finishBusy();
+        if(timedOut) appendError("请求超时，请稍后重试", true);
+        else appendNote("已停止本次回答");
+        return;
+      }
+      if(ex && ex.fallback && !gotChunk){
+        plainChat(body, seq, typingEl || typing, ctrl);
+        return;
+      }
+      if(typingEl) typingEl.remove();
+      removePartial();
+      finishBusy();
+      appendError((ex && ex.message) || "助手暂时不可用，请稍后重试", true);
+    }
+  })();
+}
+
+function plainChat(body, seq, typing, ctrl){
+  API.postWithSignal("/api/ai/assistant/chat", body, ctrl && ctrl.signal).then(function(res){
+    if(seq !== chatSeq) return;
+    if(typing) typing.remove();
     finishBusy();
     handleResponse(res || {});
   }).catch(function(ex){
-    typing.remove();
+    if(seq !== chatSeq) return;
+    if(typing) typing.remove();
     finishBusy();
     if(ex && ex.aborted){ appendNote("已停止本次回答"); return; }
-    appendError((ex && ex.message) || "助手暂时不可用，请稍后重试");
+    appendError((ex && ex.message) || "助手暂时不可用，请稍后重试", true);
   });
+}
+
+function parseSse(block){
+  var event = "message";
+  var data = [];
+  String(block || "").split("\n").forEach(function(line){
+    if(!line || line.charAt(0) === ":") return;
+    var i = line.indexOf(":");
+    var key = i < 0 ? line : line.slice(0, i);
+    var val = i < 0 ? "" : line.slice(i + 1);
+    if(val.charAt(0) === " ") val = val.slice(1);
+    if(key === "event") event = val;
+    else if(key === "data") data.push(val);
+  });
+  return data.length ? { event: event, data: data.join("\n") } : null;
+}
+
+function safeJson(text){
+  try{ return JSON.parse(text || "{}"); }catch(e){ return null; }
+}
+
+function showPartial(text){
+  if(!partialEl){
+    partialEl = document.createElement("div");
+    partialEl.className = "ai-msg bot ai-streaming";
+    var body = document.createElement("div");
+    body.className = "ai-md";
+    partialEl.appendChild(body);
+    els.msgs.appendChild(partialEl);
+  }
+  var target = partialEl.querySelector(".ai-md");
+  if(target) target.textContent = text;
+  scrollBottom();
+}
+
+function removePartial(){
+  if(partialEl && partialEl.parentNode) partialEl.parentNode.removeChild(partialEl);
+  partialEl = null;
 }
 
 function stop(){
@@ -331,12 +740,23 @@ function handleResponse(res){
   }
 
   if(answer){
-    history.push({ role: "assistant", content: answer });
+    transcript.push({ role: "assistant", content: answer, localOnly: res.intent === "query" });
+    /* 查询类回答可能带需求/版本标题：只在本地展示，下一轮不发给模型 */
+    if(res.intent !== "query") history.push({ role: "assistant", content: answer });
     trimHistory();
   }
-  var bot = appendBot(answer, links);
-  /* 查询结果只渲染、不写进 history：标题不能随下一轮对话发给模型 */
-  if(res.intent === "query" && res.tasks && res.tasks.length) appendTaskList(bot, res.tasks);
+  var bot = appendBot(answer, links, {
+    intent: res.intent,
+    queryType: res.queryType,
+    contextLabel: res.contextLabel,
+    sourceLabel: res.sourceLabel,
+    asOf: res.asOf
+  });
+  /* 查询结果只渲染、不写进 history：标题和指标不能随下一轮对话发给模型 */
+  if(res.intent === "query"){
+    if(res.facts && res.facts.length) appendFacts(bot, res.facts);
+    if(res.tasks && res.tasks.length) appendTaskList(bot, res.tasks);
+  }
   if(question && answer.indexOf(question) === -1){
     var q = document.createElement("div");
     q.className = "ai-msg note";
@@ -358,6 +778,8 @@ function handleResponse(res){
 
 function trimHistory(){
   if(history.length > MAX_HISTORY) history = history.slice(-MAX_HISTORY);
+  if(transcript.length > MAX_HISTORY * 2) transcript = transcript.slice(-MAX_HISTORY * 2);
+  saveHistory();
 }
 
 /* ==================== 消息渲染 ==================== */
@@ -370,17 +792,81 @@ function appendUser(text){
   scrollBottom();
 }
 
-function appendBot(text, links){
+function appendBot(text, links, meta){
+  meta = meta || {};
   var el = document.createElement("div");
   el.className = "ai-msg bot";
+  if(meta.contextLabel){
+    var ctx = document.createElement("div");
+    ctx.className = "ai-context";
+    ctx.textContent = "当前上下文 · " + meta.contextLabel;
+    el.appendChild(ctx);
+  }
   var body = document.createElement("div");
   body.className = "ai-md";
   el.appendChild(body);
   els.msgs.appendChild(el);
   renderMarkdown(body, text || "");
   if(links && links.length) appendLinkChips(el, links);
+  if(meta.intent) appendFeedback(el, meta);
+  if(meta.sourceLabel || meta.asOf){
+    var prov = document.createElement("div");
+    prov.className = "ai-provenance";
+    prov.textContent = (meta.asOf ? "数据截至 " + meta.asOf : "")
+      + (meta.sourceLabel ? (meta.asOf ? " · " : "") + "来源：" + meta.sourceLabel : "");
+    el.appendChild(prov);
+  }
   scrollBottom();
   return el;
+}
+
+function appendFacts(container, facts){
+  var wrap = document.createElement("div");
+  wrap.className = "ai-facts";
+  var count = 0;
+  (facts || []).forEach(function(f){
+    if(!f || f.label == null || f.value == null) return;
+    var row = document.createElement(f.href && isSafeHref(f.href) ? "button" : "div");
+    row.className = "ai-fact tone-" + (f.tone || "normal");
+    if(row.tagName === "BUTTON"){
+      row.type = "button";
+      row.setAttribute("data-ai-href", f.href);
+    }
+    row.innerHTML = '<span class="ai-fact-label">' + esc(f.label) + '</span>'
+      + '<span class="ai-fact-value">' + esc(f.value) + '</span>';
+    wrap.appendChild(row);
+    count++;
+  });
+  if(!count) return;
+  var links = container.querySelector(".ai-links");
+  container.insertBefore(wrap, links || null);
+  scrollBottom();
+}
+
+function appendFeedback(container, meta){
+  var wrap = document.createElement("div");
+  wrap.className = "ai-feedback";
+  var intent = esc(meta.intent || "");
+  var query = esc(meta.queryType || "");
+  wrap.innerHTML = '<span>这条回答</span>'
+    + '<button type="button" data-ai-fb="1" data-ai-intent="' + intent + '" data-ai-query="' + query + '">有用</button>'
+    + '<button type="button" data-ai-fb="0" data-ai-intent="' + intent + '" data-ai-query="' + query + '">没用</button>';
+  container.appendChild(wrap);
+}
+
+function sendFeedback(btn){
+  var wrap = btn.parentNode;
+  if(!wrap || wrap.getAttribute("data-ai-sent")) return;
+  wrap.setAttribute("data-ai-sent", "1");
+  Array.prototype.slice.call(wrap.querySelectorAll("button")).forEach(function(b){
+    b.disabled = true;
+    if(b === btn) b.classList.add("on");
+  });
+  API.post("/api/ai/assistant/feedback", {
+    helpful: btn.getAttribute("data-ai-fb") === "1" ? 1 : 0,
+    intent: btn.getAttribute("data-ai-intent") || "",
+    queryType: btn.getAttribute("data-ai-query") || ""
+  }).catch(function(){ /* 反馈失败不打断对话 */ });
 }
 
 function appendTaskList(container, tasks){
@@ -411,10 +897,18 @@ function appendNote(text){
   scrollBottom();
 }
 
-function appendError(text){
+function appendError(text, canRetry){
   var el = document.createElement("div");
   el.className = "ai-msg error";
   el.textContent = text;
+  if(canRetry){
+    var retry = document.createElement("button");
+    retry.type = "button";
+    retry.className = "ai-retry";
+    retry.setAttribute("data-ai-retry-answer", "");
+    retry.textContent = "重试";
+    el.appendChild(retry);
+  }
   els.msgs.appendChild(el);
   if(/未配置|配置 AI|API Key|密钥|模型/.test(text)){
     appendLinkChips(el, [{ label: "前往 AI 设置", href: "#/profile" }]);
@@ -1035,15 +1529,73 @@ function cssEscape(v){
   return window.CSS && CSS.escape ? CSS.escape(v) : String(v).replace(/["\\]/g, "\\$&");
 }
 
-/* 当前页面上下文：打开着的工作项抽屉 / 需求详情 / 需求池当前项目。
+/* 当前页面上下文：打开着的工作项抽屉 / 需求详情 / 需求池当前项目 / 版本与文档页签。
    只是线索：服务端会按可见范围重新解析，不可见的 id 一律当作没有上下文 */
 function currentContext(){
   var ctx = { view: activeView };
+  var pt = document.getElementById("pageTitleText");
+  if(pt){
+    var title = String(pt.textContent || "").replace(/\s+/g, " ").trim();
+    if(title) ctx.pageTitle = title.slice(0, 40);
+  }
   if(rt.editingId) ctx.taskId = rt.editingId;
   var dl = document.querySelector(".modal-layer[data-ai-demand]");
   if(dl) ctx.demandId = dl.getAttribute("data-ai-demand");
+  var q = hashParams();
+  if(q.doc) ctx.docId = q.doc;
+  if(activeView === "version" && q.id) ctx.versionId = q.id;
+  if((activeView === "delivery" || activeView === "release") && q.versionId) ctx.versionId = q.versionId;
+  if(activeView === "project" && rt.managerProjectId) ctx.projectId = rt.managerProjectId;
   if(activeView === "demands" && rt.demandReqId) ctx.projectId = rt.demandReqId;
+  if(!ctx.projectId && q.reqId && (activeView === "version" || activeView === "requirements")){
+    ctx.projectId = q.reqId;
+  }
   return ctx;
+}
+
+function hashParams(){
+  var raw = String(location.hash || "").replace(/^#\//, "");
+  var qi = raw.indexOf("?");
+  var out = {};
+  if(qi < 0) return out;
+  raw.substring(qi + 1).split("&").forEach(function(p){
+    if(!p) return;
+    var kv = p.split("=");
+    try{ out[decodeURIComponent(kv[0])] = decodeURIComponent(kv[1] || ""); }catch(e){ /* 跳过坏参数 */ }
+  });
+  return out;
+}
+
+/* ==================== 页级入口 ====================
+   路由切页会先清空 #pageActions 再渲染，因此用 MutationObserver 在页面动作渲染好后补一个「问 AI」。 */
+function mountPageEntry(){
+  var bar = document.getElementById("pageActions");
+  if(!bar || bar.__aiEntryBound) return;
+  bar.__aiEntryBound = true;
+  bar.addEventListener("click", function(e){
+    if(e.target.closest("[data-ai-page-entry]")){
+      e.preventDefault();
+      openPanel();
+    }
+  });
+  new MutationObserver(function(){ ensurePageEntry(bar); })
+    .observe(bar, { childList: true, attributes: true, attributeFilter: ["hidden"] });
+  ensurePageEntry(bar);
+}
+
+function ensurePageEntry(bar){
+  var old = bar.querySelector("[data-ai-page-entry]");
+  if(!enabled || bar.hidden || !bar.children.length){
+    if(old) old.parentNode.removeChild(old);
+    return;
+  }
+  if(old) return;
+  var b = document.createElement("button");
+  b.type = "button";
+  b.className = "btn ai-page-entry";
+  b.setAttribute("data-ai-page-entry", "");
+  b.innerHTML = icon("ai", 15) + '<span>问 AI</span>';
+  bar.appendChild(b);
 }
 
 /* ==================== 站内跳转 ==================== */

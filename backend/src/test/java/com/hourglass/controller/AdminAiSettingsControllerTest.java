@@ -4,12 +4,18 @@ import com.hourglass.common.AppException;
 import com.hourglass.common.LoginUser;
 import com.hourglass.dto.SharedAiSettingsView;
 import com.hourglass.entity.AppUser;
+import com.hourglass.entity.Workspace;
 import com.hourglass.mapper.UserMapper;
+import com.hourglass.service.AiUsageService;
 import com.hourglass.service.SharedAiSettingService;
+import com.hourglass.service.WorkspaceService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+
+import java.util.Collections;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -23,8 +29,10 @@ class AdminAiSettingsControllerTest {
 
     private final SharedAiSettingService settings = mock(SharedAiSettingService.class);
     private final UserMapper users = mock(UserMapper.class);
+    private final WorkspaceService workspaces = mock(WorkspaceService.class);
+    private final AiUsageService usage = mock(AiUsageService.class);
     private final AdminAiSettingsController controller =
-            new AdminAiSettingsController(settings, users);
+            new AdminAiSettingsController(settings, users, workspaces, usage);
 
     @AfterEach
     void clearContext() {
@@ -52,6 +60,33 @@ class AdminAiSettingsControllerTest {
         SharedAiSettingsView out = controller.get().getData();
 
         assertEquals(view, out);
+    }
+
+    @Test
+    void nonAdminCannotReadUsage() {
+        login("U1");
+        when(users.selectById("U1")).thenReturn(user("U1", "user"));
+
+        AppException ex = assertThrows(AppException.class,
+                () -> controller.usage(7, "W1"));
+
+        assertEquals(403, ex.getCode());
+        verify(usage, never()).dashboard("W1", 7);
+    }
+
+    @Test
+    void adminReadsUsageForResolvedWorkspace() {
+        login("U9");
+        when(users.selectById("U9")).thenReturn(user("U9", "admin"));
+        Workspace ws = new Workspace();
+        ws.setId("W1");
+        when(workspaces.resolve("U9", "W1")).thenReturn(ws);
+        Map<String, Object> data = Collections.<String, Object>singletonMap("days", 7);
+        when(usage.dashboard("W1", 7)).thenReturn(data);
+
+        Map<String, Object> out = controller.usage(7, "W1").getData();
+
+        assertEquals(data, out);
     }
 
     private static void login(String id) {

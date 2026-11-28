@@ -551,13 +551,14 @@ function setSettingsTab(tab){
   /* SMTP 与团队 AI 配置在「通知与集成」页里，仅平台管理员可见 */
   if($("set-mail")) $("set-mail").hidden = tab !== "integration" || !isAdmin;
   if($("set-team-ai")) $("set-team-ai").hidden = tab !== "integration" || !isAdmin;
+  if($("set-ai-usage")) $("set-ai-usage").hidden = tab !== "integration" || !isAdmin;
   if(tab === "data") loadTrash({silent:true});
   if(tab === "workflow") loadWsCatProjects();
   /* 切换页签时清掉成员搜索残留：避免上一次选中的账号在下一次打开时仍留在输入框里 */
   if(prevTab !== tab && (prevTab === "members" || tab === "members")) resetMemberPicker();
   if(tab === "visibility" && isManager && !isPersonal) loadProjectAccess();
   if(tab === "integration") loadAutomation();
-  if(tab === "integration" && isAdmin){ loadMailSettings(); loadTeamAiSettings(); }
+  if(tab === "integration" && isAdmin){ loadMailSettings(); loadTeamAiSettings(); loadAiUsage(); }
   if(tab === "platform" && isAdmin) setPlatformTab(platformTab);
   if(tab === "workflow") setWorkflowTab(wfTab);
   syncSettingsPageHead();
@@ -4051,5 +4052,169 @@ if($("teamAiClearKey")) $("teamAiClearKey").addEventListener("click", function()
     if($("teamAiResult")){ $("teamAiResult").hidden = false; $("teamAiResult").textContent = "已清除，可以填入新的 Key"; }
   }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
 });
+
+/* ===== AI 用量（平台管理员） ===== */
+var AI_USAGE_LABELS = {
+  "query:overdue": "逾期查询",
+  "query:today": "今天到期查询",
+  "query:soon": "3 天内到期查询",
+  "query:blocked": "阻塞查询",
+  "query:open": "未完成查询",
+  "query": "只读查询",
+  "answer": "问答",
+  "clarify": "追问澄清",
+  "navigate": "页面跳转",
+  "create_task": "新建工作项草稿",
+  "create_demand": "新建需求草稿",
+  "demand_action": "需求流转草稿",
+  "move_task": "移动工作项草稿",
+  "feature:demand_split": "需求拆工作项",
+  "feature:reqdoc_split": "文档拆工作项",
+  "feature:reqdoc_audit": "需求文档体检",
+  "feature:selection": "文档选区改写",
+  "feature:selection_tasks": "选区提工作项",
+  "feature:testcase_gen": "生成测试用例",
+  "feature:weekly": "AI 周报",
+  "feature:investment": "投入总结",
+  "feature:release_summary": "发布摘要生成",
+  "draft:acceptance": "验收标准生成",
+  "draft:task_done": "完成标准生成",
+  "error": "失败",
+  "unknown": "未知"
+};
+function aiUsageIntentLabel(k){
+  if(AI_USAGE_LABELS[k]) return AI_USAGE_LABELS[k];
+  if(k && k.indexOf("query:") === 0) return "只读查询：" + k.slice(6);
+  return k || "未知";
+}
+function aiUsageNum(n){
+  n = Number(n) || 0;
+  return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+function aiUsageMs(ms){
+  ms = Number(ms) || 0;
+  return ms >= 1000 ? (Math.round(ms / 100) / 10) + " 秒" : Math.round(ms) + " ms";
+}
+function ensureAiUsageCard(){
+  if($("set-ai-usage")) return $("set-ai-usage");
+  var anchor = $("set-team-ai");
+  if(!anchor || !anchor.parentNode) return null;
+  var card = document.createElement("div");
+  card.className = "panel";
+  card.id = "set-ai-usage";
+  card.dataset.setPane = "integration";
+  card.hidden = true;
+  card.innerHTML = '<div class="panel-head"><h3>AI 用量</h3><span class="meta-right muted" id="aiUsageState">—</span></div>'
+    + '<p class="set-hint">按当前空间统计助手与各 AI 功能的调用次数、token 与耗时；只记计数，不保存问题、文档正文与回答原文。</p>'
+    + '<div class="ai-usage-kpis" id="aiUsageKpis"></div>'
+    + '<div class="ai-usage-cols">'
+    + '<div class="ai-usage-col"><div class="ai-usage-h">每日调用</div><div class="ai-usage-daily" id="aiUsageDaily"></div></div>'
+    + '<div class="ai-usage-col"><div class="ai-usage-h">高频类型</div><ul class="ai-usage-top" id="aiUsageTop"></ul></div>'
+    + '</div>'
+    + '<p class="foot-note" id="aiUsageFoot"></p>';
+  anchor.parentNode.insertBefore(card, anchor.nextSibling);
+  return card;
+}
+function renderAiUsage(d){
+  var kpis = $("aiUsageKpis");
+  if(!kpis) return;
+  var t = (d && d.totals) || {};
+  kpis.innerHTML = "";
+  [
+    ["调用次数", aiUsageNum(t.calls)],
+    ["Token", aiUsageNum(t.tokens)],
+    ["成功率", t.successRatePct == null ? "—" : t.successRatePct + "%"],
+    ["平均耗时", aiUsageMs(t.avgMs)]
+  ].forEach(function(pair){
+    var cell = document.createElement("div");
+    cell.className = "ai-usage-kpi";
+    var k = document.createElement("span");
+    k.className = "ai-usage-k";
+    k.textContent = pair[0];
+    var v = document.createElement("strong");
+    v.className = "ai-usage-v";
+    v.textContent = pair[1];
+    cell.appendChild(k);
+    cell.appendChild(v);
+    kpis.appendChild(cell);
+  });
+
+  var daily = $("aiUsageDaily");
+  if(daily){
+    daily.innerHTML = "";
+    var rows = (d && d.daily) || [];
+    if(!rows.length){
+      daily.innerHTML = '<p class="ai-usage-empty">最近还没有调用记录。</p>';
+    } else {
+      var table = document.createElement("table");
+      table.className = "ai-usage-table";
+      table.innerHTML = '<thead><tr><th>日期</th><th class="num">调用</th><th class="num">Token</th></tr></thead>';
+      var tb = document.createElement("tbody");
+      rows.forEach(function(r){
+        var tr = document.createElement("tr");
+        [
+          String(r.day || "").slice(5),
+          aiUsageNum(r.calls),
+          aiUsageNum((Number(r.promptTokens) || 0) + (Number(r.completionTokens) || 0))
+        ].forEach(function(txt, i){
+          var td = document.createElement("td");
+          if(i) td.className = "num";
+          td.textContent = txt;
+          tr.appendChild(td);
+        });
+        tb.appendChild(tr);
+      });
+      table.appendChild(tb);
+      daily.appendChild(table);
+    }
+  }
+
+  var top = $("aiUsageTop");
+  if(top){
+    top.innerHTML = "";
+    var items = (d && d.top) || [];
+    if(!items.length){
+      top.innerHTML = '<li class="ai-usage-empty">暂无数据</li>';
+    } else {
+      items.forEach(function(r){
+        var li = document.createElement("li");
+        var name = document.createElement("span");
+        name.className = "ai-usage-name";
+        name.textContent = aiUsageIntentLabel(r.intent);
+        var count = document.createElement("span");
+        count.className = "ai-usage-count";
+        count.textContent = aiUsageNum(r.calls) + " 次";
+        li.appendChild(name);
+        li.appendChild(count);
+        top.appendChild(li);
+      });
+    }
+  }
+
+  if($("aiUsageState")){
+    $("aiUsageState").textContent = "最近 " + ((d && d.days) || 7) + " 天";
+    $("aiUsageState").className = "meta-right muted";
+  }
+  if($("aiUsageFoot")){
+    $("aiUsageFoot").textContent = d && d.from
+      ? "统计起始 " + d.from + "，包含失败调用；失败按类型记为 error。"
+      : "包含失败调用。";
+  }
+}
+function loadAiUsage(){
+  var card = ensureAiUsageCard();
+  if(!card) return;
+  /* 卡片在这次切页时才创建，晚于页签的显隐循环，必须自己显示出来 */
+  card.hidden = false;
+  API.get("/api/admin/ai-usage", { days: 7 }).then(renderAiUsage).catch(function(ex){
+    if($("aiUsageState")){
+      $("aiUsageState").textContent = "加载失败";
+      $("aiUsageState").className = "meta-right bad";
+    }
+    if($("aiUsageDaily")){
+      $("aiUsageDaily").innerHTML = '<p class="ai-usage-empty">' + esc(ex.message || "未知错误") + "</p>";
+    }
+  });
+}
 
 export { enterSettingsView, loadTrash, loadUsers, openHelp, refreshPlatformTab, setPlatformTab, setSettingsTab, settingsTab };

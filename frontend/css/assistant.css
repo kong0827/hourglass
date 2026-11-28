@@ -51,6 +51,48 @@
 }
 .ai-icon-btn:hover{background:var(--surface-hover);color:var(--text);}
 
+/* ---------- 历史会话（本机） ---------- */
+.ai-history{
+  position:absolute;left:8px;right:8px;top:52px;z-index:6;
+  max-height:min(420px,calc(100% - 120px));
+  display:flex;flex-direction:column;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);
+  box-shadow:var(--shadow-lg);overflow:hidden;
+}
+.ai-history[hidden]{display:none;}
+.ai-history-head{
+  display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+  padding:9px 12px 7px;border-bottom:1px solid var(--border);
+}
+.ai-history-head b{font-size:12px;font-weight:650;color:var(--text);}
+.ai-history-head span{font-size:11px;line-height:15px;color:var(--text-3);}
+.ai-history-list{
+  flex:1 1 auto;min-height:0;margin:0;padding:4px;list-style:none;
+  overflow-y:auto;overscroll-behavior:contain;
+}
+.ai-history-item{
+  display:flex;flex-direction:column;gap:2px;width:100%;padding:7px 9px;
+  border:0;border-radius:var(--r-xs);background:transparent;text-align:left;
+}
+.ai-history-item:hover{background:var(--surface-hover);}
+.ai-history-item.on{background:var(--primary-soft);}
+.ai-history-item .t{
+  max-width:100%;font-size:12px;line-height:17px;font-weight:600;color:var(--text);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.ai-history-item .m{font-size:11px;line-height:15px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.ai-history-empty{padding:14px 10px;font-size:12px;line-height:18px;color:var(--text-3);}
+.ai-history-foot{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:7px 10px 8px;border-top:1px solid var(--border);
+  font-size:11px;line-height:15px;color:var(--text-3);
+}
+.ai-history-foot button{
+  padding:2px 8px;border:1px solid var(--border);border-radius:var(--r-xs);
+  background:transparent;font-size:11px;line-height:17px;color:var(--text-3);
+}
+.ai-history-foot button:hover{border-color:var(--danger-border);color:var(--danger-fg);background:var(--danger-soft);}
+
 /* ---------- 对话区 ---------- */
 .ai-body{
   flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;
@@ -114,6 +156,15 @@
 .ai-md pre code{padding:0;background:transparent;}
 .ai-md a{color:var(--primary-fg);text-decoration:underline;text-underline-offset:2px;}
 .ai-md strong{font-weight:650;}
+
+/* 流式输出期间是纯文本增量，保留换行；结束后整段重新按 Markdown 渲染 */
+.ai-streaming .ai-md{white-space:pre-wrap;}
+.ai-provenance{margin-top:7px;font-size:11px;line-height:15px;color:var(--text-3);}
+.ai-retry{
+  margin-top:7px;padding:3px 9px;border:1px solid var(--border);border-radius:var(--r-sm);
+  background:var(--surface);color:var(--text-2);font-size:12px;line-height:17px;
+}
+.ai-retry:hover{border-color:var(--primary-border);color:var(--primary-fg);}
 
 /* ---------- 入口 chips ---------- */
 .ai-links{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px;}
@@ -227,6 +278,81 @@
   flex:0 0 auto;padding:0 12px 8px;font-size:11px;line-height:15px;color:var(--text-3);
 }
 
+/* ---------- 上下文与指标 ---------- */
+.ai-context{
+  margin-bottom:5px;padding-bottom:5px;border-bottom:1px dashed var(--border);
+  font-size:11px;line-height:16px;color:var(--text-3);
+}
+.ai-facts{
+  display:grid;grid-template-columns:1fr 1fr;gap:5px;
+  margin-top:9px;
+}
+.ai-fact{
+  display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-1);
+  min-width:0;padding:4px 7px;border:1px solid var(--border);border-radius:var(--r-xs);
+  background:var(--surface);text-align:left;font-size:12px;line-height:17px;
+}
+button.ai-fact:hover{border-color:var(--primary-border);background:var(--primary-soft);}
+.ai-fact-label{color:var(--text-3);white-space:nowrap;}
+.ai-fact-value{font-weight:600;color:var(--text);overflow-wrap:anywhere;}
+.ai-fact.tone-good .ai-fact-value{color:var(--success-fg);}
+.ai-fact.tone-warn .ai-fact-value{color:var(--warning-fg);}
+.ai-fact.tone-danger .ai-fact-value{color:var(--danger-fg);}
+
+/* ---------- 回答反馈 ---------- */
+.ai-feedback{
+  display:flex;align-items:center;gap:5px;margin-top:8px;
+  font-size:11px;line-height:16px;color:var(--text-3);
+}
+.ai-feedback button{
+  padding:1px 7px;border:1px solid var(--border);border-radius:var(--r-pill);
+  background:transparent;font-size:11px;line-height:16px;color:var(--text-3);
+}
+.ai-feedback button:hover:not([disabled]){border-color:var(--primary-border);color:var(--primary-fg);}
+.ai-feedback button.on{border-color:var(--primary-border);background:var(--primary-soft);color:var(--primary-fg);}
+.ai-feedback button[disabled]{cursor:default;opacity:.7;}
+
+/* ---------- 页级入口 ---------- */
+.ai-page-entry{display:inline-flex;align-items:center;gap:5px;}
+.ai-page-entry svg{flex:0 0 auto;}
+
+/* ---------- 设置页：助手用量 ---------- */
+.ai-usage-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px;}
+.ai-usage-kpi{
+  display:flex;flex-direction:column;gap:2px;padding:8px 10px;
+  border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface-sunken);
+}
+.ai-usage-k{font-size:11px;line-height:15px;color:var(--text-3);}
+.ai-usage-v{font-size:16px;line-height:22px;font-weight:650;color:var(--text);font-variant-numeric:tabular-nums;}
+.ai-usage-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;}
+.ai-usage-col{min-width:0;}
+.ai-usage-h{margin-bottom:6px;font-size:12px;font-weight:600;color:var(--text-2);}
+.ai-usage-daily{max-height:220px;overflow-y:auto;overscroll-behavior:contain;}
+.ai-usage-table{width:100%;border-collapse:collapse;font-size:12px;line-height:17px;}
+.ai-usage-table th{
+  position:sticky;top:0;background:var(--surface);text-align:left;font-weight:600;
+  color:var(--text-3);padding:4px 6px;border-bottom:1px solid var(--border);
+}
+.ai-usage-table td{
+  padding:4px 6px;border-bottom:1px solid var(--border);
+  color:var(--text-2);font-variant-numeric:tabular-nums;
+}
+.ai-usage-table th.num,.ai-usage-table td.num{text-align:right;}
+.ai-usage-top{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px;}
+.ai-usage-top li{
+  display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+  padding:4px 6px;border-bottom:1px solid var(--border);
+  font-size:12px;line-height:17px;color:var(--text-2);
+}
+.ai-usage-top li:last-child{border-bottom:0;}
+.ai-usage-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ai-usage-count{flex:0 0 auto;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.ai-usage-empty{margin:6px 0 0;font-size:12px;line-height:17px;color:var(--text-3);}
+@media (max-width:760px){
+  .ai-usage-kpis{grid-template-columns:1fr 1fr;}
+  .ai-usage-cols{grid-template-columns:1fr;}
+}
+
 /* ---------- 手机：底部面板 ---------- */
 /* 移动端不再单独悬浮 AI 钮：入口收进顶栏「新建」菜单，避免与「+」FAB 叠放争抢拇指区 */
 [data-layout="mobile"] .ai-fab{display:none;}
@@ -248,4 +374,102 @@
 
 @media (max-width:420px){
   .ai-panel{height:min(82vh,calc(100vh - 40px));}
+}
+
+/* ---------- 字段级 AI 按钮：需求「验收标准」/ 工作项「完成标准」 ---------- */
+.field[data-ai-field] > label,
+.field[data-ai-field] > .field-label{display:flex;align-items:center;gap:6px;}
+.ai-field-btn{
+  margin-left:auto;flex:0 0 auto;height:22px;padding:0 8px;
+  border:1px solid var(--border);border-radius:var(--r-pill);
+  background:var(--primary-soft);color:var(--primary-fg);
+  font-size:11px;font-weight:600;line-height:20px;letter-spacing:.2px;
+  cursor:pointer;white-space:nowrap;
+}
+.ai-field-btn:hover{border-color:var(--primary);}
+.ai-field-btn:disabled{opacity:.6;cursor:progress;}
+.ai-field-btn.is-off{background:var(--surface-sunken);color:var(--text-3);border-color:var(--border);}
+.ai-field-btn:focus-visible{outline:2px solid var(--primary);outline-offset:1px;}
+.ai-field-panel{
+  margin-top:4px;padding:10px 12px;
+  border:1px solid var(--border);border-radius:var(--r-sm);
+  background:var(--surface-sunken);
+}
+.ai-field-panel.is-error{border-color:var(--danger-border);background:var(--danger-soft);}
+.ai-field-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+  font-size:12px;line-height:17px;color:var(--text-2);}
+.ai-field-head b{font-weight:650;color:var(--text);}
+.ai-field-head span{color:var(--text-3);font-variant-numeric:tabular-nums;}
+.ai-field-loading{margin-top:6px;font-size:12px;line-height:18px;color:var(--text-3);}
+.ai-field-list{margin:6px 0 0;padding:0;list-style:none;font-size:13px;line-height:21px;color:var(--text-2);}
+.ai-field-item{display:flex;align-items:center;gap:6px;}
+.ai-field-item+.ai-field-item{margin-top:4px;}
+.ai-field-item-input{
+  flex:1 1 auto;min-width:0;height:30px;padding:4px 8px;border:1px solid var(--border);
+  border-radius:var(--r-xs);background:var(--surface);
+  font-size:13px;line-height:18px;color:var(--text);font-family:inherit;
+}
+.ai-field-item-input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft);}
+.ai-field-item-del{
+  flex:0 0 auto;width:24px;height:24px;padding:0;border:1px solid transparent;border-radius:var(--r-xs);
+  background:transparent;color:var(--text-3);font-size:15px;line-height:1;
+}
+.ai-field-item-del:hover{border-color:var(--border);color:var(--danger-fg);background:var(--surface);}
+.ai-field-add{
+  align-self:flex-start;margin-top:5px;padding:2px 8px;border:1px dashed var(--border);
+  border-radius:var(--r-xs);background:transparent;
+  font-size:12px;line-height:17px;color:var(--text-3);
+}
+.ai-field-add:hover{border-color:var(--primary-border);color:var(--primary-fg);background:var(--primary-soft);}
+.ai-field-note{margin:6px 0 0;font-size:12px;line-height:18px;color:var(--text-3);}
+.ai-field-msg{margin:6px 0 0;font-size:12px;line-height:18px;color:var(--danger-fg);}
+.ai-field-msg a{margin-left:6px;color:var(--primary);}
+.ai-field-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.ai-field-tip{margin:6px 0 0;font-size:11px;line-height:16px;color:var(--text-3);}
+@media (max-width:760px){
+  .ai-field-acts .btn{flex:1 1 auto;}
+}
+
+/* ---------- 交付说明：AI 发布摘要草稿 ---------- */
+.ai-release-layer{position:fixed;inset:0;z-index:220;display:grid;place-items:center;padding:24px;}
+.ai-release-layer[hidden]{display:none;}
+.ai-release-mask{position:absolute;inset:0;background:rgba(15,23,42,.42);}
+.ai-release-panel{
+  position:relative;display:flex;flex-direction:column;
+  width:min(760px,100%);max-height:calc(100vh - 48px);
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-lg);box-shadow:var(--shadow-xl);overflow:hidden;
+}
+.ai-release-head{
+  display:flex;align-items:flex-start;gap:10px;
+  padding:14px 16px 10px;border-bottom:1px solid var(--border);
+}
+.ai-release-head > div{flex:1 1 auto;min-width:0;}
+.ai-release-head b{display:block;font-size:14px;line-height:19px;font-weight:650;color:var(--text);}
+.ai-release-head span{display:block;margin-top:2px;font-size:12px;line-height:17px;color:var(--text-3);}
+.ai-release-head a{margin-left:6px;color:var(--primary);}
+.ai-release-basis{
+  margin:10px 16px 0;padding:6px 10px;
+  border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface-sunken);
+  font-size:12px;line-height:18px;color:var(--text-3);
+}
+.ai-release-basis summary{cursor:pointer;color:var(--text-2);}
+.ai-release-basis ul{max-height:150px;overflow-y:auto;margin:6px 0 2px;padding-left:18px;}
+.ai-release-basis li + li{margin-top:2px;}
+.ai-release-basis li.miss{color:var(--warning-fg);}
+.ai-release-panel textarea{
+  flex:1 1 auto;min-height:260px;margin:12px 16px 0;padding:10px 12px;
+  border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);
+  font-size:13px;line-height:21px;color:var(--text);font-family:inherit;resize:vertical;
+}
+.ai-release-panel textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft);}
+.ai-release-tip{margin:8px 16px 0;font-size:11px;line-height:16px;color:var(--text-3);}
+.ai-release-foot{display:flex;align-items:center;gap:6px;padding:12px 16px 14px;}
+.ai-release-usage{font-size:11px;line-height:16px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.ai-release-spacer{flex:1 1 auto;}
+body.ai-release-open{overflow:hidden;}
+@media (max-width:760px){
+  .ai-release-layer{padding:8px;}
+  .ai-release-panel{max-height:calc(100vh - 16px);}
+  .ai-release-foot{flex-wrap:wrap;}
 }

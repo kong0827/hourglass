@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>字段级 AI 按钮 · 原型 2026-11-28</title>
+<style>
+  :root{
+    --blue:#2563EB; --blue-soft:#EFF4FF; --ink:#1F2937; --mute:#667085; --line:#E4E7EC;
+    --bg:#F6F7F9; --card:#FFFFFF; --warn:#B54708; --warn-soft:#FFFAEB; --ok:#067647;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 24px 48px}
+  h1{font-size:18px;margin:0 0 4px}
+  .sub{color:var(--mute);font-size:12px;margin:0 0 22px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px}
+  .card h2{font-size:14px;margin:0 0 2px}
+  .card .hint{color:var(--mute);font-size:12px;margin:0 0 14px}
+  .field{margin-bottom:14px}
+  .label-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .label-row label{font-size:13px;font-weight:600}
+  .ai-btn{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border:1px solid #C7D4F8;
+    background:var(--blue-soft);color:var(--blue);border-radius:6px;font-size:12px;font-weight:600;cursor:pointer}
+  .ai-btn:hover{background:#E3EBFF}
+  .ai-btn[disabled]{opacity:.55;cursor:not-allowed}
+  .ai-btn .sp{width:11px;height:11px;border:2px solid #9DB4F0;border-top-color:var(--blue);border-radius:50%;
+    animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  textarea,.fake-input{width:100%;border:1px solid #D0D5DD;border-radius:8px;padding:9px 11px;font:inherit;color:var(--ink);
+    background:#fff;resize:vertical}
+  textarea{min-height:76px}
+  textarea::placeholder{color:#98A2B3}
+  .panel{border:1px solid #D4DFFB;background:#F8FAFF;border-radius:8px;padding:11px 12px;margin-top:8px}
+  .panel .head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px}
+  .panel .head b{font-size:12px;color:#1D4ED8;font-weight:700}
+  .panel .meta{font-size:11px;color:var(--mute)}
+  .panel ul{margin:0;padding-left:18px}
+  .panel li{margin:2px 0}
+  .panel .acts{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .btn{height:28px;padding:0 12px;border-radius:6px;border:1px solid #D0D5DD;background:#fff;color:var(--ink);
+    font:inherit;font-size:12px;cursor:pointer}
+  .btn.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+  .btn.ghost{border-color:transparent;background:transparent;color:var(--mute)}
+  .note{font-size:11px;color:var(--mute);margin-top:7px}
+  .err{border-color:#FDA29B;background:#FFFBFA}
+  .err .head b{color:#B42318}
+  .empty-dash{border:1px dashed #D0D5DD;border-radius:8px;min-height:76px;padding:16px;color:#98A2B3}
+  .steps{border-top:1px dashed var(--line);margin-top:16px;padding-top:12px}
+  .steps h3{font-size:12px;color:var(--mute);margin:0 0 8px;font-weight:600}
+  .state-row{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start}
+  .state{flex:1 1 240px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+  .state b{font-size:12px;display:block;margin-bottom:4px}
+  .state span{font-size:11px;color:var(--mute)}
+  .tag{display:inline-block;font-size:11px;color:var(--warn);background:var(--warn-soft);border:1px solid #FEDF89;
+    border-radius:4px;padding:0 5px;margin-left:6px}
+  .legend{font-size:11px;color:var(--mute);margin-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>字段级 AI 小按钮 · 设计原型</h1>
+  <p class="sub">2026-11-28 · 需求「验收标准」与工作项「完成标准」两处；结果只填表单，不自动保存</p>
+
+  <div class="grid">
+    <!-- 需求 -->
+    <section class="card">
+      <h2>需求 · 验收标准</h2>
+      <p class="hint">新建/编辑需求抽屉；已有内容时给出「替换 / 追加」两种采用方式</p>
+
+      <div class="field">
+        <div class="label-row"><label>需求标题</label></div>
+        <input class="fake-input" value="支持按项目导出对账单" readonly />
+      </div>
+
+      <div class="field">
+        <div class="label-row">
+          <label>验收标准</label>
+          <button class="ai-btn" type="button">AI 生成</button>
+        </div>
+        <textarea>1. 可按项目与日期范围导出；
+2. 导出文件为 xlsx，含汇总页与明细页。</textarea>
+        <div class="panel">
+          <div class="head"><b>AI 生成 4 条验收标准</b><span class="meta">1,284 tokens · 团队 AI</span></div>
+          <ul>
+            <li>选择项目与日期范围后，导出文件只包含该范围内的对账单数据。</li>
+            <li>导出文件为 xlsx，含「汇总」与「明细」两个工作表。</li>
+            <li>汇总页金额合计与明细页逐条相加一致，误差为 0。</li>
+            <li>单次导出 10 万条明细在 60 秒内完成；超出时提示分批导出。</li>
+          </ul>
+          <div class="acts">
+            <button class="btn primary" type="button">替换现有内容</button>
+            <button class="btn" type="button">追加到末尾</button>
+            <button class="btn ghost" type="button">重新生成</button>
+            <button class="btn ghost" type="button">关闭</button>
+          </div>
+          <p class="note">生成内容只会写入表单，仍需你点「保存」；可继续手动修改。</p>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="label-row"><label>需求描述</label></div>
+        <textarea placeholder="背景、场景、要解决什么问题…"></textarea>
+      </div>
+    </section>
+
+    <!-- 工作项 -->
+    <section class="card">
+      <h2>工作项 · 完成标准</h2>
+      <p class="hint">编辑态描述编辑器上方；生成后插入描述末尾，保存仍由用户确认</p>
+
+      <div class="field">
+        <div class="label-row"><label>工作项标题</label></div>
+        <input class="fake-input" value="实现对账单导出接口" readonly />
+      </div>
+
+      <div class="field">
+        <div class="label-row">
+          <label>描述</label>
+          <button class="ai-btn" type="button" disabled><span class="sp"></span>生成中…</button>
+        </div>
+        <div class="empty-dash">目标、验收标准、注意事项…（可选）</div>
+        <div class="panel">
+          <div class="head"><b>正在生成完成标准</b><span class="meta">通常 5–15 秒</span></div>
+          <ul>
+            <li style="color:#98A2B3">读取标题与描述，列出 3–5 条可勾选核对的完成标准…</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="label-row"><label>预计耗时</label></div>
+        <input class="fake-input" value="8 小时" readonly />
+      </div>
+    </section>
+  </div>
+
+  <div class="steps">
+    <h3>其余状态</h3>
+    <div class="state-row">
+      <div class="state">
+        <b>未配置 AI</b>
+        <button class="ai-btn" type="button" disabled>AI 生成</button>
+        <span>按钮禁用，提示「先配置 AI」并链到个人设置</span>
+      </div>
+      <div class="state err">
+        <b>失败可重试</b>
+        <span>结果面板显示「生成失败：当前使用人数较多，请稍后」+ 重试</span>
+        <div class="acts" style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn" type="button">重试</button>
+          <button class="btn ghost" type="button">关闭</button>
+        </div>
+      </div>
+      <div class="state">
+        <b>只读项目</b>
+        <button class="ai-btn" type="button" disabled>AI 生成</button>
+        <span>只读项目不显示按钮；服务端仍校验写权限</span>
+      </div>
+    </div>
+  </div>
+
+  <p class="legend">说明：按钮为小号幽灵样式，不抢主操作视觉；所有结果仅写入表单，不触发生成即保存。</p>
+</div>
+</body>
+</html>

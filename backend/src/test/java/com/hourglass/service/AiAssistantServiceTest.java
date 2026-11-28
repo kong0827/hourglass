@@ -38,6 +38,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -75,9 +76,11 @@ class AiAssistantServiceTest {
     private final ReleasePermissionService releasePermission = mock(ReleasePermissionService.class);
     private final ProjectVersionMapper versionMapper = mock(ProjectVersionMapper.class);
     private final UserMapper userMapper = mock(UserMapper.class);
+    private final AiAssistantInsightService insightService = mock(AiAssistantInsightService.class);
     private final AiAssistantService service = new AiAssistantService(
             configService, client, requirementService, projectAccess, taskService, new AssistantFaqService(),
-            demandService, taskWorkflow, taskQuery, metaCache, releasePermission, versionMapper, userMapper);
+            demandService, taskWorkflow, taskQuery, metaCache, releasePermission, versionMapper, userMapper,
+            insightService);
 
     // ==================== 固定模板只读查询 ====================
 
@@ -837,6 +840,55 @@ class AiAssistantServiceTest {
             out.add(o.getValue());
         }
         return out;
+    }
+
+    @Test
+    void streamFailureAfterPartialDoesNotRetryNonStream() {
+        member(USER);
+        when(requirementService.list(WS, USER)).thenReturn(Arrays.asList(project("P1", "项目甲")));
+        allow("P1", true, true);
+        when(configService.resolve(USER, WS)).thenReturn(config());
+        final List<String> partials = new ArrayList<String>();
+        when(client.chatStream(any(AiConfig.class), anyString(), anyString(), any(Consumer.class)))
+                .thenAnswer(invocation -> {
+                    Consumer<String> consumer = invocation.getArgument(3);
+                    consumer.accept("{\"intent\":\"answer\",\"answer\":\"正在整理");
+                    throw new AppException(502, "客户端已断开");
+                });
+
+        assertThrows(AppException.class, () -> service.chat(USER, WS, WS_NAME,
+                request("帮我总结一下这个版本的进展"), new Consumer<String>() {
+                    @Override
+                    public void accept(String text) {
+                        partials.add(text);
+                    }
+                }));
+
+        assertEquals(Arrays.asList("正在整理"), partials);
+        verify(client, never()).chat(any(AiConfig.class), anyString(), anyString(), anyBoolean());
+    }
+
+    @Test
+    void streamFailureBeforeAnyDeltaFallsBackToNonStream() {
+        member(USER);
+        when(requirementService.list(WS, USER)).thenReturn(Arrays.asList(project("P1", "项目甲")));
+        allow("P1", true, true);
+        when(configService.resolve(USER, WS)).thenReturn(config());
+        when(client.chatStream(any(AiConfig.class), anyString(), anyString(), any(Consumer.class)))
+                .thenThrow(new AppException(400, "stream 不被支持"));
+        when(client.chat(any(AiConfig.class), anyString(), anyString(), anyBoolean()))
+                .thenReturn(reply("{\"intent\":\"answer\",\"answer\":\"整段回答\"}"));
+
+        AiAssistantResponse res = service.chat(USER, WS, WS_NAME,
+                request("帮我总结一下这个版本的进展"), new Consumer<String>() {
+                    @Override
+                    public void accept(String text) {
+                        /* 无需断言增量 */
+                    }
+                });
+
+        assertEquals("整段回答", res.getAnswer());
+        verify(client).chat(any(AiConfig.class), anyString(), anyString(), anyBoolean());
     }
 
     private String createDraft() {
