@@ -12,7 +12,7 @@
 - **鉴权边界**：`Authorization: Bearer` 通过后以令牌所属账号身份只读访问；纯 Bearer 请求免 CSRF、不创建会话，带 `JSESSIONID` 的请求仍受 CSRF 保护；令牌不能调用 `/api/admin/**`、令牌管理与改密接口，只读令牌的写方法一律 403；每令牌默认 120 次 / 分钟，超限 429。
 - **受控 OpenAPI**：`GET /v3/api-docs` 需登录（会话或令牌），只输出白名单只读路径并裁掉非 GET，Swagger UI 关闭；修正 springdoc 把 `@CurrentWorkspace` / `@BoardFilter` 展开成必填 `ctx` / `query` 的问题。
 - **MCP 侧车**：`tools/mcp/hourglass-mcp/`（Node ≥20）把同一批只读能力封成 14 个工具，Streamable HTTP，默认 `127.0.0.1:8788/mcp`；未设 `HG_MCP_KEY` 时只接受回环来源，非回环监听且无密钥拒绝启动；nginx `/mcp` 反代与 IP 限流见 `deploy/nginx-hourglass.conf`。
-- **验证**：后端新增 35 项单测（含 OpenAPI 定制 3 项），全量 1866 项通过；侧车 15 项单测与 15 项真实链路 E2E 通过（9 个空间、82 个未完成项、191 条需求、文档正文、撤销令牌后 401）。
+- **验证**：后端新增 35 项单测（含 OpenAPI 定制 3 项），本批提交树全量 1839 项通过（JDK 8）；侧车 15 项单测与 15 项真实链路 E2E 通过（9 个空间、82 个未完成项、191 条需求、文档正文、撤销令牌后 401）。
 - **文档**：新增《对外 API 与 MCP P0 实施设计》，接口契约「对外只读 API」、管理员指南 3.9 / 3.11、常见问题与 README 同步；`check-docs.py` 与基线校验全绿。
 - 未部署；前端令牌管理页、写接口与飞书 / 企微适配仍属后续批次。
 
