@@ -253,4 +253,26 @@ public interface RequirementDocMapper {
 
     /** 空间删除时连带清理收藏 */
     int deleteFavoritesByWorkspace(@Param("workspaceId") String workspaceId);
+
+    /** 文档间引用：保存正文时按 hgdoc:// 解析重建 */
+    int deleteDocLinksByFromDoc(@Param("workspaceId") String workspaceId, @Param("fromDocId") String fromDocId);
+
+    /** 文档删除时清掉指向它的反链 */
+    int deleteDocLinksByToDoc(@Param("workspaceId") String workspaceId, @Param("toDocId") String toDocId);
+
+    int insertDocLink(@Param("workspaceId") String workspaceId, @Param("fromDocId") String fromDocId,
+                      @Param("toDocId") String toDocId, @Param("userId") String userId);
+
+    int countDocLinksOut(@Param("workspaceId") String workspaceId, @Param("docId") String docId);
+
+    int countDocLinksBack(@Param("workspaceId") String workspaceId, @Param("docId") String docId);
+
+    /** 出链 / 反链可见列表：复用列表的 visibilityWhere 口径，不可见目标不进结果 */
+    List<com.hourglass.dto.DocLinkView> selectDocLinksOut(@Param("workspaceId") String workspaceId,
+                                                          @Param("docId") String docId,
+                                                          @Param("userId") String userId);
+
+    List<com.hourglass.dto.DocLinkView> selectDocLinksBack(@Param("workspaceId") String workspaceId,
+                                                           @Param("docId") String docId,
+                                                           @Param("userId") String userId);
 }

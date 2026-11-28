@@ -1818,6 +1818,10 @@ function reqDocReaderOpenLinks(body){
     links[i].setAttribute("rel", "noopener noreferrer");
   }
 }
+/* 文档正文渲染用：在 DOMPurify 默认协议白名单基础上放行站内 hgdoc:// 引用链接 */
+var REQ_DOC_SANITIZE_CFG = {
+  ALLOWED_URI_REGEXP: /^(?:(?:hgdoc|https?|mailto|tel|callto|sms|cid|xmpp):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i
+};
 /* 先在惰性的 template 里给图片加懒加载/异步解码再挂载：直接 innerHTML 会立刻解码全部内嵌图片 */
 function reqDocReaderFill(body, cleanHtml){
   var tpl = document.createElement("template");
@@ -2778,7 +2782,9 @@ function loadRrdRelLists(id, force){
   return Promise.all([
     loadReqDocDemands(id, { list: $("rrdRelDemands"), count: $("rrdRelDemandCount"), reader: true }),
     loadReqDocTasks(id, { list: $("rrdRelTasks"), count: $("rrdRelTaskCount"), reader: true }),
-    loadReqDocAttachments(id, { list: $("rrdRelAtts"), count: $("rrdRelAttCount"), reader: true })
+    loadReqDocAttachments(id, { list: $("rrdRelAtts"), count: $("rrdRelAttCount"), reader: true }),
+    loadRrdDocLinks(id),
+    loadRrdDocBacklinks(id)
   ]);
 }
 function watchRrdRel(id){
@@ -2812,9 +2818,157 @@ function scrollRrdRel(sec){
   /* 首次跳转会顺带补取数据：条目落地后再亮一次，免得高亮只落在「加载中…」上 */
   if(!rrdRelBoxLoaded(splitDocId)) loadRrdRelLists(splitDocId).then(flash);
 }
+/* ---------- 文档间引用：hgdoc:// 站内协议，配合后端 doc_link（SQL 135） ----------
+   Markdown 存 [标题](hgdoc://id)，富文本存 data-hg-ref="doc:id"；保存时服务端解析重建引用关系。 */
+function openReqDocLinkTarget(id){
+  if(!id) return Promise.resolve(false);
+  if(isReqDocEditing() && editingDocId !== id){
+    toast("当前文档还有未保存的修改，请先保存或放弃后再打开其它文档", "warn");
+    return Promise.resolve(false);
+  }
+  return showView("requirements").then(function(){
+    if(activeView !== "requirements") return;
+    setReqDocMode("read");
+    loadReqDocSplitDoc(id);
+  });
+}
+function rrdDocLinkMeta(d){
+  return docFormatLabel(d.format || "") + " · " + reqDocStatusLabel(d.status || "draft");
+}
+function rrdDocLinkListHtml(res, emptyText){
+  var rows = (res && res.visible) || [];
+  var hidden = res && res.hiddenCount ? res.hiddenCount : 0;
+  var out = rows.map(function(d){
+    return '<button class="req-expand-doc" type="button" data-doc-link="' + esc(d.docId) + '" title="打开文档">'
+      + '<span class="rd-title">' + esc(d.title) + '</span>'
+      + '<span class="rd-meta">' + esc(rrdDocLinkMeta(d)) + '</span></button>';
+  });
+  if(hidden > 0){
+    out.push('<div class="tl-empty">另有 ' + hidden + ' 处引用不可见（无权查看或已删除）</div>');
+  }
+  if(!out.length) out.push(rrdRelNone(emptyText));
+  return out.join("");
+}
+function loadRrdDocLinks(id){
+  var list = $("rrdRelLinks"), count = $("rrdRelLinkCount");
+  if(!list || !id) return Promise.resolve();
+  var key = String(id);
+  list.dataset.docId = key;
+  list.innerHTML = '<div class="tl-empty">加载中…</div>';
+  if(count) count.textContent = "";
+  return API.get("/api/req-docs/" + encodeURIComponent(id) + "/links").then(function(res){
+    if(list.dataset.docId !== key) return;
+    var rows = (res && res.visible) || [];
+    if(count) count.textContent = rows.length ? "（" + rows.length + "）" : "";
+    list.innerHTML = rrdDocLinkListHtml(res, "还没有引用其它文档");
+  }).catch(function(ex){
+    if(list.dataset.docId !== key) return;
+    list.innerHTML = rrdRelNone("引用加载失败", true);
+  });
+}
+function loadRrdDocBacklinks(id){
+  var list = $("rrdRelBacklinks"), count = $("rrdRelBacklinkCount");
+  if(!list || !id) return Promise.resolve();
+  var key = String(id);
+  list.dataset.docId = key;
+  list.innerHTML = '<div class="tl-empty">加载中…</div>';
+  if(count) count.textContent = "";
+  return API.get("/api/req-docs/" + encodeURIComponent(id) + "/backlinks").then(function(res){
+    if(list.dataset.docId !== key) return;
+    var rows = (res && res.visible) || [];
+    if(count) count.textContent = rows.length ? "（" + rows.length + "）" : "";
+    list.innerHTML = rrdDocLinkListHtml(res, "还没有被其它文档引用");
+  }).catch(function(ex){
+    if(list.dataset.docId !== key) return;
+    list.innerHTML = rrdRelNone("被引用加载失败", true);
+  });
+}
+/* 引用文档选择器：弹框与按钮都运行时注入，不改静态模板；Markdown 与富文本统一入口 */
+var reqRefPickSeq = 0;
+function ensureReqRefPicker(){
+  var dlg = $("dlgReqRefPick");
+  if(dlg) return dlg;
+  dlg = document.createElement("div");
+  dlg.className = "modal-layer";
+  dlg.id = "dlgReqRefPick";
+  dlg.setAttribute("role", "dialog");
+  dlg.setAttribute("aria-modal", "true");
+  dlg.setAttribute("aria-labelledby", "dlgReqRefPickTitle");
+  dlg.innerHTML = '<div class="sheet">'
+    + '<h3 class="reqdoc-dlg-title" id="dlgReqRefPickTitle">引用文档</h3>'
+    + '<p class="reqdoc-dlg-msg">选择要引用的文档，插入为站内链接；保存后双方分别出现在「引用 / 被引用」列表里。表格与 Univer 格式暂不支持插入引用。</p>'
+    + '<div class="reqdoc-dlg-form">'
+    + '<label class="reqdoc-dlg-field"><span>搜索文档</span>'
+    + '<input id="reqRefPickQuery" type="search" placeholder="按标题搜索；留空列出全部可见文档" autocomplete="off" /></label>'
+    + '<div class="req-ref-pick-list" id="reqRefPickList"></div>'
+    + '</div>'
+    + '<div class="reqdoc-dlg-foot">'
+    + '<button class="btn" type="button" id="reqRefPickCancel">取消</button>'
+    + '</div></div>';
+  document.body.appendChild(dlg);
+  $("reqRefPickCancel").addEventListener("click", function(){ UI.closeModal(dlg); });
+  var input = $("reqRefPickQuery");
+  input.addEventListener("input", function(){ reqRefPickSearch(input.value); });
+  input.addEventListener("keydown", function(e){
+    if(e.key === "Enter"){
+      var first = $("reqRefPickList").querySelector("[data-ref-pick]");
+      if(first) first.click();
+    }
+  });
+  $("reqRefPickList").addEventListener("click", function(e){
+    var row = e.target.closest("[data-ref-pick]");
+    if(row) insertReqDocRef(row.dataset.refPick, row.dataset.refTitle);
+  });
+  return dlg;
+}
+function reqRefPickSearch(kw){
+  var list = $("reqRefPickList");
+  if(!list) return;
+  var seq = ++reqRefPickSeq;
+  kw = (kw || "").trim();
+  list.innerHTML = '<div class="tl-empty">加载中…</div>';
+  API.getAllPages("/api/req-docs", kw ? { keyword: kw } : null).then(function(rows){
+    if(seq !== reqRefPickSeq || !$("dlgReqRefPick").classList.contains("open")) return;
+    rows = (rows || []).filter(function(d){ return d.id !== editingDocId; });
+    list.innerHTML = rows.length ? rows.slice(0, 50).map(function(d){
+      return '<button class="req-expand-doc" type="button" data-ref-pick="' + esc(d.id) + '" data-ref-title="' + esc(d.title) + '">'
+        + '<span class="rd-title">' + esc(d.title) + '</span>'
+        + '<span class="rd-meta">' + esc(docFormatLabel(d.format) || "") + '</span></button>';
+    }).join("") : '<div class="tl-empty">没有可引用的文档</div>';
+  }).catch(function(ex){
+    if(seq !== reqRefPickSeq) return;
+    list.innerHTML = '<div class="tl-empty">' + esc(ex.message || "搜索失败") + '</div>';
+  });
+}
+function insertReqDocRef(id, title){
+  title = String(title || "").replace(/[\[\]\n\r]/g, " ").trim() || "引用文档";
+  if(isMarkdownDoc()){
+    var ta = $("reqDocMdCanvas");
+    if(ta){
+      ta.setRangeText("[" + title + "](hgdoc://" + id + ")", ta.selectionStart, ta.selectionEnd, "end");
+      ta.focus();
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  }else if(!isUniverDoc() && !isSheetDoc() && reqEditor){
+    reqEditor.insertHTML('<a href="hgdoc://' + esc(id) + '" data-hg-ref="doc:' + esc(id) + '">' + esc(title) + "</a>&nbsp;");
+  }else{
+    return;
+  }
+  UI.closeModal($("dlgReqRefPick"));
+  markReqDocDirty();
+}
+function openReqRefPicker(){
+  if(!editingDocId) return;
+  if(isUniverDoc() || isSheetDoc()){ toast("表格与 Univer 格式暂不支持插入引用", "warn"); return; }
+  ensureReqRefPicker();
+  UI.openModal($("dlgReqRefPick"), "#reqRefPickQuery");
+  var input = $("reqRefPickQuery");
+  input.value = "";
+  reqRefPickSearch("");
+}
 /* 打印 / 导出 PDF 用的关联清单纯文本版：阅读页那份是交互组件，直接搬进打印窗口会带一堆按钮 */
 function rrdRelPrintHtml(){
-  var secs = [["rrdRelDemands", "关联需求"], ["rrdRelTasks", "关联工作项"], ["rrdRelAtts", "附件"]];
+  var secs = [["rrdRelDemands", "关联需求"], ["rrdRelTasks", "关联工作项"], ["rrdRelAtts", "附件"], ["rrdRelLinks", "引用"], ["rrdRelBacklinks", "被引用"]];
   var out = "";
   secs.forEach(function(pair){
     var list = $(pair[0]);
@@ -2952,6 +3106,10 @@ function renderReqDocReader(doc){
       rrdRelSec("demands", "关联需求", "rrdRelDemands", "rrdRelDemandCount") +
       rrdRelSec("tasks", "关联工作项", "rrdRelTasks", "rrdRelTaskCount") +
       rrdRelSec("attach", "附件", "rrdRelAtts", "rrdRelAttCount") +
+      (doc.format === "markdown" || docFormatOf(doc.format) === "html"
+        ? rrdRelSec("links", "引用", "rrdRelLinks", "rrdRelLinkCount") +
+          rrdRelSec("backlinks", "被引用", "rrdRelBacklinks", "rrdRelBacklinkCount")
+        : "") +
     '</section>' +
     '<button class="rrd-top" id="rrdTop" type="button" title="回到顶部" aria-label="回到顶部" hidden>' + icon("up", 16) + '</button>' +
     '<div class="rrd-progress" id="rrdProgress" hidden aria-hidden="true"><i id="rrdProgressFill"></i></div>' +
@@ -3029,7 +3187,7 @@ function renderReqDocReader(doc){
       /* 服务端已按白名单清洗过，这里再过一道 DOMPurify（双保险） */
       html = reqDocHtmlPadImg(doc.content || "");
     }
-    reqDocReaderFill(body, window.DOMPurify.sanitize(html));
+    reqDocReaderFill(body, window.DOMPurify.sanitize(html, REQ_DOC_SANITIZE_CFG));
     reqDocReaderOpenLinks(body);
     decorateCodeBlocks(body);
     decorateTables(body);
@@ -6362,7 +6520,7 @@ function renderMarkdownPreview(){
     /* 预览是本地渲染，仍走 DOMPurify：文档内容可能来自导入文件 */
     var html = "";
     try{ html = window.marked.parse(src, { gfm: true, breaks: false }); }catch(e){ html = ""; }
-    box.innerHTML = window.DOMPurify.sanitize(html);
+    box.innerHTML = window.DOMPurify.sanitize(html, REQ_DOC_SANITIZE_CFG);
     var links = box.querySelectorAll("a[href]");
     for(var i = 0; i < links.length; i++){
       links[i].setAttribute("target", "_blank");
@@ -7451,7 +7609,7 @@ function renderReqDocHistoryPreview(h, box){
     }else{
       html = reqDocHtmlPadImg(h.content || "");
     }
-    box.innerHTML = window.DOMPurify.sanitize(html);
+    box.innerHTML = window.DOMPurify.sanitize(html, REQ_DOC_SANITIZE_CFG);
     var links = box.querySelectorAll("a[href]");
     for(var i = 0; i < links.length; i++){
       links[i].setAttribute("target", "_blank");
@@ -9344,6 +9502,8 @@ function populateReqDocSelect(keep){
       if(rtk){ openTaskById(rtk.dataset.reqdocTask); return; }
       var rdm = e.target.closest("#rrdRel [data-doc-demand]");
       if(rdm){ openDemandDetailById(rdm.dataset.docDemand); return; }
+      var rlk = e.target.closest("#rrdRel [data-doc-link]");
+      if(rlk){ openReqDocLinkTarget(rlk.dataset.docLink); return; }
       var rdl = e.target.closest("#rrdRel [data-att-download]");
       if(rdl){ window.open(downloadUrl(rdl.dataset.attDownload), "_blank", "noopener"); return; }
       var rop = e.target.closest("#rrdRel [data-att-open]");
@@ -9608,6 +9768,27 @@ function populateReqDocSelect(keep){
     reqDocDuplicate(editingDocId, true);
   });
   if($("reqDocCodeBtn")) $("reqDocCodeBtn").addEventListener("click", openReqDocCodeMenu);
+  /* 引用文档按钮：运行时注入到「代码块」前，Markdown 与富文本统一入口 */
+  (function(){
+    if($("reqDocRefBtn")) return;
+    var anchor = $("reqDocCodeBtn");
+    if(!anchor || !anchor.parentNode) return;
+    var btn = document.createElement("button");
+    btn.className = "btn sm ghost";
+    btn.id = "reqDocRefBtn";
+    btn.type = "button";
+    btn.title = "在正文中引用另一篇文档，保存后双方出现「引用 / 被引用」";
+    btn.innerHTML = '<span data-icon="link"></span>&nbsp;引用';
+    anchor.parentNode.insertBefore(btn, anchor);
+    btn.addEventListener("click", openReqRefPicker);
+  })();
+  /* 正文 hgdoc:// 站内协议：阅读 / 预览 / 编辑器里点击都走应用内跳转，不交给浏览器（协议本身无默认行为） */
+  document.addEventListener("click", function(e){
+    var a = e.target.closest && e.target.closest('a[href^="hgdoc://"]');
+    if(!a) return;
+    e.preventDefault();
+    openReqDocLinkTarget(decodeURIComponent(a.getAttribute("href").slice("hgdoc://".length)));
+  });
   /* 低频操作收进“更多”：点开后保持与顶部工具栏相同的位置计算与关闭规则 */
   if($("reqDocMore")){
     $("reqDocMore").addEventListener("click", function(){
@@ -9981,6 +10162,7 @@ function populateReqDocSelect(keep){
     if($("dlgNewReqDoc") && $("dlgNewReqDoc").classList.contains("open")){ closeNewReqDocDialog(); return; }
     if(activeView === "dochistory"){ backFromDocHistory(); return; }
     if($("dlgReqDocShare") && $("dlgReqDocShare").classList.contains("open")){ UI.closeModal($("dlgReqDocShare")); return; }
+    if($("dlgReqRefPick") && $("dlgReqRefPick").classList.contains("open")){ UI.closeModal($("dlgReqRefPick")); return; }
     if($("dlgReqDocNotify") && $("dlgReqDocNotify").classList.contains("open")){ UI.closeModal($("dlgReqDocNotify")); return; }
     if($("dlgReqDocTrash") && $("dlgReqDocTrash").classList.contains("open")){ UI.closeModal($("dlgReqDocTrash")); return; }
     if($("rrdFindBar") && !$("rrdFindBar").hidden){ closeRrdFind(); return; }

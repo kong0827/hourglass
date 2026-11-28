@@ -13,6 +13,15 @@
 - **文档**：用户手册 8.2 补查找替换一条；`docs/` 与 `frontend/` 两份副本 md5 一致。
 - **验证**：`tools/e2e/doc-edit-comfort.mjs` 全部通过（38 断言：原 25 项 + 新增 Markdown 路径查 / 替换当前 / 全部替换与计数、富文本路径 ⌘+F 高亮 / 全部替换后 marks 清零、关闭编辑页查找条收敛）；`requirements.js` 通过 ESM 语法检查。未部署，SW `CACHE_NAME` 未 bump。
 
+## 2026-11-28 · 文档引用与反链面板（含 SQL 135，新增 doc_link 表）
+
+- **正文引用文档**：编辑页工具栏新增「引用」按钮（运行时注入，不改静态模板），搜索选择当前可见文档后插入站内链接——Markdown 存 `[标题](hgdoc://id)`，富文本存 `data-hg-ref="doc:id"`；正文、预览与阅读态点击这类链接走应用内跳转。表格与 Univer 格式暂不支持插入。前后端清洗白名单同步放行 `hgdoc://` 协议与 `data-hg-ref` 属性（原先服务端入库清洗与前端 DOMPurify 都会把这类链接剥掉），含 `javascript:` 等危险协议仍拦截的回归断言。
+- **引用 / 被引用**：保存正文时服务端解析站内协议重建 `doc_link`（sql/135，整删整插、去重、排除自引用、上限 200）；阅读页底部新增「引用 / 被引用」两个列表（Markdown 与 HTML 文档，懒加载同关联区），点击进入目标文档阅读态；文档删除 / 项目级联时清理双向关系。
+- **权限占位**：出链 / 反链复用文档列表的 `visibilityWhere` 口径过滤；无权查看或已删除的目标只显示「另有 N 处引用不可见」，不泄露标题。
+- **接口**：`GET /api/req-docs/{id}/links`、`GET /api/req-docs/{id}/backlinks` 返回 `{visible, hiddenCount}`；解析器 `DocLinkParser` 独立单测。
+- **文档**：用户手册 8.2 补引用与反链一条；`docs/` 与 `frontend/` 两份副本 md5 一致。
+- **验证**：`DocLinkParserTest` 5/5、`RequirementDocHtmlSanitizeTest` 6/6（含 hgdoc 放行）；隔离副本全量后端 1752 项 0 错误（唯一失败为并行未提交批次的 `ListPreferenceServiceTest.rejectsTooManyColumnsBeforeWriting`，非本批文件）；`tools/e2e/doc-links.mjs` 14 断言连续两轮 ALL PASS（picker 插入并保存落库、被引用面板点击跳回、正文 hgdoc 点击跳转、viewer 视角权限占位不泄露标题；样例用后即删）。未部署，SW `CACHE_NAME` 未 bump。
+
 ## 2026-11-27 · 文档编辑体验：粘贴纯文本开关、打印版式（纯前端，无 SQL）
 
 - **粘贴纯文本**：编辑页工具栏新增「粘贴纯文本」开关（本机记忆），开启后从网页 / 微信等粘贴只保留文字——换行转成换行、样式与标签剥掉、内容里的 HTML 字面量按文本转义；剪贴板带截图文件时不拦截，仍走原图片上传。SunEditor `onPaste` 返回字符串即替换粘贴内容，不改默认富文本路径。

@@ -60,4 +60,18 @@ class RequirementDocHtmlSanitizeTest {
         assertFalse(clean.contains("<script"), clean);
         assertTrue(clean.contains("color: red"), clean);
     }
+
+    @Test
+    void keepsHgdocLinksAndRefMarker() {
+        /* 站内文档引用链接：href 走 hgdoc:// 协议、data-hg-ref 标记目标，清洗不能剥掉 */
+        String html = "<p>详见<a href=\"hgdoc://K100\" data-hg-ref=\"doc:K100\" title=\"t\">目标文档</a></p>"
+                + "<p><a href=\"javascript:alert(1)\">恶意</a></p>";
+
+        String clean = RequirementDocService.sanitize(html);
+
+        assertNotNull(clean);
+        assertTrue(clean.contains("href=\"hgdoc://K100\""), clean);
+        assertTrue(clean.contains("data-hg-ref=\"doc:K100\""), clean);
+        assertFalse(clean.contains("javascript:"), clean);
+    }
 }

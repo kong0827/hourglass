@@ -132,6 +132,24 @@ public class RequirementDocController {
                 offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
+    /** 本文引用的文档列表（阅读页「引用」）：不可见目标只返回计数 */
+    @GetMapping("/api/req-docs/{id}/links")
+    public ApiResult<com.hourglass.dto.DocLinksResponse> links(@PathVariable String id,
+                                                               @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(docService.linksOf(ws.getId(), userId, id));
+    }
+
+    /** 引用本文的文档列表（阅读页「被引用」）：不可见来源只返回计数，不泄露标题 */
+    @GetMapping("/api/req-docs/{id}/backlinks")
+    public ApiResult<com.hourglass.dto.DocLinksResponse> backlinks(@PathVariable String id,
+                                                                   @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(docService.backlinksTo(ws.getId(), userId, id));
+    }
+
     /** 需求文档活动轨迹：沿用空间成员权限，并校验文档属于该空间。 */
     @GetMapping("/api/req-docs/{id}/activities")
     public ApiResult<PageResult<WorkActivity>> activities(@PathVariable String id,

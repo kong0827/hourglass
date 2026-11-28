@@ -753,6 +753,9 @@ mark.rrd-hit.on{background:var(--warning);color:#fff;}
 .req-find .btn{flex:0 0 auto;height:24px;padding:0 8px;font-size:12px;}
 mark.req-hit{background:var(--warning-border);color:inherit;border-radius:2px;}
 mark.req-hit.on{background:var(--warning);color:#fff;}
+/* 引用文档选择器：结果列表复用 req-expand-doc 行样式，限定高度滚动 */
+.req-ref-pick-list{display:flex;flex-direction:column;gap:6px;max-height:320px;overflow:auto;padding:2px 0;}
+.req-ref-pick-list .req-expand-doc{width:100%;text-align:left;}
 .rrd-body{font-size:14px;line-height:1.85;min-height:200px;}
 /* 阅读页：正文 + 右侧大纲（大纲沿用编辑页那套 .reqdoc-toc，只是外层改为网格） */
 .rrd-docwrap{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:22px;align-items:start;}

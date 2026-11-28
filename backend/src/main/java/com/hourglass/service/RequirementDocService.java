@@ -119,8 +119,9 @@ public class RequirementDocService {
             /* Quill 时代的列表用 <li data-list="bullet|ordered">，SunEditor 用标准 ul/ol；
                保留此放行以兼容旧数据 */
             .addAttributes("li", "data-list")
-            .addAttributes("a", "href", "title", "target", "rel")
-            .addProtocols("a", "href", "http", "https", "mailto");
+            /* data-hg-ref 标记站内文档引用（值 doc:<id>），与 hgdoc:// 协议配套，阅读页据此渲染反链 */
+            .addAttributes("a", "href", "title", "target", "rel", "data-hg-ref")
+            .addProtocols("a", "href", "http", "https", "mailto", "hgdoc");
 
     /**
      * 允许保留的视觉样式：只收排版类“纯展示”属性，刻意排除 position / display / float /
@@ -461,6 +462,7 @@ public class RequirementDocService {
         List<String> memberIds = apply(d, reqId, req, userId);
         docMapper.insert(d);
         saveVisibilityMembers(workspaceId, d.getId(), memberIds);
+        refreshDocLinks(userId, workspaceId, d.getId(), d.getContent());
         workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, d.getId(), userId,
                 "create", "创建了文档「" + d.getTitle() + "」");
         return withMembers(docMapper.selectById(d.getId()));
@@ -619,6 +621,7 @@ public class RequirementDocService {
             notifyDocOwner(d, userId, "文档「" + d.getTitle() + "」已更新",
                     "文档内容或属性有更新");
         }
+        refreshDocLinks(userId, workspaceId, id, d.getContent());
         return withMembers(docMapper.selectById(id));
     }
 
@@ -852,6 +855,8 @@ public class RequirementDocService {
         if (docMapper.softDelete(workspaceId, id, userId) == 0) {
             throw AppException.conflict("文档已被删除，请刷新后重试");
         }
+        docMapper.deleteDocLinksByFromDoc(workspaceId, id);
+        docMapper.deleteDocLinksByToDoc(workspaceId, id);
         workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, id, userId,
                 "delete", "将文档「" + d.getTitle() + "」移入回收站");
         notifyDocOwner(d, userId, "文档「" + d.getTitle() + "」已移入回收站",
@@ -869,6 +874,7 @@ public class RequirementDocService {
         for (String docId : docMapper.selectIdsByReq(workspaceId, reqId)) {
             docMapper.clearTaskRef(workspaceId, docId);
             docMapper.deleteDemandLinksByDoc(workspaceId, docId);
+            docMapper.deleteDocLinksByFromDoc(workspaceId, docId);
             shareMapper.deleteByDoc(workspaceId, docId);
             attachmentService.deleteByTarget(workspaceId, docId, AttachmentService.KIND_DOC);
             workActivityService.deleteByEntity(workspaceId, WorkActivityService.REQUIREMENT_DOC, docId);
@@ -876,6 +882,34 @@ public class RequirementDocService {
         docMapper.deleteVisibilityMembersByReq(workspaceId, reqId);
         docMapper.deleteFavoritesByReq(workspaceId, reqId);
         return docMapper.deleteByReq(workspaceId, reqId);
+    }
+
+    /* ---------------- 文档间引用与反链 ---------------- */
+
+    /** 保存正文后按 hgdoc:// 重建出链：整删整插，解析失败按普通文本处理不阻塞保存 */
+    private void refreshDocLinks(String userId, String workspaceId, String docId, String content) {
+        docMapper.deleteDocLinksByFromDoc(workspaceId, docId);
+        for (String toId : DocLinkParser.extract(content, docId)) {
+            docMapper.insertDocLink(workspaceId, docId, toId, userId);
+        }
+    }
+
+    /** 出链（本文引用了谁）：读取前校验文档可见；不可见或已删除的目标只给计数，不泄露标题 */
+    public com.hourglass.dto.DocLinksResponse linksOf(String workspaceId, String userId, String docId) {
+        getVisible(workspaceId, userId, docId);
+        com.hourglass.dto.DocLinksResponse r = new com.hourglass.dto.DocLinksResponse();
+        r.setVisible(docMapper.selectDocLinksOut(workspaceId, docId, userId));
+        r.setHiddenCount(Math.max(0, docMapper.countDocLinksOut(workspaceId, docId) - r.getVisible().size()));
+        return r;
+    }
+
+    /** 反链（谁引用了本文）：口径与出链一致 */
+    public com.hourglass.dto.DocLinksResponse backlinksTo(String workspaceId, String userId, String docId) {
+        getVisible(workspaceId, userId, docId);
+        com.hourglass.dto.DocLinksResponse r = new com.hourglass.dto.DocLinksResponse();
+        r.setVisible(docMapper.selectDocLinksBack(workspaceId, docId, userId));
+        r.setHiddenCount(Math.max(0, docMapper.countDocLinksBack(workspaceId, docId) - r.getVisible().size()));
+        return r;
     }
 
     /* ---------------- 历史版本 ---------------- */
