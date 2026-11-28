@@ -127,13 +127,13 @@ class ListPreferenceServiceTest {
     @Test
     void rejectsTooManyColumnsBeforeWriting() {
         List<String> columns = new ArrayList<String>(Collections.singletonList("title"));
-        for (int i = 0; i < 18; i++) {
+        for (int i = 0; i < 19; i++) {
             columns.add("extra" + i);
         }
 
         AppException error = assertBadRequest(() -> service.save("U1", "W1", "task-list", request("table", columns)));
 
-        assertTrue(error.getMessage().contains("最多 18 列"));
+        assertTrue(error.getMessage().contains("最多 19 列"));
         verify(mapper, never()).upsert(org.mockito.ArgumentMatchers.any(UserListPreference.class));
     }
 

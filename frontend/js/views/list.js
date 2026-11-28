@@ -15,7 +15,7 @@ import { moveTaskToColumn, openDuePopover, openOwnerMenu, openPriorityMenu, open
 import { deleteTask, openTaskDrawer, ownerOptions } from "../core/task-drawer.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { taskVersionsText, taskVersionLinksHTML, assocLinkHTML, taskIsPublished, taskPublicationHTML, taskPublicationText, CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, avatarHTML, colMeta, colName, demandNoText, duePresetDate, fmtShortMD, fmtTs, parseDate, priName, priTagHTML, severityBadgeHTML, spanText, typeBadgeHTML, typeName } from "../lib/format.js";
+import { taskVersionsText, taskVersionLinksHTML, assocLinkHTML, taskIsPublished, taskPublicationHTML, taskPublicationText, CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, avatarHTML, colMeta, colName, demandNoText, duePresetDate, fmtShortMD, fmtTs, itemNoText, parseDate, priName, priTagHTML, severityBadgeHTML, spanText, typeBadgeHTML, typeName } from "../lib/format.js";
 import { loadBoard, loadReqs } from "./board.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { triggerDownload } from "../lib/download.js";
@@ -73,13 +73,13 @@ var VERSION_GROUP_MAX = 500;
 /* 列头排序：dueDate/updatedAt/work 复用服务端已有的 due/updated/actual，其余按列 key 本地排序 */
 var SORT_DEFAULT_DIR = {
   due:"asc", priority:"asc", estimate:"desc", actual:"desc", updated:"desc",
-  title:"asc", type:"asc", column:"asc", publication:"asc", owner:"asc", progress:"desc",
+  title:"asc", no:"asc", type:"asc", column:"asc", publication:"asc", owner:"asc", progress:"desc",
   project:"asc", demand:"asc", version:"asc", category:"asc", startDate:"asc", tags:"asc",
   subtasks:"desc", comments:"desc"
 };
 var HEAD_SORT_MAP = { dueDate:"due", updatedAt:"updated", work:"actual" };
 var LIST_SORTS = ["default"].concat(Object.keys(SORT_DEFAULT_DIR));
-var COL_WIDTHS = { title:"minmax(240px,1fr)", type:"80px", column:"96px", publication:"104px", priority:"72px", owner:"96px", dueDate:"104px", progress:"108px", project:"132px", demand:"180px", version:"112px", category:"100px", startDate:"110px", tags:"160px", subtasks:"90px", work:"100px", comments:"80px", updatedAt:"168px" };
+var COL_WIDTHS = { title:"minmax(240px,1fr)", no:"76px", type:"80px", column:"96px", publication:"104px", priority:"72px", owner:"96px", dueDate:"104px", progress:"108px", project:"132px", demand:"180px", version:"112px", category:"100px", startDate:"110px", tags:"160px", subtasks:"90px", work:"100px", comments:"80px", updatedAt:"168px" };
 
 function renderSmartTabs(){
   updateMobFilterSummary();
@@ -220,7 +220,7 @@ function initSmartTable(){
     '<option value="due">按截止日期</option><option value="priority">按优先级</option>' +
     '<option value="estimate">按预估工时</option><option value="actual">按实际工时</option>' +
     '<option value="updated">按更新时间</option>' +
-    [["title", "按标题"], ["type", "按类型"], ["column", "按状态"], ["owner", "按负责人"],
+    [["title", "按标题"], ["no", "按编号"], ["type", "按类型"], ["column", "按状态"], ["owner", "按负责人"],
      ["progress", "按进度"], ["project", "按项目"], ["version", "按计划版本"], ["category", "按分类"],
      ["startDate", "按开始日期"], ["tags", "按标签"], ["subtasks", "按子任务"], ["comments", "按评论数"]
     ].map(function(o){
@@ -434,6 +434,10 @@ function minutesText(value){
 function taskCell(t, key, hasTypeCol, rowEdit){
   if(key === "title") return '<span class="lr-task"><span class="lr-t" title="' + esc(t.title) + '">' + (hasTypeCol ? "" : typeBadgeHTML(t.itemType) + severityBadgeHTML(t.severity)) + esc(t.title)
     + '</span></span>';
+  if(key === "no"){
+    var noTxt = itemNoText(t.itemNo);
+    return '<span class="cell' + (noTxt ? '" title="工作项编号' : ' muted" title="未取号') + '">' + esc(noTxt || "—") + '</span>';
+  }
   if(key === "type") return '<span class="cell">' + (typeBadgeHTML(t.itemType) || esc(typeName(t.itemType))) + severityBadgeHTML(t.severity) + '</span>';
   if(key === "publication"){
     if(!taskIsPublished(t)) return '<span class="cell muted" title="没有正式生产发布记录，也没有人工标记">未发布</span>';
@@ -548,6 +552,7 @@ function presetFilteredItems(){
 }
 function sortValue(t, key){
   if(key === "title") return String(t.title || "");
+  if(key === "no") return t.itemNo == null ? null : Number(t.itemNo);
   if(key === "type") return typeName(t.itemType) || "";
   if(key === "column"){
     var ci = -1;
@@ -742,6 +747,7 @@ function csvCell(value){
 }
 function taskCsvValue(t, key){
   if(key === "title") return t.title || "";
+  if(key === "no") return itemNoText(t.itemNo) || "";
   if(key === "type") return typeName(t.itemType);
   if(key === "column") return colName(t.boardColumn);
   if(key === "priority") return t.priority || "";

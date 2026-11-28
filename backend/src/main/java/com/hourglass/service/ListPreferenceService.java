@@ -31,7 +31,7 @@ public class ListPreferenceService {
 
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final Set<String> TASK_COLUMNS = Collections.unmodifiableSet(new LinkedHashSet<String>(Arrays.asList(
-            "title", "type", "column", "publication", "priority", "owner", "dueDate", "progress", "project", "demand",
+            "title", "no", "type", "column", "publication", "priority", "owner", "dueDate", "progress", "project", "demand",
             "version", "category", "startDate", "tags", "subtasks", "work", "comments", "updatedAt")));
     private static final Set<String> MY_TASK_COLUMNS = Collections.unmodifiableSet(new LinkedHashSet<String>(Arrays.asList(
             "title", "type", "priority", "status", "dueDate", "startDate", "progress", "work", "project", "updatedAt")));
@@ -42,7 +42,7 @@ public class ListPreferenceService {
             "name", "status", "health", "total", "backlog", "doing", "done", "overdue", "blocked",
             "progress", "weekCompleted", "weekWorkMinutes", "members")));
     private static final Set<String> DEMAND_POOL_COLUMNS = Collections.unmodifiableSet(new LinkedHashSet<String>(Arrays.asList(
-            "title", "kind", "category", "priority", "status", "project", "version", "expectDate", "wsjf", "source", "createdAt")));
+            "title", "no", "kind", "category", "priority", "status", "project", "version", "expectDate", "wsjf", "source", "createdAt")));
     private static final Set<String> PROJECT_VIEW_COLUMNS = Collections.unmodifiableSet(new LinkedHashSet<String>(Arrays.asList(
             "name", "status", "health", "total", "backlog", "doing", "done", "overdue",
             "progress", "owner", "dueDate", "estimate", "actual")));

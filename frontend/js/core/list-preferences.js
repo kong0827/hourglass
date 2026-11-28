@@ -9,9 +9,9 @@ var DEFS = {
     mode: "table",
     modes: ["table"],
     required: "title",
-    labels: { title:"工作项", type:"类型", column:"状态", publication:"发布态", priority:"优先级", owner:"负责人", dueDate:"截止", progress:"进度", project:"项目", demand:"关联需求", version:"计划版本", category:"分类", startDate:"开始日期", tags:"标签", subtasks:"子任务", work:"工时", comments:"评论", updatedAt:"更新" },
-    /* 默认 9 列：发布态紧跟状态，保证未发布也逐行可见；类型并入标题、进度按需打开，更新时间收进行尾 */
-    defaults: ["title","column","publication","priority","owner","dueDate","project","version","updatedAt"]
+    labels: { title:"工作项", no:"编号", type:"类型", column:"状态", publication:"发布态", priority:"优先级", owner:"负责人", dueDate:"截止", progress:"进度", project:"项目", demand:"关联需求", version:"计划版本", category:"分类", startDate:"开始日期", tags:"标签", subtasks:"子任务", work:"工时", comments:"评论", updatedAt:"更新" },
+    /* 默认 10 列：编号紧跟标题；发布态紧跟状态，保证未发布也逐行可见；类型并入标题、进度按需打开，更新时间收进行尾 */
+    defaults: ["title","no","column","publication","priority","owner","dueDate","project","version","updatedAt"]
   },
   "my-tasks": {
     mode: "table",
@@ -46,8 +46,8 @@ var DEFS = {
     mode: "board",
     modes: ["board", "table", "gantt"],
     required: "title",
-    labels: { title:"需求", kind:"类型", category:"分类", priority:"优先级", status:"状态", project:"项目", version:"目标版本", expectDate:"期望交付", wsjf:"WSJF", source:"来源", reviewer:"评审人", createdAt:"提交时间" },
-    defaults: ["title","kind","priority","status","project","version","expectDate","wsjf"]
+    labels: { title:"需求", no:"编号", kind:"类型", category:"分类", priority:"优先级", status:"状态", project:"项目", version:"目标版本", expectDate:"期望交付", wsjf:"WSJF", source:"来源", reviewer:"评审人", createdAt:"提交时间" },
+    defaults: ["title","no","kind","priority","status","project","version","expectDate","wsjf"]
   }
 };
 var cache = {};
@@ -75,6 +75,8 @@ function load(viewKey){
   pending[key] = API.get("/api/list-preferences/" + viewKey).then(function(d){
     var current = stateFor(viewKey);
     if(d && Array.isArray(d.columns) && d.columns.length) current.columns = sanitize(viewKey, d.columns);
+    /* 编号列是后加的：老的服务端偏好里没有就补到标题后；用户仍可在「显示字段」里关掉或挪位 */
+    if(DEFS[viewKey].labels.no && current.columns.indexOf("no") === -1) current.columns.splice(1, 0, "no");
     /* 服务端偏好晚到不能覆盖本次会话里用户已经选过的视图：
        否则先点「列表」再收到「看板」的返回，界面会停在骨架屏上 */
     if(d && !current.modeTouched && DEFS[viewKey].modes.indexOf(d.viewMode) !== -1) current.viewMode = d.viewMode;

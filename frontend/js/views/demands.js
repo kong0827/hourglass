@@ -1410,6 +1410,10 @@ function demCreatorLine(d){
 function demEmptyCell(){ return '<span class="muted">—</span>'; }
 function demandCell(d, key){
   if(key === "title") return '<button class="link-title dem-link-title" type="button" data-dem-detail="' + esc(d.id) + '" title="查看需求详情">' + esc(d.title) + demCreatorLine(d) + '</button>';
+  if(key === "no"){
+    var dNo = demandNoText(d.demandNo);
+    return dNo ? '<span title="需求编号">' + esc(dNo) + '</span>' : demEmptyCell();
+  }
   if(key === "kind") return '<span class="tag ghost">' + esc(d.itemKind || "其他") + '</span>';
   if(key === "category") return demCategoryCell(d);
   if(key === "priority") return demPriorityCell(d);
@@ -2282,6 +2286,7 @@ function demCsvCell(value){
 }
 function demCsvValue(d, key){
   if(key === "title") return d.title || "";
+  if(key === "no") return demandNoText(d.demandNo) || "";
   if(key === "kind") return d.itemKind || "";
   if(key === "category") return catNameById(d.categoryId);
   if(key === "priority") return d.priority || "";
