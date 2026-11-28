@@ -2009,11 +2009,13 @@ function reportCaseById(id){
   }
   return null;
 }
-/* 报告里的用例可能不在当前列表页，按标题回查一次，再按 100 条一页兜底查找 */
-function openReportCase(id){
+/* 报告里的用例可能不在当前列表页，按标题回查一次，再按 100 条一页兜底查找。
+   meta 可由调用方带入（KPI 下钻已有完整行），省一次按 id 反查 */
+function openReportCase(id, meta){
   if(caseById(id)){ openCaseDetail(id); return; }
   if(!caseReqId){ toast("先选择项目再打开用例", "warn"); return; }
-  var reqId = caseReqId, meta = reportCaseById(id);
+  var reqId = caseReqId;
+  meta = meta || reportCaseById(id);
   function openFound(c){
     if(!c) return false;
     if(!caseById(c.id)) cases.push(c);
@@ -2192,10 +2194,133 @@ function exportRunDrillCsv(){
   downloadCsv("执行明细-" + safe(reqNameOf(caseReqId)) + "-" + safe(dimName) + "-" + safe(m.label) + ".csv", rows);
   toast("已导出执行明细 CSV", "fs");
 }
+/* ---------- KPI 卡下钻：本轮执行明细 / 需求覆盖明细（弹层，口径同报告卡片） ---------- */
+var repDrill = { kind:"", filter:"", reqId:"", seq:0, cache:{}, items:[] };
+function repDrillRate(s){
+  var base = Math.max(0, (s.total || 0) - (s.skipped || 0));
+  return base ? Math.round((s.passed || 0) * 100 / base) : 0;
+}
+function repDrillTexts(kind){
+  var s = (reportData && reportData.stats) || {};
+  if(kind === "coverage"){
+    var cov = coverageSummary(reportData.coverage);
+    return {
+      title: "需求覆盖明细",
+      desc: cov.covered + " / " + cov.total + " 条需求有至少 1 条用例 · 未覆盖 " + Math.max(0, cov.total - cov.covered) + " 条 · 点击需求打开详情"
+    };
+  }
+  var executed = Math.max(0, (s.total || 0) - (s.untested || 0));
+  return {
+    title: kind === "failed" ? "失败用例" : (kind === "blocked" ? "阻塞用例" : (kind === "skipped" ? "跳过用例" : "本轮执行明细")),
+    desc: "本轮执行 " + executed + " 条 · 通过 " + (s.passed || 0) + " · 失败 " + (s.failed || 0)
+      + " · 阻塞 " + (s.blocked || 0) + " · 跳过 " + (s.skipped || 0)
+      + " · 通过率 " + repDrillRate(s) + "%（跳过不计入分母）"
+  };
+}
+function repDrillChipsHTML(){
+  var chips;
+  if(repDrill.kind === "coverage"){
+    var cov = coverageSummary(reportData.coverage);
+    chips = [["uncovered", "未覆盖", Math.max(0, cov.total - cov.covered)], ["covered", "已覆盖", cov.covered]];
+  }else{
+    var s = reportData.stats || {};
+    chips = [["passed", "通过", s.passed || 0], ["failed", "失败", s.failed || 0],
+      ["blocked", "阻塞", s.blocked || 0], ["skipped", "跳过", s.skipped || 0]];
+  }
+  return chips.map(function(it){
+    var on = it[0] === repDrill.filter;
+    return '<button class="tc-cov-chip' + (on ? " on" : "") + '" type="button" aria-pressed="' + on + '"'
+      + ' data-rep-drill-chip="' + it[0] + '">' + it[1] + '<span class="n">' + it[2] + '</span></button>';
+  }).join("");
+}
+function repDrillCoverageHTML(){
+  var rows = ((reportData && reportData.coverage) || []).filter(function(r){ return r.demandId; });
+  var wantCovered = repDrill.filter === "covered";
+  var list = rows.filter(function(r){ return wantCovered ? (r.caseTotal || 0) > 0 : (r.caseTotal || 0) === 0; });
+  if(!list.length) return '<p class="rep-empty">' + (wantCovered ? "还没有任何需求被用例覆盖。" : "所有需求都至少有一条用例。") + '</p>';
+  return '<div class="rep-cov">' + list.map(function(r){
+    var ok = (r.caseTotal || 0) > 0;
+    return '<div class="rep-cov-row rep-cov-link" role="button" tabindex="0" data-cov-demand="' + esc(r.demandId) + '" title="查看需求详情"><span>' + esc(r.demandTitle || "未命名需求") + '</span>'
+      + '<span>' + (r.caseTotal || 0) + ' 用例 · ' + (r.passed || 0) + ' 通过 · ' + (r.failed || 0) + ' 失败'
+      + (r.skipped ? ' · ' + r.skipped + ' 跳过' : '') + '</span>'
+      + '<span class="mini-tag ' + (ok ? "ok" : "over") + '">' + (ok ? "已覆盖" : "未覆盖") + '</span></div>';
+  }).join("") + '</div>'
+    + '<p class="foot-note rep-drill-more">0 表示未发生，不代表通过或失败。</p>';
+}
+function repDrillEmptyText(status){
+  return { passed:"本轮没有通过的用例。", failed:"本轮没有失败用例。", blocked:"本轮没有阻塞用例。", skipped:"本轮没有跳过的用例。" }[status] || "没有匹配的用例。";
+}
+/* 单结果取前 100 条：通过类用例量可能很大，弹层不做全量渲染 */
+function repDrillFetch(status){
+  var key = repDrill.reqId + "|" + status;
+  if(repDrill.cache[key]) return Promise.resolve(repDrill.cache[key]);
+  return API.get("/api/test-cases", { reqId: repDrill.reqId, status: status, sort: "executed", sortDir: "desc", offset: 0, limit: 100 })
+    .then(function(page){
+      var data = { items: (page && page.items) || [], total: (page && page.total) || 0 };
+      repDrill.cache[key] = data;
+      return data;
+    });
+}
+function repDrillCaseHTML(data, status){
+  repDrill.items = data.items || [];
+  if(!repDrill.items.length) return '<p class="rep-empty">' + repDrillEmptyText(status) + '</p>';
+  var kind = status === "failed" ? "fail" : (status === "blocked" ? "block" : "");
+  var body = repDrill.items.map(function(c){ return reportCaseRow(c, kind); }).join("");
+  return body + (data.total > repDrill.items.length
+    ? '<p class="foot-note rep-drill-more">共 ' + data.total + ' 条，按最近执行时间展示前 ' + repDrill.items.length + ' 条。</p>'
+    : "");
+}
+function renderRepDrillBody(){
+  var body = $("repDrillBody");
+  if(!body || !reportData) return;
+  var seq = ++repDrill.seq;
+  repDrill.items = [];
+  if(repDrill.kind === "coverage"){ body.innerHTML = repDrillCoverageHTML(); return; }
+  var status = repDrill.filter;
+  body.innerHTML = UI.skeletonRows(4);
+  repDrillFetch(status).then(function(data){
+    if(seq !== repDrill.seq) return;
+    body.innerHTML = repDrillCaseHTML(data, status);
+  }).catch(function(ex){
+    if(seq !== repDrill.seq) return;
+    body.innerHTML = UI.errorState((ex && ex.message) || "明细加载失败");
+  });
+}
+function openRepDrill(kind){
+  if(!reportData || !caseReqId) return;
+  var dlg = $("dlgRepDrill");
+  if(!dlg) return;
+  repDrill.kind = kind === "coverage" ? "coverage" : "cases";
+  repDrill.filter = kind === "coverage" ? "uncovered" : (kind === "failed" ? "failed" : (kind === "blocked" ? "blocked" : (kind === "skipped" ? "skipped" : "passed")));
+  repDrill.reqId = caseReqId;
+  repDrill.cache = {};
+  var t = repDrillTexts(kind);
+  $("repDrillTitle").textContent = t.title;
+  $("repDrillSub").textContent = t.desc;
+  $("repDrillChips").innerHTML = repDrillChipsHTML();
+  renderRepDrillBody();
+  UI.openModal(dlg, "[data-rep-drill-chip].on");
+}
+function closeRepDrill(){
+  var dlg = $("dlgRepDrill");
+  if(dlg) UI.closeModal(dlg);
+}
+function switchRepDrillFilter(value){
+  if(!value || repDrill.filter === value) return;
+  repDrill.filter = value;
+  var chips = $("repDrillChips");
+  if(chips) chips.innerHTML = repDrillChipsHTML();
+  renderRepDrillBody();
+}
+function repDrillCaseById(id){
+  for(var i = 0; i < repDrill.items.length; i++) if(repDrill.items[i].id === id) return repDrill.items[i];
+  return null;
+}
 function renderTestReport(){
   var box = $("tcReport");
   if(!box || !reportData) return;
   runDrillSeq++;
+  if($("dlgRepDrill") && $("dlgRepDrill").classList.contains("open")) closeRepDrill();
   var s = reportData.stats || {};
   var total = s.total || 0;
   /* 通过与通过率都不把跳过算作未通过：分母剔除跳过的用例 */
@@ -2234,16 +2359,21 @@ function renderTestReport(){
     + '<button class="btn sm" type="button" data-tc-report-doc>Word</button>'
     + '<button class="btn sm" type="button" data-tc-report-csv>CSV</button>'
     + '</div>';
-  function kpiHTML(cls, key, sub, val, foot){
-    return '<div class="rep-kpi' + (cls ? " " + cls : "") + '">'
+  /* 四张 KPI 卡都可下钻：点开弹层看构成明细（用例按结果切换 / 需求按覆盖切换） */
+  function kpiHTML(cls, key, sub, val, foot, drill, drillTitle){
+    var attrs = drill
+      ? ' role="button" tabindex="0" data-rep-kpi-drill="' + drill + '" aria-haspopup="dialog" title="' + esc(drillTitle || "查看明细") + '"'
+      : "";
+    return '<div class="rep-kpi' + (cls ? " " + cls : "") + (drill ? " is-drill" : "") + '"' + attrs + '>'
+      + (drill ? '<span class="rep-kpi-go">明细' + icon("chevronRight", 10) + '</span>' : '')
       + '<div class="k">' + key + (sub ? '<span class="k-sub">' + sub + '</span>' : '') + '</div>'
       + '<div class="v">' + val + '</div><div class="f">' + foot + '</div></div>';
   }
   var kpis = '<div class="rep-kpis">'
-    + kpiHTML("good", "通过率", "按本轮", passRate + '<small>%</small>', (s.passed || 0) + ' / ' + rateBase + ' · 排除跳过')
-    + kpiHTML((s.failed || 0) ? "bad" : "", "失败", "", (s.failed || 0), "已转缺陷 " + failedWithBug)
-    + kpiHTML((s.blocked || 0) ? "warn" : "", "阻塞", "", (s.blocked || 0), "等待环境与权限")
-    + kpiHTML("", "覆盖率", "全部需求", cov.pct + '<small>%</small>', cov.covered + ' / ' + cov.total + ' 条需求有至少 1 条用例')
+    + kpiHTML("good", "通过率", "最近一轮", passRate + '<small>%</small>', (s.passed || 0) + ' / ' + rateBase + ' · 排除跳过', "pass", "查看本轮执行明细")
+    + kpiHTML((s.failed || 0) ? "bad" : "", "失败", "", (s.failed || 0), "已转缺陷 " + failedWithBug, (s.failed || 0) ? "failed" : "", "查看失败用例明细")
+    + kpiHTML((s.blocked || 0) ? "warn" : "", "阻塞", "", (s.blocked || 0), "等待环境与权限", (s.blocked || 0) ? "blocked" : "", "查看阻塞用例明细")
+    + kpiHTML("", "覆盖率", "全部需求", cov.pct + '<small>%</small>', cov.covered + ' / ' + cov.total + ' 条需求有至少 1 条用例', cov.total ? "coverage" : "", "查看需求覆盖明细")
     + '</div>';
   var failBlock = '<section class="rep-section" id="repFailed"><div class="rep-section-head"><b>失败用例</b><span>'
     + (reportData.failedTotal || 0) + ' 条</span></div>'
@@ -11858,6 +11988,8 @@ if($("tcReport")){
     if(e.target.closest("[data-tc-report-csv]")){ exportTestReport(); return; }
     if(e.target.closest("[data-tc-report-doc]")){ exportTestReportDoc(); return; }
     if(e.target.closest("[data-tc-report-print]")){ printTestReport(); return; }
+    var kpiCard = e.target.closest("[data-rep-kpi-drill]");
+    if(kpiCard){ openRepDrill(kpiCard.dataset.repKpiDrill); return; }
     var guideGo = e.target.closest("[data-rep-guide-go]");
     if(guideGo){ setTcMode(guideGo.dataset.repGuideGo); return; }
     if(e.target.closest("[data-rs-drill-export]")){ exportRunDrillCsv(); return; }
@@ -11892,11 +12024,39 @@ if($("tcReport")){
   $("tcReport").addEventListener("keydown", covRowKeyActivate);
   $("tcReport").addEventListener("keydown", function(e){
     if(e.key !== "Enter" && e.key !== " ") return;
+    var kpi = e.target.closest("[data-rep-kpi-drill]");
+    if(kpi){ e.preventDefault(); kpi.click(); return; }
     var row = e.target.closest("[data-rs-drill]");
     if(!row) return;
     e.preventDefault();
     row.click();
   });
+}
+/* 报告 KPI 下钻弹层：结果 chip 切换 + 行内继续开用例 / 执行历史 / 缺陷 / 需求 */
+if($("dlgRepDrill")){
+  $("dlgRepDrillX").addEventListener("click", function(){ closeRepDrill(); });
+  $("dlgRepDrill").addEventListener("click", function(e){
+    var chip = e.target.closest("[data-rep-drill-chip]");
+    if(chip){ switchRepDrillFilter(chip.dataset.repDrillChip); return; }
+    var caseBtn = e.target.closest("[data-report-case]");
+    if(caseBtn){ openReportCase(caseBtn.dataset.reportCase, repDrillCaseById(caseBtn.dataset.reportCase)); return; }
+    var runs = e.target.closest("[data-report-runs]");
+    if(runs){
+      var rc = repDrillCaseById(runs.dataset.reportRuns);
+      openRunsDialog(runs.dataset.reportRuns, rc ? rc.title : "");
+      return;
+    }
+    var bug = e.target.closest("[data-report-bug]");
+    if(bug){
+      var bc = repDrillCaseById(bug.dataset.reportBug);
+      if(bc && bc.latestBugTaskId) openTaskById(bc.latestBugTaskId);
+      else toast("未找到关联缺陷，可能已被删除", "warn");
+      return;
+    }
+    var covRow = e.target.closest("[data-cov-demand]");
+    if(covRow){ openDemandDetailById(covRow.dataset.covDemand); return; }
+  });
+  $("dlgRepDrill").addEventListener("keydown", covRowKeyActivate);
 }
 
 /* 弹窗开着时切视图：先处理未保存内容，确认后再继续跳转 */

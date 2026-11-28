@@ -1204,6 +1204,20 @@ body[data-view="testcases"] #btnPlanNew{display:none !important;}
 .rs-drill-mute{color:var(--text-3);}
 .rs-drill-more{margin:8px 0 0;}
 @media (max-width:900px){.rs-drill-table{min-width:640px;}}
+/* 报告 KPI 卡下钻：四卡可点开明细弹层，结果 chip 切换明细范围 */
+.rep-kpi.is-drill{position:relative;cursor:pointer;transition:border-color var(--dur-fast) var(--ease-out),background var(--dur-fast) var(--ease-out);}
+.rep-kpi.is-drill:hover{border-color:var(--primary);background:var(--surface-hover);}
+.rep-kpi.is-drill:focus-visible{outline:2px solid var(--primary);outline-offset:1px;}
+.rep-kpi-go{position:absolute;top:8px;right:10px;display:inline-flex;align-items:center;gap:1px;
+  font-size:10.5px;color:var(--text-3);}
+.rep-kpi.is-drill:hover .rep-kpi-go{color:var(--primary-fg);}
+.rep-drill-chips{display:flex;gap:6px;flex-wrap:wrap;}
+.rep-drill-chips .tc-cov-chip .n{margin-left:3px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.rep-drill-chips .tc-cov-chip.on .n{color:var(--primary-fg);}
+.rep-drill-body{border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);overflow:hidden;}
+.rep-drill-body .rep-cov{padding:0 14px;}
+.rep-drill-body .rep-empty{padding:12px 14px;}
+.rep-drill-more{margin:0;padding:8px 14px;border-top:1px solid var(--border);color:var(--text-3);}
 /* 执行历史与失败证据 */
 .tc-runs{display:flex;flex-direction:column;gap:10px;max-height:58vh;overflow:auto;padding-right:2px;}
 .run-item{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);padding:9px 11px;}
