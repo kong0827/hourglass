@@ -311,8 +311,12 @@ function releaseSnapshotBodyHTML(record, taskId, opts){
   var hideActions = !!(opts && opts.hideActions);
   var items = (record.items || []).filter(function(item){ return !taskId || item.taskId === taskId; });
   var rows = items.map(function(item){
-    var taskCell = esc(itemNoText(item.taskItemNo) || item.taskId || "") + '<br>' + esc(item.title || "—");
-    if(!taskId && item.taskId){
+    /* 历史导入快照（sql/73）只保留当时的需求标题，task_id 是合成的，不对应 task 表记录；
+       这类行不渲染成可点链接，否则点了只会弹「工作项不存在」 */
+    var historical = item.itemType === "historical";
+    var taskCell = esc(itemNoText(item.taskItemNo) || item.taskId || "") + '<br>' + esc(item.title || "—")
+      + (historical ? ' <span class="mini-tag">历史导入</span>' : "");
+    if(!taskId && item.taskId && !historical){
       taskCell = '<a class="snap-link" href="' + esc(taskHref(item.taskId)) + '" data-task-link="' + esc(item.taskId) + '" title="打开工作项详情；Ctrl / ⌘ 点击在新标签页打开">' + taskCell + '</a>';
     }
     var demandCell = esc(demandNoText(item.demandNo) || item.demandId || "") + '<br>' + esc(item.demandTitle || "—");

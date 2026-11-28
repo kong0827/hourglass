@@ -1,0 +1,87 @@
+/* tour.css · 首次进入欢迎卡、分步指引与重播入口（原型 11-27 §15.4）
+   只消费 tokens.css 的令牌；遮罩不抢焦点，键盘由 core/tour.js 处理。 */
+
+body.tour-lock{overflow:hidden;}
+
+/* 重播入口：叠在 AI 助手上方，避开右下主按钮 */
+.tour-replay{
+  position:fixed;right:24px;bottom:calc(24px + var(--app-foot-h) + 60px);z-index:99;
+  display:grid;place-items:center;width:38px;height:38px;border-radius:50%;
+  border:1px solid var(--border);background:var(--surface);color:var(--primary-fg);
+  font-size:15px;font-weight:700;box-shadow:var(--shadow-md);cursor:pointer;
+}
+.tour-replay:hover{background:var(--primary-soft);}
+.tour-replay:focus-visible{outline:none;box-shadow:var(--shadow-md),var(--ring-focus);}
+
+.welcome-mask{
+  position:fixed;inset:0;z-index:400;display:flex;align-items:center;justify-content:center;
+  background:rgba(16,24,40,.46);padding:20px;
+}
+.welcome-mask[hidden]{display:none;}
+.welcome{
+  width:640px;max-width:calc(100vw - 40px);max-height:calc(100vh - 40px);overflow:auto;
+  background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow-xl);
+  padding:22px 24px 18px;
+}
+.wc-title{font-size:18px;font-weight:700;color:var(--text);}
+.wc-time{
+  display:inline-block;margin-left:9px;padding:3px 8px;border-radius:6px;vertical-align:2px;
+  background:var(--primary-soft);color:var(--primary-fg);font-size:11.5px;font-weight:550;
+}
+.wc-sub{margin-top:7px;font-size:12.5px;color:var(--text-2);}
+.wc-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px;}
+.wc-steps .ws{border:1px solid var(--border);border-radius:10px;padding:11px 12px;background:var(--surface-2);}
+.wc-steps .ws .n{
+  display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;
+  font-size:11.5px;font-weight:700;
+}
+.wc-steps .ws .n.is-purple{background:var(--plum-soft);color:var(--plum-fg);}
+.wc-steps .ws .n.is-blue{background:var(--primary-soft);color:var(--primary-fg);}
+.wc-steps .ws .n.is-green{background:var(--success-soft);color:var(--success-fg);}
+.wc-steps .ws .n.is-orange{background:var(--warning-soft);color:var(--warning-fg);}
+.wc-steps .ws .t{margin-top:8px;font-size:12.5px;font-weight:650;color:var(--text);}
+.wc-steps .ws .d{margin-top:4px;font-size:11px;line-height:1.65;color:var(--text-3);}
+.wc-tips{
+  margin-top:12px;padding:10px 12px;border-radius:9px;background:var(--surface-sunken);
+  font-size:11.5px;line-height:1.9;color:var(--text-2);
+}
+.wc-tips b{color:var(--text);}
+.wc-foot{display:flex;align-items:center;gap:8px;margin-top:14px;}
+.wc-foot .sp{flex:1;}
+.wc-note{margin-right:8px;font-size:11px;color:var(--text-3);}
+
+.tour-mask{position:fixed;inset:0;z-index:410;}
+.tour-mask[hidden]{display:none;}
+.tour-box{
+  position:fixed;border-radius:10px;pointer-events:none;
+  box-shadow:0 0 0 9999px rgba(16,24,40,.42),0 0 0 2px var(--primary);
+  transition:all .35s ease;
+}
+.tour-box[hidden]{display:none;}
+.tour-card{
+  position:fixed;width:400px;max-width:calc(100vw - 24px);
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);
+  box-shadow:var(--shadow-xl);padding:16px 18px;
+}
+.tour-head{display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--text-3);}
+.tour-head .tour-skip{
+  margin-left:auto;border:0;background:none;color:var(--text-3);cursor:pointer;font-size:11.5px;
+}
+.tour-head .tour-skip:hover{color:var(--text);}
+.tour-dots{display:flex;gap:5px;}
+.tour-dots i{width:6px;height:6px;border-radius:50%;background:var(--border);}
+.tour-dots i.on{background:var(--primary);}
+.tour-title{margin:9px 0 6px;font-size:14.5px;font-weight:650;color:var(--text);}
+.tour-body{font-size:12.5px;line-height:1.75;color:var(--text-2);}
+.tour-nav{display:flex;justify-content:space-between;gap:8px;margin-top:13px;}
+.tour-nav .btn{height:32px;}
+
+/* 向导的吸底操作条在手机上会被底部 Tab 与 AI 悬浮入口压住 */
+body[data-view="plan-wizard"] .ai-fab{display:none;}
+[data-layout="mobile"] .pw-foot{bottom:calc(var(--tabbar-space) + 4px);}
+[data-layout="mobile"] .tour-replay{display:none;}
+[data-layout="mobile"] .wc-steps{grid-template-columns:repeat(2,minmax(0,1fr));}
+[data-layout="mobile"] .wc-foot{flex-wrap:wrap;}
+[data-layout="mobile"] .wc-foot .btn{flex:1 1 100%;}
+[data-layout="mobile"] .wc-foot .sp,
+[data-layout="mobile"] .wc-note{display:none;}

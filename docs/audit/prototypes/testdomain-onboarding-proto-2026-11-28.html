@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>沙漏 · 测试域新手友好重设计原型 2026-11-28</title>
+<style>
+:root{
+  --bg-app:#F7F8FA;--surface:#FFF;--sunken:#F2F4F7;
+  --text:#101828;--text-2:#475467;--text-3:#667085;
+  --primary:#2563EB;--primary-soft:#EFF4FF;--primary-fg:#1D4ED8;
+  --border:#E4E7EC;--rowline:#F2F4F7;
+  --green:#12B76A;--green-soft:#ECFDF3;--green-fg:#027A48;
+  --red:#F04438;--red-soft:#FEF3F2;--red-fg:#B42318;
+  --orange:#F79009;--orange-soft:#FFFAEB;--orange-fg:#B54708;
+  --purple:#6941C5;--purple-soft:#F4F3FF;--purple-fg:#6941C5;
+}
+*{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+body{background:var(--bg-app);color:var(--text)}
+.hide{display:none!important}
+.app{display:flex;height:100vh}
+/* ===== 侧栏 ===== */
+.side{width:216px;flex:none;background:#fff;border-right:1px solid var(--border);display:flex;flex-direction:column}
+.side .brand{height:54px;display:flex;align-items:center;gap:9px;padding:0 14px;border-bottom:1px solid var(--rowline);font-size:14.5px;font-weight:700}
+.brand .logo{width:28px;height:28px;border-radius:9px;background:linear-gradient(135deg,#F6C177,#E8862D);display:flex;align-items:center;justify-content:center;font-size:14px}
+.space-card{margin:10px 12px;height:38px;border:1px solid var(--border);border-radius:9px;display:flex;align-items:center;gap:8px;padding:0 10px;font-size:12px;font-weight:600}
+.space-card .dot{width:18px;height:18px;border-radius:6px;background:var(--primary-soft);color:var(--primary-fg);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
+.nav{flex:1;padding:6px 8px}
+.nav .grp{font-size:10.5px;font-weight:600;color:var(--text-3);padding:12px 8px 5px}
+.nav .it{height:31px;display:flex;align-items:center;gap:8px;padding:0 10px;border-radius:7px;font-size:12.5px;font-weight:500;color:var(--text-2);cursor:pointer}
+.nav .it .ic{width:15px;height:15px;border-radius:4px;background:var(--sunken);flex:none}
+.nav .it.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600}
+.nav .it .car{margin-left:auto;font-size:10px;color:var(--text-3)}
+/* ===== 主区 ===== */
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.topbar{height:46px;background:#fff;border-bottom:1px solid var(--rowline);display:flex;align-items:center;padding:0 20px;gap:14px;font-size:12px;color:var(--text-3);flex:none}
+.topbar .sp{flex:1}
+.avatar{width:26px;height:26px;border-radius:50%;background:#E1E8F5;color:var(--primary-fg);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+.content{flex:1;overflow:auto;padding:14px 20px;display:flex;flex-direction:column;gap:12px}
+.crumbs{font-size:11.5px;color:var(--text-3);display:flex;gap:6px;align-items:center}
+.crumbs a{color:var(--primary-fg);cursor:pointer;font-weight:500}
+.pagehead{display:flex;align-items:flex-start;gap:12px}
+.pagehead h1{font-size:19px;font-weight:700;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.pagehead .sub{font-size:11.5px;color:var(--text-3);font-weight:400}
+.pagehead .acts{margin-left:auto;display:flex;gap:8px;align-items:center;flex:none}
+.btn{height:32px;padding:0 14px;border-radius:8px;font-size:12.5px;font-weight:600;border:1px solid var(--border);background:#fff;color:var(--text-2);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn.pri{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn.soft{background:var(--primary-soft);border-color:transparent;color:var(--primary-fg)}
+.btn.sm{height:26px;padding:0 10px;font-size:11.5px;border-radius:7px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.pill{display:inline-flex;align-items:center;gap:5px;height:21px;padding:0 9px;border-radius:6px;font-size:11.5px;font-weight:600;white-space:nowrap}
+.pill .d{width:5px;height:5px;border-radius:50%}
+.pill.blue{background:var(--primary-soft);color:var(--primary-fg)}.pill.blue .d{background:var(--primary)}
+.pill.green{background:var(--green-soft);color:var(--green-fg)}.pill.green .d{background:var(--green)}
+.pill.red{background:var(--red-soft);color:var(--red-fg)}.pill.red .d{background:var(--red)}
+.pill.orange{background:var(--orange-soft);color:var(--orange-fg)}.pill.orange .d{background:var(--orange)}
+.pill.purple{background:var(--purple-soft);color:var(--purple-fg)}.pill.purple .d{background:var(--purple)}
+.pill.gray{background:var(--sunken);color:var(--text-2)}.pill.gray .d{background:#98A2B3}
+.toolbar{min-height:48px;background:#fff;border:1px solid var(--border);border-radius:11px;display:flex;align-items:center;padding:6px 12px;gap:10px;flex-wrap:wrap;flex:none}
+.toolbar .seg{display:flex;background:var(--sunken);border-radius:8px;padding:2px;gap:2px;flex:none}
+.toolbar .seg span{padding:4px 11px;font-size:12px;border-radius:6px;color:var(--text-2);cursor:pointer;font-weight:500;white-space:nowrap}
+.toolbar .seg span.on{background:#fff;color:var(--text);font-weight:600;box-shadow:0 1px 2px rgba(16,24,40,.08)}
+.toolbar .fld{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);border:1px solid var(--border);border-radius:8px;height:30px;padding:0 10px;background:#fff;white-space:nowrap}
+.toolbar .fld b{font-weight:600;color:var(--text)}
+.toolbar .fld .car{color:var(--text-3);font-size:9px}
+.toolbar .sdiv{width:1px;height:20px;background:var(--border);flex:none}
+.toolbar .search{display:flex;align-items:center;gap:7px;border:1px solid var(--border);border-radius:8px;height:30px;padding:0 10px;color:var(--text-3);font-size:12px;background:#fff;width:180px}
+.toolbar .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.card{background:#fff;border:1px solid var(--border);border-radius:11px;overflow:hidden;flex:none}
+.card .chd{min-height:44px;display:flex;align-items:center;gap:9px;padding:6px 14px;border-bottom:1px solid var(--rowline);flex-wrap:wrap}
+.card .chd .t{font-size:13px;font-weight:700}
+.card .chd .hint{font-size:11px;color:var(--text-3)}
+.card .chd .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.card .cbd{padding:12px 14px}
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{height:34px;background:#F9FAFB;text-align:left;font-size:11px;font-weight:550;color:var(--text-3);padding:0 12px;border-bottom:1px solid var(--rowline);white-space:nowrap}
+.tbl td{height:44px;padding:0 12px;border-bottom:1px solid var(--rowline);color:var(--text-2);vertical-align:middle}
+.tbl tbody tr:hover{background:#FAFBFC}
+.tbl .tt{font-size:12.5px;font-weight:600;color:var(--text)}
+.tbl .num{text-align:right;font-variant-numeric:tabular-nums}
+.bar{height:5px;border-radius:3px;background:var(--sunken);overflow:hidden;margin-top:8px;min-width:60px}
+.bar i{display:block;height:100%;border-radius:3px;background:var(--primary)}
+.bar i.g{background:var(--green)}.bar i.o{background:var(--orange)}.bar i.r{background:var(--red)}
+.note{font-size:11px;color:var(--text-3);line-height:1.7}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpi{background:#fff;border:1px solid var(--border);border-radius:11px;padding:13px 15px}
+.kpi .lb{font-size:11.5px;color:var(--text-3);display:flex;align-items:center;gap:5px}
+.kpi .v{font-size:21px;font-weight:700;margin-top:6px;font-variant-numeric:tabular-nums}
+.kpi .v small{font-size:12px;font-weight:500;color:var(--text-3)}
+.kpi .ft{font-size:11px;color:var(--text-3);margin-top:5px}
+/* 新手条 */
+.banner{display:flex;align-items:center;gap:14px;border-radius:11px;padding:11px 14px;font-size:12px;line-height:1.7}
+.banner .tx{flex:1;min-width:0}
+.banner.o{background:var(--orange-soft);border:1px solid #FEDF89;color:var(--orange-fg)}
+.banner.b{background:var(--primary-soft);border:1px solid #D1E0FF;color:var(--primary-fg)}
+.banner.g{background:var(--green-soft);border:1px solid #A6F4C5;color:var(--green-fg)}
+/* 流程 stepper */
+.stepper{display:flex;align-items:stretch;gap:0}
+.step{flex:1;display:flex;gap:11px;align-items:flex-start;padding:4px 14px 4px 4px;position:relative;cursor:pointer}
+.step .ci{width:26px;height:26px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:var(--sunken);color:var(--text-3)}
+.step.done .ci{background:var(--green-soft);color:var(--green-fg)}
+.step.cur .ci{background:var(--primary);color:#fff}
+.step .st .t{font-size:12.5px;font-weight:600}
+.step .st .d{font-size:11px;color:var(--text-3);margin-top:3px;line-height:1.5}
+.step:not(:last-child)::after{content:"";position:absolute;right:2px;top:17px;width:calc(100% - 60px);height:1px;background:var(--border)}
+/* 待办 / 清单 */
+.todo{display:flex;flex-direction:column}
+.todo .row{display:flex;align-items:center;gap:11px;padding:11px 14px;border-bottom:1px solid var(--rowline);cursor:pointer}
+.todo .row:last-child{border-bottom:none}
+.todo .ic{width:26px;height:26px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+.todo .ic.o{background:var(--orange-soft);color:var(--orange-fg)}
+.todo .ic.p{background:var(--purple-soft);color:var(--purple-fg)}
+.todo .ic.b{background:var(--primary-soft);color:var(--primary-fg)}
+.todo .ic.g{background:var(--green-soft);color:var(--green-fg)}
+.todo .tx{flex:1;min-width:0}
+.todo .tx .t{font-size:12.5px;font-weight:600}
+.todo .tx .d{font-size:11px;color:var(--text-3);margin-top:2px;line-height:1.5}
+.ck{width:18px;height:18px;border-radius:6px;border:1.5px solid #D0D5DD;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px}
+.ck.on{background:var(--green);border-color:var(--green)}
+.grid2l{display:grid;grid-template-columns:1.6fr 1fr;gap:12px;align-items:start}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+/* 表单分区（向导） */
+.form .sec{margin-bottom:20px}
+.form .sec .sh{font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.form .sec .sh .no{width:19px;height:19px;border-radius:6px;background:var(--primary-soft);color:var(--primary-fg);font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:700}
+.form .sec .sd{font-size:11px;color:var(--text-3);margin:0 0 12px 27px;line-height:1.6}
+.fld-row{margin-bottom:12px}
+.fld-row label{display:block;font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px}
+.inp,.sel{width:100%;height:34px;border:1px solid var(--border);border-radius:8px;padding:0 10px;font-size:12.5px;color:var(--text);background:#fff}
+textarea.inp{height:auto;padding:8px 10px;resize:vertical}
+.inp:focus,.sel:focus{outline:2px solid var(--primary-soft);border-color:var(--primary)}
+.req::after{content:" *";color:var(--red)}
+/* 就绪检查 */
+.checks{display:flex;flex-direction:column;gap:8px}
+.checks .ckrow{display:flex;align-items:center;gap:10px;font-size:12.5px;padding:9px 12px;border-radius:9px;background:#fff;border:1px solid var(--rowline)}
+.checks .st-ok{color:var(--green-fg);font-weight:700;flex:none}
+.checks .st-warn{color:var(--orange-fg);font-weight:700;flex:none}
+.checks .st-err{color:var(--red-fg);font-weight:700;flex:none}
+.checks .why{color:var(--text-3);font-size:11px}
+/* 空态 */
+.empty{display:flex;flex-direction:column;align-items:center;text-align:center;padding:44px 20px;gap:8px}
+.empty .ei{width:52px;height:52px;border-radius:16px;background:var(--sunken);display:flex;align-items:center;justify-content:center;font-size:24px}
+.empty .et{font-size:14px;font-weight:700;margin-top:6px}
+.empty .ed{font-size:12px;color:var(--text-3);max-width:460px;line-height:1.7}
+.empty .ea{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;justify-content:center}
+/* 时间线 */
+.timeline .tl{display:flex;gap:10px;padding:8px 0;font-size:12px}
+.timeline .tl .dot{width:7px;height:7px;border-radius:50%;background:var(--primary);margin-top:5px;flex:none}
+.timeline .tl .tx{color:var(--text-2)}
+.timeline .tl .tm{color:var(--text-3);font-size:11px;margin-top:2px}
+/* 介绍帧（设计说明） */
+.intro{max-width:1080px;margin:0 auto;padding:28px 24px 60px}
+.intro h1{font-size:20px;font-weight:800}
+.intro .sub{font-size:12px;color:var(--text-3);margin:6px 0 22px}
+.intro .fr{background:#fff;border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:14px}
+.intro .fr h2{font-size:14px;font-weight:700;margin-bottom:6px}
+.intro .fr p{font-size:12px;color:var(--text-2);line-height:1.9}
+.intro .fr p b{color:var(--primary-fg)}
+.intro .fr .dec{font-size:11.5px;color:var(--text-3);background:var(--sunken);border-radius:8px;padding:8px 12px;margin-top:8px;line-height:1.8}
+.intro .entry{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 14px;border-radius:8px;background:var(--primary);color:#fff;font-size:12.5px;font-weight:600;cursor:pointer;margin-top:10px}
+kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;background:var(--sunken);border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:1px 6px}
+@media (max-width:900px){
+  .side{display:none}
+  .grid2l,.grid2{grid-template-columns:1fr}
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .stepper{flex-direction:column;gap:10px}
+  .step:not(:last-child)::after{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- ================= 设计说明（首页帧） ================= -->
+<div class="intro" id="pg-intro">
+  <h1>测试域新手友好重设计 · 交互原型</h1>
+  <p class="sub">2026-11-28 · 参照「版本发布全流程」原型形制 · 覆盖 工作台 / 用例 / 测试计划 / 报告 四块，缺陷列表结构不动只接新手条。截图用 #hash 直达各画面。</p>
+
+  <div class="fr">
+    <h2>问题（现状截图证据）</h2>
+    <p>① 测试计划页空态是一句话+右上角小按钮，新手到这是<b>死胡同</b>；② 「报告」藏在测试计划的页签里，IA 上报告不属于计划；③ 用例页工具条四层、左栏+列表+批量条同屏，新手没有<b>从哪开始</b>的叙述；④ 报告零数据时一排 0% KPI，无决策价值还误读为健康；⑤ 测试域完全没有接入全局已有的引导机制（首屏引导卡 / 空态动作 / 示例项目先例）。</p>
+  </div>
+
+  <div class="fr">
+    <h2>方案：一条工作流、一个家、每步有动作</h2>
+    <p>核心模型照发布原型：<b>「准备用例 → 圈选成计划 → 执行记录 → 报告导出」四步流程条常驻工作台</b>，进度由真实数据派生（用例数/计划数/执行数），点任意一步直达对应页面。测试域新增<b>「工作台」子导航并设为默认落地</b>：新手任务清单卡（5 项，做了自动勾掉）、我的待办（待执行/待复测）、进行中计划、最近报告一屏收齐。熟练用户不受打扰：清单可关，子导航一格直达用例。</p>
+    <div class="dec">决定 1：新增工作台落地页（替代：仅强化三页签空态）｜代价：多一个入口；反悔点：熟练用户嫌多一跳时加「默认落地页」本机设置。<br>
+    决定 2：引导用常驻清单卡+可关提示条（替代：分步遮罩 tour）｜理由：遮罩打断工作流，与「干活即记录」冲突；清单由真实数据自动勾选，成就感驱动。<br>
+    决定 3：计划创建走向导四步（替代：单页大表单）｜照搬已批准发布计划形制，每步只回答一个问题。<br>
+    决定 4：用例空态三入口——AI 生成 / Excel 导入 / <b>示例用例包</b>（照 showSampleOnboarding 先例，标注合成、一键删除）。<br>
+    决定 5：报告零数据用「如何生成报告」三步引导卡替换 0 值 KPI。</div>
+  </div>
+
+  <div class="fr">
+    <h2>画面导航（点击直达，截图用同一 hash）</h2>
+    <p>
+      <a class="entry" data-go="home">工作台（有数据）</a>&nbsp;
+      <a class="entry" data-go="home-newbie">工作台（全新空间）</a>&nbsp;
+      <a class="entry" data-go="cases">用例列表</a>&nbsp;
+      <a class="entry" data-go="cases-empty">用例空态</a>&nbsp;
+      <a class="entry" data-go="wizard">新建计划向导</a>&nbsp;
+      <a class="entry" data-go="plan">计划详情</a>&nbsp;
+      <a class="entry" data-go="report">测试报告（有数据）</a>&nbsp;
+      <a class="entry" data-go="report-zero">报告零数据引导</a>
+    </p>
+    <p style="margin-top:8px">原型数据为演示合成（标注「示例」处）；真实量级参照运营研发中心空间：26 项目 · 89 用例 · 21 未关闭缺陷。</p>
+  </div>
+</div>
+
+<!-- ================= 应用壳 ================= -->
+<div class="app hide" id="app">
+  <div class="side">
+    <div class="brand"><div class="logo">⏳</div>沙漏</div>
+    <div class="space-card"><div class="dot">运</div>运营研发中心<div class="car" style="margin-left:auto;color:var(--text-3);font-size:10px">▾</div></div>
+    <div class="nav">
+      <div class="grp">我的</div>
+      <div class="it" onclick="toast('原型只覆盖测试域，其余按生产结构展示')"><div class="ic"></div>我的工作</div>
+      <div class="grp">交付</div>
+      <div class="it" onclick="toast('原型只覆盖测试域，其余按生产结构展示')"><div class="ic"></div>项目<span class="car">▸</span></div>
+      <div class="it" onclick="toast('原型只覆盖测试域，其余按生产结构展示')"><div class="ic"></div>文档<span class="car">▸</span></div>
+      <div class="it on" id="nav-test"><div class="ic"></div>测试<span class="car">▸</span></div>
+      <div class="grp" style="padding-left:26px" id="nav-sub">
+        <div class="it" data-nav="home" style="height:28px">工作台</div>
+        <div class="it" data-nav="cases">用例 <span class="car" style="font-size:10px">89</span></div>
+        <div class="it" data-nav="plans">测试计划 <span class="car" style="font-size:10px">2</span></div>
+        <div class="it" data-nav="defects">缺陷 <span class="car" style="font-size:10px">21</span></div>
+      </div>
+      <div class="grp">分析</div>
+      <div class="it" onclick="toast('原型只覆盖测试域，其余按生产结构展示')"><div class="ic"></div>洞察<span class="car">▸</span></div>
+    </div>
+  </div>
+  <div class="main">
+    <div class="topbar"><span id="crumb">运营研发中心 / <b>测试</b></span><span class="sp"></span><span>🔔</span><div class="avatar">孔</div></div>
+    <div class="content" id="content">
+
+      <!-- ============ 工作台（有数据） ============ -->
+      <section class="page hide" id="pg-home">
+        <div class="pagehead">
+          <div><h1>测试工作台<span class="sub">一条工作流：准备用例 → 圈选成计划 → 执行记录 → 报告导出</span></h1></div>
+          <div class="acts"><button class="btn" onclick="toast('原型演示：导出测试周报')">导出周报</button><button class="btn pri" onclick="go('wizard')">＋ 新建测试计划</button></div>
+        </div>
+        <div class="banner o" id="tip-home">
+          <div class="tx"><b>新手 3 分钟上手：</b>测试就四步——先在用例库备好要测什么，圈成一个「测试计划」，按计划逐条记录执行结果，最后到报告页一键导出。下面流程条随时告诉你进行到哪一步。</div>
+          <button class="btn sm" onclick="dismissTip('tip-home')">知道了</button>
+        </div>
+
+        <div class="card">
+          <div class="chd"><div class="t">测试流程</div><div class="hint">进度由真实数据自动汇总，点步骤直达</div><div class="right"><span class="pill green"><span class="d"></span>进行中 · 第 2/4 步</span></div></div>
+          <div class="cbd"><div class="stepper" id="flow-steps"></div></div>
+        </div>
+
+        <div class="grid2l">
+          <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+            <div class="card" id="check-card">
+              <div class="chd"><div class="t">新手任务</div><div class="hint">完成自动勾掉，可随时收起</div><div class="right"><button class="btn sm" onclick="hideCard('check-card')">收起</button></div></div>
+              <div class="todo" id="checklist"></div>
+            </div>
+            <div class="card">
+              <div class="chd"><div class="t">我的待办</div><div class="hint">来自进行中的计划与缺陷</div><div class="right"><button class="btn sm" onclick="go('plan')">进计划</button></div></div>
+              <div class="todo">
+                <div class="row" onclick="go('plan')"><div class="ic b">执</div><div class="tx"><div class="t">待我执行 12 条用例</div><div class="d">「资金通 12 月迭代回归」指派给我 · 已过期 2 条建议今天先跑</div></div><span class="pill blue"><span class="d"></span>去执行</span></div>
+                <div class="row" onclick="toast('原型演示：打开待复测缺陷清单')"><div class="ic o">复</div><div class="tx"><div class="t">待我复测 3 个缺陷</div><div class="d">开发已修复待验证 · 最晚 11-30</div></div><span class="pill orange"><span class="d"></span>去复测</span></div>
+                <div class="row" onclick="toast('原型演示：打开我提交的缺陷')"><div class="ic p">认</div><div class="tx"><div class="t">我提交的 1 个缺陷待确认</div><div class="d">「E2E 执行链路…」处理人请求补充环境信息</div></div><span class="pill purple"><span class="d"></span>去补充</span></div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+            <div class="card">
+              <div class="chd"><div class="t">进行中的计划</div><div class="right"><button class="btn sm" onclick="go('plans')">全部</button></div></div>
+              <div class="todo">
+                <div class="row" onclick="go('plan')"><div class="tx"><div class="t">资金通 12 月迭代回归</div><div class="d">34/52 已执行 · 通过 28 · 失败 4 · 阻塞 2</div><div class="bar"><i style="width:65%"></i></div></div><span class="pill blue"><span class="d"></span>进行中</span></div>
+                <div class="row" onclick="go('plan')"><div class="tx"><div class="t">消息中心 P1 用例冒烟</div><div class="d">9/66 已执行 · 今天新建</div><div class="bar"><i style="width:14%"></i></div></div><span class="pill gray"><span class="d"></span>未开始</span></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="chd"><div class="t">最近报告</div><div class="right"><button class="btn sm" onclick="go('report-zero')">报告页</button></div></div>
+              <div class="cbd">
+                <div style="display:flex;align-items:baseline;gap:10px"><span style="font-size:26px;font-weight:800">87%</span><span class="pill green"><span class="d"></span>上一期通过率</span></div>
+                <div class="note" style="margin-top:8px">资金通 11 月迭代回归 · 45/52 通过 · 导出 11-25</div>
+                <div style="display:flex;gap:8px;margin-top:12px"><button class="btn sm" onclick="go('report')">查看本期</button><button class="btn sm" onclick="toast('原型演示：导出 Word 报告')">Word</button></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 工作台（全新空间） ============ -->
+      <section class="page hide" id="pg-home-newbie">
+        <div class="pagehead">
+          <div><h1>测试工作台<span class="sub">从零开始：跟着下面四步走，第一次测试 10 分钟跑通</span></h1></div>
+          <div class="acts"><button class="btn pri" onclick="go('cases-empty')">＋ 创建第一条用例</button></div>
+        </div>
+        <div class="banner b">
+          <div class="tx"><b>这里是测试的家。</b>用例库回答「测什么」，测试计划回答「这轮测哪些」，执行记录回答「测得怎样」，报告回答「能不能发」。流程条会一直陪着你。</div>
+          <button class="btn sm" onclick="dismissTip('tip-home-newbie')">知道了</button>
+        </div>
+        <div class="card">
+          <div class="chd"><div class="t">测试流程</div><div class="hint">四步都完成后，报告自动生成</div></div>
+          <div class="cbd"><div class="stepper" id="flow-newbie"></div></div>
+        </div>
+        <div class="grid2">
+          <div class="card">
+            <div class="chd"><div class="t">新手任务</div><div class="hint">5 步上手 · 做了自动勾掉</div></div>
+            <div class="todo">
+              <div class="row" onclick="go('cases-empty')"><span class="ck"></span><div class="tx"><div class="t">备好第一批用例</div><div class="d">手写一条、AI 生成一批，或载入示例用例包（推荐先体验）</div></div><button class="btn sm soft">去做</button></div>
+              <div class="row" onclick="go('wizard')"><span class="ck"></span><div class="tx"><div class="t">圈一个测试计划</div><div class="d">把要测的用例圈进来，指定执行人</div></div><button class="btn sm soft">去做</button></div>
+              <div class="row" onclick="toast('原型演示：打开计划的批量执行')"><span class="ck"></span><div class="tx"><div class="t">记录一次执行</div><div class="d">步骤默认全通过，有失败点步骤标记 ✗</div></div><button class="btn sm soft">去做</button></div>
+              <div class="row" onclick="toast('原型演示：失败用例转缺陷')"><span class="ck"></span><div class="tx"><div class="t">把一个失败转缺陷</div><div class="d">失败证据自动携带，开发直接可看</div></div><button class="btn sm soft">去做</button></div>
+              <div class="row" onclick="go('report')"><span class="ck"></span><div class="tx"><div class="t">导出一份报告</div><div class="d">Word / CSV / PDF 一键出</div></div><button class="btn sm soft">去做</button></div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+            <div class="card">
+              <div class="chd"><div class="t">还不确定怎么用？</div></div>
+              <div class="cbd" style="display:flex;flex-direction:column;gap:10px">
+                <button class="btn" onclick="go('cases-empty')">载入示例用例包（8 条 · 标注示例 · 一键删除）</button>
+                <button class="btn" onclick="go('wizard')">直接建第一个测试计划</button>
+                <div class="note">示例数据只进当前项目，不影响真实数据；删除后流程条自动回到第 1 步。</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="chd"><div class="t">我的待办</div></div>
+              <div class="empty" style="padding:26px 20px"><div class="ei">🎈</div><div class="et">还没有待办</div><div class="ed">建好计划、开始执行后，待我跑的用例和待复测的缺陷会出现在这里。</div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 用例列表 ============ -->
+      <section class="page hide" id="pg-cases">
+        <div class="pagehead">
+          <div><h1>用例<span class="sub">用例库 · 89 条 · 测什么的唯一入口，计划从这里圈选</span></h1></div>
+          <div class="acts"><button class="btn" onclick="toast('原型演示：Excel 导入')">导入</button><button class="btn" onclick="toast('原型演示：问 AI 生成用例')">问 AI</button><button class="btn pri" onclick="toast('原型演示：新建用例抽屉')">＋ 新建用例</button></div>
+        </div>
+        <div class="banner o" id="tip-cases">
+          <div class="tx"><b>小提示：</b>点行尾「记录」直接记一次执行结果；多选后底部批量条可整批记录；键盘 <kbd>↑</kbd><kbd>↓</kbd> 移动、<kbd>Enter</kbd> 打开详情。</div>
+          <button class="btn sm" onclick="dismissTip('tip-cases')">知道了</button>
+        </div>
+        <div class="toolbar">
+          <div class="fld">范围 <b>全部项目 · 26</b><span class="car">▾</span></div>
+          <div class="sdiv"></div>
+          <div class="fld">结果 <b>全部</b><span class="car">▾</span></div>
+          <div class="fld">执行人 <b>全部</b><span class="car">▾</span></div>
+          <div class="fld">优先级 <b>全部</b><span class="car">▾</span></div>
+          <div class="sdiv"></div>
+          <div class="seg"><span class="on">项目与分组</span><span>目录</span></div>
+          <div class="sdiv"></div>
+          <div class="right"><div class="search">🔎 搜索编号或标题</div></div>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>编号</th><th>用例</th><th>分组</th><th>优先级</th><th>最近结果</th><th>执行人</th><th>更新</th><th style="width:150px"></th></tr></thead>
+            <tbody>
+              <tr><td style="font-family:ui-monospace,monospace">TC-066</td><td><div class="tt">验证菜单权限勾选业务类型配置修改</div><div class="note">需求 掌厅业务未… · 工作项 WI-003</div></td><td>消息中心</td><td>—</td><td><span class="pill green"><span class="d"></span>通过</span></td><td>周劲松</td><td>11-16</td><td><button class="btn sm" onclick="toast('原型演示：执行弹框')">记录</button> <button class="btn sm soft" onclick="toast('原型演示：再次执行')">重新执行</button></td></tr>
+              <tr><td style="font-family:ui-monospace,monospace">TC-064</td><td><div class="tt">验证菜单权限勾选接收人删除，对应角色…</div><div class="note">需求 掌厅业务未… · 工作项 WI-003</div></td><td>消息中心</td><td>—</td><td><span class="pill green"><span class="d"></span>通过</span></td><td>周劲松</td><td>11-16</td><td><button class="btn sm" onclick="toast('原型演示：执行弹框')">记录</button> <button class="btn sm soft" onclick="toast('原型演示：再次执行')">重新执行</button></td></tr>
+              <tr><td style="font-family:ui-monospace,monospace">TC-028</td><td><div class="tt">登录-连续错误密码锁定与解锁</div><div class="note">需求 登录安全 · 工作项 WI-014</div></td><td>登录/安全</td><td><span style="color:var(--red)">●</span> P1</td><td><span class="pill red"><span class="d"></span>失败</span></td><td>孔祥金</td><td>11-28</td><td><button class="btn sm" onclick="toast('原型演示：执行弹框（上轮失败，带步骤对比）')">重新执行</button> <button class="btn sm soft" onclick="toast('原型演示：转缺陷（证据已携带）')">转缺陷</button></td></tr>
+              <tr><td style="font-family:ui-monospace,monospace">TC-031</td><td><div class="tt">出金比例提高审批流-或签分支</div><div class="note">需求 提高出金比例 · 未关联工作项</div></td><td>流程引擎</td><td><span style="color:var(--orange)">●</span> P2</td><td><span class="pill orange"><span class="d"></span>阻塞</span></td><td>吴君</td><td>11-27</td><td><button class="btn sm" onclick="toast('原型演示：执行弹框')">记录</button> <button class="btn sm soft" onclick="toast('原型演示：转缺陷')">转缺陷</button></td></tr>
+              <tr><td style="font-family:ui-monospace,monospace">TC-045</td><td><div class="tt">次席资金监控-大额划转短信提醒</div><div class="note">需求 次席资金监控 · 工作项 WI-021</div></td><td>资金通</td><td><span style="color:var(--orange)">●</span> P2</td><td><span class="note">未执行</span></td><td>—</td><td>11-20</td><td><button class="btn sm pri" onclick="toast('原型演示：执行弹框')">记录</button></td></tr>
+              <tr><td style="font-family:ui-monospace,monospace">TC-0035</td><td><div class="tt">登录-短信验证码下发</div><div class="note">需求 登录安全</div></td><td>登录/安全</td><td><span style="color:var(--text-3)">●</span> P3</td><td><span class="pill green"><span class="d"></span>通过</span></td><td>孔祥金</td><td>11-12</td><td><button class="btn sm" onclick="toast('原型演示：执行弹框')">记录</button> <button class="btn sm soft" onclick="toast('原型演示：再次执行')">重新执行</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note">共 89 条 · 每页 100 条 · 列与分组偏好本机记忆 · 未关闭缺陷可从筛选条直达</div>
+      </section>
+
+      <!-- ============ 用例空态 ============ -->
+      <section class="page hide" id="pg-cases-empty">
+        <div class="pagehead">
+          <div><h1>用例<span class="sub">用例库 · 0 条</span></h1></div>
+        </div>
+        <div class="card"><div class="empty">
+          <div class="ei">🧪</div>
+          <div class="et">这个项目还没有用例</div>
+          <div class="ed">用例回答「这一步要验证什么、怎样算通过」。三种方式起步，选一种就能继续后面的计划与报告。</div>
+          <div class="ea">
+            <button class="btn pri" onclick="toast('原型演示：AI 生成用例草稿（人工确认后入库）')">✨ AI 生成一批</button>
+            <button class="btn" onclick="toast('原型演示：下载 Excel 模板并导入')">导入 Excel</button>
+            <button class="btn" onclick="toast('原型演示：载入 8 条示例用例')">载入示例用例包</button>
+          </div>
+          <div class="note" style="margin-top:10px">示例用例包为合成数据（编号带「示例」前缀），只进当前项目，可一键整体删除。</div>
+        </div></div>
+        <div class="card"><div class="cbd" style="display:flex;gap:14px;align-items:flex-start">
+          <div style="flex:none;width:26px;height:26px;border-radius:8px;background:var(--primary-soft);color:var(--primary-fg);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">?</div>
+          <div><div style="font-size:12.5px;font-weight:700;margin-bottom:4px">什么是好的用例？</div>
+          <div class="note">一条用例只做一件事：步骤写「做什么」，预期写「看到什么」。例如「输入错误密码 5 次 → 提示账号锁定并显示剩余锁定时长」。写好步骤后，执行时逐步勾选 ✓/✗，结果自动判定。</div></div>
+        </div></div>
+      </section>
+
+      <!-- ============ 测试计划列表 ============ -->
+      <section class="page hide" id="pg-plans">
+        <div class="pagehead">
+          <div><h1>测试计划<span class="sub">从用例库圈选一批，按版本留痕 · 2 个</span></h1></div>
+          <div class="acts"><button class="btn pri" onclick="go('wizard')">＋ 新建计划</button></div>
+        </div>
+        <div class="kpis">
+          <div class="kpi"><div class="lb">进行中</div><div class="v">1</div><div class="ft">34/52 已执行</div></div>
+          <div class="kpi"><div class="lb">待复测</div><div class="v">4</div><div class="ft">缺陷已关闭、用例仍失败</div></div>
+          <div class="kpi"><div class="lb">本期通过率</div><div class="v">87<small>%</small></div><div class="ft">45/52 · 排除跳过</div></div>
+          <div class="kpi"><div class="lb">未关闭缺陷</div><div class="v">21</div><div class="ft">严重 7 · 一般 5</div></div>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>计划</th><th>版本</th><th>用例进度</th><th>结果分布</th><th>执行人</th><th>状态</th><th style="width:120px"></th></tr></thead>
+            <tbody>
+              <tr><td><div class="tt">资金通 12 月迭代回归</div><div class="note">11-25 创建 · 孔祥金</div></td><td class="lk" onclick="toast('原型演示：跳版本')">资金通 V2.4</td><td><div class="num">34/52</div><div class="bar"><i style="width:65%"></i></div></td><td><span class="pill green"><span class="d"></span>28</span> <span class="pill red"><span class="d"></span>4</span> <span class="pill orange"><span class="d"></span>2</span></td><td>孔祥金、吴君</td><td><span class="pill blue"><span class="d"></span>进行中</span></td><td><button class="btn sm pri" onclick="go('plan')">去执行</button></td></tr>
+              <tr><td><div class="tt">消息中心 P1 用例冒烟</div><div class="note">11-28 创建 · 孔祥金</div></td><td class="note">未关联</td><td><div class="num">0/66</div><div class="bar"><i style="width:2%"></i></div></td><td><span class="note">未开始</span></td><td>周劲松</td><td><span class="pill gray"><span class="d"></span>未开始</span></td><td><button class="btn sm" onclick="go('plan')">打开</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note">计划完成后锁定为快照，报告基于快照导出，事后改动用例不影响历史报告。</div>
+      </section>
+
+      <!-- ============ 新建计划向导 ============ -->
+      <section class="page hide" id="pg-wizard">
+        <div class="crumbs"><a data-go="plans">← 测试计划</a><span>/</span><span>新建计划</span></div>
+        <div class="pagehead">
+          <div><h1>新建测试计划<span class="sub">四步完成：叫什么都行，随时可以存草稿</span></h1></div>
+          <div class="acts"><button class="btn" onclick="toast('原型演示：存草稿')">存草稿</button><button class="btn pri" id="btn-create-plan" onclick="createPlan()">创建并开始</button></div>
+        </div>
+        <div class="card"><div class="cbd"><div class="stepper" id="wz-steps"></div></div></div>
+        <div class="grid2l">
+          <div class="card"><div class="cbd form">
+            <div class="sec" id="wz-s1">
+              <div class="sh"><span class="no">1</span>这个计划叫什么、测哪个版本？</div>
+              <div class="sd">版本用于报告留痕：报告标题与归档都按版本收纳。可以先不选，之后再补。</div>
+              <div class="fld-row"><label class="req">计划名称</label><input class="inp" value="资金通 12 月迭代回归" placeholder="例如：资金通 12 月迭代回归"></div>
+              <div class="grid2">
+                <div class="fld-row"><label>关联版本</label><select class="sel"><option>资金通 V2.4（计划中）</option><option>不关联版本</option></select></div>
+                <div class="fld-row"><label>所属项目</label><select class="sel"><option>资金通</option><option>消息中心</option></select></div>
+              </div>
+            </div>
+            <div class="sec" id="wz-s2">
+              <div class="sh"><span class="no">2</span>圈哪些用例进来？</div>
+              <div class="sd">三种圈法可混用：按项目整圈、按筛选条件、手动勾选。右侧实时显示已圈数量，超过 2000 条请拆成多个计划。</div>
+              <div class="toolbar" style="min-height:40px;border-radius:9px;margin-bottom:10px">
+                <div class="seg" id="seg-pick"><span class="on" data-k="proj" onclick="pickMode('proj')">按项目</span><span data-k="filter" onclick="pickMode('filter')">按筛选</span><span data-k="hand" onclick="pickMode('hand')">手动勾选</span></div>
+                <div class="right"><button class="btn sm" onclick="bumpPicked(10)">＋ 全选当前范围</button><button class="btn sm" onclick="bumpPicked(0)">只选未执行</button></div>
+              </div>
+              <div class="checks" id="pick-preview"></div>
+            </div>
+            <div class="sec" id="wz-s3">
+              <div class="sh"><span class="no">3</span>谁来执行、什么时候要结果？</div>
+              <div class="sd">执行人会收到待办；设了截止日期，逾期会出现在工作台「我的待办」里。</div>
+              <div class="grid2">
+                <div class="fld-row"><label class="req">执行人</label><select class="sel"><option>孔祥金（我）</option><option>吴君</option><option>周劲松</option><option>＋ 多人（按住多选）</option></select></div>
+                <div class="fld-row"><label>期望完成</label><input class="inp" type="date" value="2026-12-04"></div>
+              </div>
+              <div class="fld-row"><label>执行提醒</label><select class="sel"><option>每天 9:30 提醒未完成部分</option><option>不提醒</option><option>仅逾期提醒</option></select></div>
+              <div class="fld-row"><label>备注</label><textarea class="inp" placeholder="给执行人的交代：重点测什么、环境准备、注意事项"></textarea></div>
+            </div>
+            <div class="sec" id="wz-s4" style="margin-bottom:4px">
+              <div class="sh"><span class="no">4</span>可以开始了吗？</div>
+              <div class="sd">「未通过」要处理或写明理由才能创建；「提醒」不阻塞，创建时会再提示一次。</div>
+              <div class="checks">
+                <div class="ckrow"><span class="st-ok">✓</span><div><div>已圈选 <b id="wz-count">52</b> 条用例</div><div class="why">资金通 · 全部优先级</div></div></div>
+                <div class="ckrow"><span class="st-ok">✓</span><div><div>已指定执行人</div><div class="why">孔祥金（我）</div></div></div>
+                <div class="ckrow"><span class="st-ok">✓</span><div><div>计划名称合法</div><div class="why">同名计划已存在 0 个</div></div></div>
+                <div class="ckrow"><span class="st-warn">!</span><div><div>未关联版本</div><div class="why">报告将按「未关联版本」归档；建议关联后重建</div></div></div>
+              </div>
+            </div>
+          </div></div>
+          <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+            <div class="card">
+              <div class="chd"><div class="t">已圈用例预览</div><div class="right"><span class="pill blue"><span class="d"></span><span id="wz-count2">52</span> 条</span></div></div>
+              <div class="todo" id="picked-preview"></div>
+            </div>
+            <div class="card"><div class="cbd">
+              <div class="note">创建后：用例圈选锁为快照，执行记录逐条留痕；计划完成（手动或到期）后自动锁定，可直接导出报告。</div>
+            </div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 计划详情 ============ -->
+      <section class="page hide" id="pg-plan">
+        <div class="crumbs"><a data-go="plans">← 测试计划</a><span>/</span><span>资金通 12 月迭代回归</span></div>
+        <div class="pagehead">
+          <div><h1>资金通 12 月迭代回归 <span class="pill blue"><span class="d"></span>进行中</span><span class="sub">V2.4 · 孔祥金 · 期望 12-04 完成</span></h1></div>
+          <div class="acts"><button class="btn" onclick="toast('原型演示：导出该计划 Word 报告')">导出报告</button><button class="btn" onclick="toast('原型演示：完成并锁定计划（二次确认）')">完成计划</button><button class="btn pri" onclick="toast('原型演示：批量记录选中 18 条')">记录选中 18 条</button></div>
+        </div>
+        <div class="kpis">
+          <div class="kpi"><div class="lb">执行进度</div><div class="v">34<small>/52</small></div><div class="bar"><i style="width:65%"></i></div></div>
+          <div class="kpi"><div class="lb">通过</div><div class="v" style="color:var(--green-fg)">28</div><div class="ft">含跳过 0</div></div>
+          <div class="kpi"><div class="lb">失败 / 阻塞</div><div class="v"><span style="color:var(--red-fg)">4</span><small> / </small><span style="color:var(--orange-fg)">2</span></div><div class="ft">失败 4 条已转缺陷 3</div></div>
+          <div class="kpi"><div class="lb">待复测</div><div class="v" style="color:var(--purple-fg)">4</div><div class="ft">缺陷已关闭、用例仍失败</div></div>
+        </div>
+        <div class="card">
+          <div class="chd"><div class="t">下一步</div><div class="hint">系统按状态排序，处理完自动消失</div></div>
+          <div class="todo">
+            <div class="row" onclick="toast('原型演示：筛出 4 条待复测用例')"><div class="ic p">复</div><div class="tx"><div class="t">4 条用例待复测</div><div class="d">关联缺陷已被开发关闭，重新执行确认修复</div></div><span class="pill purple"><span class="d"></span>优先</span></div>
+            <div class="row" onclick="toast('原型演示：打开 2 条阻塞用例')"><div class="ic o">阻</div><div class="tx"><div class="t">2 条用例被阻塞</div><div class="d">等待测试环境权限 · 备注：预发库账号未开通</div></div><span class="pill orange"><span class="d"></span>去处理</span></div>
+            <div class="row" onclick="toast('原型演示：批量记录剩余 18 条')"><div class="ic b">执</div><div class="tx"><div class="t">18 条尚未执行</div><div class="d">已指派孔祥金 · 距截止 6 天</div></div><span class="pill blue"><span class="d"></span>去执行</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="chd"><div class="t">用例执行</div><div class="hint">多选后批量记录，结果逐项可见</div>
+            <div class="right"><div class="seg"><span class="on">全部 52</span><span>未执行 18</span><span>失败 4</span><span>待复测 4</span></div></div></div>
+          <table class="tbl">
+            <thead><tr><th style="width:30px"><span class="ck" id="ck-all" onclick="toggleCkAll(this)"></span></th><th>编号</th><th>用例</th><th>最近结果</th><th>执行人</th><th>关联缺陷</th><th style="width:110px"></th></tr></thead>
+            <tbody>
+              <tr><td><span class="ck" onclick="this.classList.toggle('on')"></span></td><td style="font-family:ui-monospace,monospace">TC-028</td><td><div class="tt">登录-连续错误密码锁定与解锁</div></td><td><span class="pill red"><span class="d"></span>失败</span> <span class="pill purple"><span class="d"></span>待复测</span></td><td>孔祥金</td><td class="lk" onclick="toast('原型演示：打开缺陷')">E2E 执行链路…</td><td><button class="btn sm pri" onclick="toast('原型演示：重新执行（带步骤对比）')">重新执行</button></td></tr>
+              <tr><td><span class="ck" onclick="this.classList.toggle('on')"></span></td><td style="font-family:ui-monospace,monospace">TC-045</td><td><div class="tt">次席资金监控-大额划转短信提醒</div></td><td><span class="note">未执行</span></td><td>—</td><td class="note">—</td><td><button class="btn sm" onclick="toast('原型演示：执行弹框')">记录</button></td></tr>
+              <tr><td><span class="ck" onclick="this.classList.toggle('on')"></span></td><td style="font-family:ui-monospace,monospace">TC-031</td><td><div class="tt">出金比例提高审批流-或签分支</div></td><td><span class="pill orange"><span class="d"></span>阻塞</span></td><td>吴君</td><td class="note">—</td><td><button class="btn sm" onclick="toast('原型演示：执行弹框')">记录</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============ 测试报告（有数据） ============ -->
+      <section class="page hide" id="pg-report">
+        <div class="pagehead">
+          <div><h1>测试报告<span class="sub">资金通 V2.4 · 最近一轮执行汇总 · 更新于 11-28 13:39</span></h1></div>
+          <div class="acts"><button class="btn" onclick="toast('原型演示：口径说明')">口径说明</button><button class="btn pri" onclick="toast('原型演示：导出报告')">导出报告 ▾</button></div>
+        </div>
+        <div class="banner b"><div class="tx"><b>导出范围：</b>本轮执行 <b>34</b> 条 · 跳过 0 条不计入通过率 · 报告基于计划快照，事后改数据不影响本期结论。</div></div>
+        <div class="kpis">
+          <div class="kpi"><div class="lb">通过率（按本轮）</div><div class="v" style="color:var(--green-fg)">82<small>%</small></div><div class="ft">28/34 · 排除跳过</div></div>
+          <div class="kpi"><div class="lb">失败</div><div class="v" style="color:var(--red-fg)">4</div><div class="ft">已转缺陷 3 · 待复测 4</div></div>
+          <div class="kpi"><div class="lb">阻塞</div><div class="v" style="color:var(--orange-fg)">2</div><div class="ft">等待环境权限</div></div>
+          <div class="kpi"><div class="lb">覆盖率（需求）</div><div class="v">75<small>%</small></div><div class="ft">3/4 条需求有 ≥1 用例</div></div>
+        </div>
+        <div class="grid2l">
+          <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+            <div class="card">
+              <div class="chd"><div class="t">执行统计</div><div class="hint">点桶下钻执行流水</div></div>
+              <table class="tbl"><thead><tr><th>执行人</th><th class="num">次数</th><th class="num">通过</th><th class="num">失败</th><th class="num">阻塞</th><th class="num">通过率</th></tr></thead>
+              <tbody>
+                <tr><td>孔祥金</td><td class="num">20</td><td class="num">16</td><td class="num">3</td><td class="num">1</td><td class="num">80%</td></tr>
+                <tr><td>吴君</td><td class="num">14</td><td class="num">12</td><td class="num">1</td><td class="num">1</td><td class="num">86%</td></tr>
+              </tbody></table>
+            </div>
+            <div class="card">
+              <div class="chd"><div class="t">失败用例</div><div class="right"><span class="pill red"><span class="d"></span>4 条</span></div></div>
+              <div class="todo">
+                <div class="row" onclick="toast('原型演示：打开用例详情')"><div class="tx"><div class="t">TC-028 登录-连续错误密码锁定与解锁</div><div class="d">第 3 步未通过 · 已转缺陷 · 待复测</div></div></div>
+                <div class="row" onclick="toast('原型演示：打开用例详情')"><div class="tx"><div class="t">TC-052 划转-并发重复提交</div><div class="d">第 1 步未通过 · 已转缺陷</div></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="chd"><div class="t">需求覆盖</div><div class="right"><button class="btn sm" onclick="go('cases')">去看覆盖矩阵</button></div></div>
+            <table class="tbl"><thead><tr><th>需求</th><th class="num">用例</th><th class="num">通过</th><th class="num">失败</th><th>覆盖</th></tr></thead>
+              <tbody>
+                <tr><td>次席资金监控</td><td class="num">6</td><td class="num">5</td><td class="num">1</td><td><span class="pill green"><span class="d"></span>已覆盖</span></td></tr>
+                <tr><td>资金通资金信息查询</td><td class="num">4</td><td class="num">4</td><td class="num">0</td><td><span class="pill green"><span class="d"></span>已覆盖</span></td></tr>
+                <tr><td>提高出金比例</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td><span class="pill red"><span class="d"></span>未覆盖</span></td></tr>
+              </tbody></table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 报告零数据引导 ============ -->
+      <section class="page hide" id="pg-report-zero">
+        <div class="pagehead">
+          <div><h1>测试报告<span class="sub">还没有可汇总的数据</span></h1></div>
+        </div>
+        <div class="card"><div class="empty" style="padding:36px 20px">
+          <div class="ei">📊</div>
+          <div class="et">报告会在第一次执行记录后自动生成</div>
+          <div class="ed">报告 = 最近一轮执行的汇总。现在还没有执行数据，按下面三步走，这里就会出现通过率、失败清单与需求覆盖。</div>
+          <div class="ea" style="flex-direction:column;align-items:stretch;min-width:420px;gap:8px">
+            <div class="ckrow" style="display:flex;align-items:center;gap:10px;font-size:12.5px;padding:10px 14px;border-radius:9px;border:1px solid var(--rowline);background:#fff;cursor:pointer" onclick="go('cases-empty')"><span style="width:19px;height:19px;border-radius:6px;background:var(--primary-soft);color:var(--primary-fg);font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:700">1</span><div style="flex:1;text-align:left"><div>备好要测的用例</div><div class="note">0/1 · 还没有用例，先建一条或载入示例包</div></div><span style="color:var(--primary-fg);font-weight:600;font-size:11.5px">去建 →</span></div>
+            <div class="ckrow" style="display:flex;align-items:center;gap:10px;font-size:12.5px;padding:10px 14px;border-radius:9px;border:1px solid var(--rowline);background:#fff;cursor:pointer" onclick="go('wizard')"><span style="width:19px;height:19px;border-radius:6px;background:var(--primary-soft);color:var(--primary-fg);font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:700">2</span><div style="flex:1;text-align:left"><div>圈一个测试计划</div><div class="note">0/1 · 计划把用例组织成「这一轮要跑哪些」</div></div><span style="color:var(--primary-fg);font-weight:600;font-size:11.5px">去圈 →</span></div>
+            <div class="ckrow" style="display:flex;align-items:center;gap:10px;font-size:12.5px;padding:10px 14px;border-radius:9px;border:1px solid var(--rowline);background:#fff;cursor:pointer" onclick="go('plan')"><span style="width:19px;height:19px;border-radius:6px;background:var(--primary-soft);color:var(--primary-fg);font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:700">3</span><div style="flex:1;text-align:left"><div>记录至少一次执行</div><div class="note">0/1 · 步骤默认全通过，有失败点步骤 ✗，结果自动判定</div></div><span style="color:var(--primary-fg);font-weight:600;font-size:11.5px">去记录 →</span></div>
+          </div>
+        </div></div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===== 页面切换 ===== */
+var PAGES = { home:"pg-home", "home-newbie":"pg-home-newbie", cases:"pg-cases", "cases-empty":"pg-cases-empty", plans:"pg-plans", wizard:"pg-wizard", plan:"pg-plan", report:"pg-report", "report-zero":"pg-report-zero" };
+var CRUMBS = { home:"运营研发中心 / <b>测试 · 工作台</b>", "home-newbie":"运营研发中心 / <b>测试 · 工作台</b>", cases:"运营研发中心 / <b>测试 · 用例</b>", "cases-empty":"运营研发中心 / <b>测试 · 用例</b>", plans:"运营研发中心 / <b>测试 · 测试计划</b>", wizard:"运营研发中心 / 测试计划 / <b>新建</b>", plan:"运营研发中心 / 测试计划 / <b>资金通 12 月迭代回归</b>", report:"运营研发中心 / <b>测试 · 报告</b>", "report-zero":"运营研发中心 / <b>测试 · 报告</b>" };
+function go(name){
+  document.getElementById("pg-intro").classList.add("hide");
+  document.getElementById("app").classList.remove("hide");
+  Object.values(PAGES).forEach(function(id){ document.getElementById(id).classList.add("hide"); });
+  document.getElementById(PAGES[name]).classList.remove("hide");
+  document.getElementById("crumb").innerHTML = CRUMBS[name];
+  document.querySelectorAll("#nav-sub .it").forEach(function(it){ it.classList.toggle("on", it.dataset.nav === name); });
+  document.querySelectorAll("#nav-sub .it .car").forEach(function(c){ c.style.visibility = (name === "home-newbie" || name === "cases-empty" || name === "report-zero") ? "hidden" : "visible"; });
+  if(name === "defects"){ /* 缺陷不在本原型范围 */ }
+  if(history.replaceState) history.replaceState(null, "", "#" + name);
+  window.scrollTo(0, 0);
+  document.getElementById("content").scrollTop = 0;
+}
+document.querySelectorAll("[data-go]").forEach(function(el){ el.addEventListener("click", function(){ go(el.dataset.go); }); });
+function toast(msg){
+  var t = document.createElement("div");
+  t.textContent = "原型演示：" + msg.replace(/^原型演示：/, "");
+  t.style.cssText = "position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#101828;color:#fff;font-size:12.5px;padding:10px 18px;border-radius:9px;z-index:99;box-shadow:0 8px 24px rgba(16,24,40,.25)";
+  document.body.appendChild(t);
+  setTimeout(function(){ t.remove(); }, 1800);
+}
+function dismissTip(id){ document.getElementById(id).remove(); }
+function hideCard(id){ document.getElementById(id).classList.add("hide"); }
+
+/* ===== 工作台流程条 ===== */
+var FLOW = [
+  { t:"准备用例", d:"89 条 · 覆盖 26 个项目", state:"done", go:"cases" },
+  { t:"圈选成计划", d:"进行中 · 资金通回归 34/52", state:"cur", go:"plans" },
+  { t:"执行记录", d:"34 次已记录 · 失败 4", state:"cur", go:"plan" },
+  { t:"报告导出", d:"上一期 87% · 本期未生成", state:"todo", go:"report" }
+];
+var FLOW_NEWBIE = [
+  { t:"准备用例", d:"还没有用例 · 先建一条或载入示例包", state:"todo", go:"cases-empty" },
+  { t:"圈选成计划", d:"把要测的用例圈成一轮", state:"todo", go:"wizard" },
+  { t:"执行记录", d:"步骤默认全通过，有失败点 ✗", state:"todo", go:"plan" },
+  { t:"报告导出", d:"Word / CSV / PDF 一键出", state:"todo", go:"report" }
+];
+function renderFlow(elId, flow){
+  document.getElementById(elId).innerHTML = flow.map(function(s, i){
+    var ci = s.state === "done" ? "✓" : (i + 1);
+    return '<div class="step ' + s.state + '" onclick="go(\'' + s.go + '\')"><div class="ci">' + ci + '</div><div class="st"><div class="t">' + s.t + '</div><div class="d">' + s.d + '</div></div></div>';
+  }).join("");
+}
+
+/* ===== 新手任务清单 ===== */
+var CHECKS = [
+  { t:"备好第一批用例", d:"已建 89 条 · AI 生成 12 条待确认", done:true, go:"cases" },
+  { t:"圈一个测试计划", d:"「资金通 12 月迭代回归」已创建", done:true, go:"plans" },
+  { t:"记录一次执行", d:"已记录 34 次 · 今天 2 次", done:true, go:"plan" },
+  { t:"把一个失败转缺陷", d:"已转 3 个 · 1 个待确认", done:true, go:"defects" },
+  { t:"导出一份报告", d:"上一期已导出 · 本期还差 18 条未执行", done:false, go:"report" }
+];
+function renderChecks(){
+  document.getElementById("checklist").innerHTML = CHECKS.map(function(c, i){
+    return '<div class="row" onclick="go(\'' + c.go + '\')"><span class="ck' + (c.done ? " on" : "") + '">' + (c.done ? "✓" : "") + '</span><div class="tx"><div class="t" style="' + (c.done ? "color:var(--text-3)" : "") + '">' + c.t + '</div><div class="d">' + c.d + '</div></div>' + (c.done ? "" : '<button class="btn sm soft">去做</button>') + '</div>';
+  }).join("");
+}
+
+/* ===== 向导 ===== */
+var picked = 52;
+var PICK_PREVIEWS = {
+  proj: [ { t:"资金通 · 全部优先级", d:"候选 52 条 · 已选 52 条", ok:true }, { t:"消息中心 · P1 及以上", d:"候选 14 条 · 已选 0 条", ok:false } ],
+  filter: [ { t:"筛选：最近结果=失败 或 未执行", d:"候选 23 条 · 已选 23 条", ok:true }, { t:"筛选：优先级 P1", d:"候选 9 条 · 已选 9 条（去重后并入）", ok:true } ],
+  hand: [ { t:"手动勾选 20 条", d:"从用例列表逐条勾选", ok:true } ]
+};
+function pickMode(k){
+  document.querySelectorAll("#seg-pick span").forEach(function(s){ s.classList.toggle("on", s.dataset.k === k); });
+  document.getElementById("pick-preview").innerHTML = PICK_PREVIEWS[k].map(function(p){
+    return '<div class="ckrow"><span class="' + (p.ok ? "st-ok" : "st-warn") + '">' + (p.ok ? "✓" : "…") + '</span><div><div>' + p.t + '</div><div class="why">' + p.d + '</div></div></div>';
+  }).join("");
+}
+function bumpPicked(n){ picked = n || 18; document.getElementById("wz-count").textContent = picked; document.getElementById("wz-count2").textContent = picked; toast("已圈选更新为 " + picked + " 条"); }
+function createPlan(){ toast("创建成功：跳转到计划详情，开始圈选/执行"); go("plan"); }
+function toggleCkAll(el){
+  var on = el.classList.toggle("on");
+  document.querySelectorAll("#pg-plan .ck").forEach(function(c){ if(c !== el) c.classList.toggle("on", on); });
+}
+function renderPicked(){
+  var rows = [ ["TC-045 次席资金监控-大额划转短信提醒","未执行 · P2"], ["TC-028 登录-连续错误密码锁定与解锁","最近失败 · 待复测"], ["TC-052 划转-并发重复提交","最近失败"], ["TC-031 出金比例提高审批流-或签分支","阻塞 · 待环境"] ];
+  document.getElementById("picked-preview").innerHTML = rows.map(function(r){
+    return '<div class="row"><div class="tx"><div class="t" style="font-size:12px">' + r[0] + '</div><div class="d">' + r[1] + '</div></div></div>';
+  }).join("") + '<div class="row"><div class="tx"><div class="d">… 等 ' + picked + ' 条，创建后锁为快照</div></div></div>';
+}
+
+/* ===== 初始化 ===== */
+renderFlow("flow-steps", FLOW);
+renderFlow("flow-newbie", FLOW_NEWBIE);
+renderChecks();
+pickMode("proj");
+renderPicked();
+var h = (location.hash || "").replace("#", "");
+if(PAGES[h]) go(h);
+</script>
+</body>
+</html>

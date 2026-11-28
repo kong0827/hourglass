@@ -25,6 +25,8 @@ public class CaseSet {
     private String ruleJson;
     /** personal/members 时为创建人账号ID；team 为空串 */
     private String ownerUserId;
+    /** 示例包标记：1=示例用例包（新手引导的合成数据，可整包级联删除，见 sql/139） */
+    private Integer pack;
     private String createdBy;
     private String createdByUserId;
     private LocalDateTime createdAt;

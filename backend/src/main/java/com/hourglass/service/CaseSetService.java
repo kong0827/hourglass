@@ -327,6 +327,35 @@ public class CaseSetService {
                 "删除用例分组「" + s.getName() + "」，解除 " + members + " 条用例的引用（用例本体保留）", null);
     }
 
+    /**
+     * 整包删除（仅示例用例包）：组内用例一并删除，用例的执行流水、计划圈选与证据按单例删除链路清理。
+     * pack 标记由载入示例包写入（sql/139）；普通分组没有 pack，仍走 delete() 只解除引用。
+     */
+    @Transactional
+    public Map<String, Object> deletePack(String userId, String workspaceId, String setId) {
+        CaseSet s = requireVisible(workspaceId, userId, setId);
+        assertManage(userId, workspaceId, s);
+        if (s.getPack() == null || s.getPack() != 1) {
+            throw AppException.badRequest("只有示例用例包可以整包删除；普通分组删除不会删除组内用例");
+        }
+        int kids = setMapper.countChildren(workspaceId, s.getReqId(), setId);
+        if (kids > 0) {
+            throw AppException.badRequest("示例用例包下还有 " + kids + " 个子分组，请先删除子分组");
+        }
+        List<String> caseIds = setMapper.selectCaseIds(setId);
+        for (String caseId : caseIds) {
+            caseService.delete(userId, workspaceId, caseId);
+        }
+        setMapper.deleteMembersBySet(setId);
+        setMapper.deleteItemsBySet(setId);
+        setMapper.delete(workspaceId, setId);
+        auditService.recordCurrent(workspaceId, "case_set_pack_delete", "case_set", setId, s.getName(), true,
+                "删除示例用例包「" + s.getName() + "」，组内 " + caseIds.size() + " 条合成用例一并删除", null);
+        Map<String, Object> out = new LinkedHashMap<String, Object>();
+        out.put("deleted", caseIds.size());
+        return out;
+    }
+
     /** 同级分组排序：ids 必须是该父级下当前用户可见且可改的全部分组，按数组顺序重写序号 */
     @Transactional
     public Map<String, Object> order(String userId, String workspaceId, com.hourglass.dto.CaseSetOrderRequest req) {
@@ -681,6 +710,7 @@ public class CaseSetService {
         v.setVisibility(s.getVisibility());
         v.setOwnerUserId(s.getOwnerUserId());
         v.setKind(s.getKind());
+        v.setPack(s.getPack() == null ? 0 : s.getPack());
         v.setRuleJson(s.getRuleJson());
         v.setMemberIds(memberIds == null ? new ArrayList<String>() : memberIds);
         v.setCreatedBy(s.getCreatedBy());

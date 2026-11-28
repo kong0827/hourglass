@@ -739,6 +739,7 @@ public class VersionReleaseService {
         next.setWorkspaceId(workspaceId);
         next.setVersionId(primaryVersion);
         next.setVersionIds(versionIds);
+        next.setName(Texts.trimToNull(request.getName()));
         next.setPlannedAt(request.getPlannedAt());
         next.setOwnerUserId(owner);
         next.setNotes(Texts.trimToNull(request.getNotes()));

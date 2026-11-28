@@ -168,6 +168,34 @@ try{
   const densityGone = await evaluate(`!document.getElementById("treeDensity")`);
   assert(densityGone, "层级工具条不再有无效的密度控件");
 
+  /* 2d. 定宽列要容下自己的内容：截止列放得下「逾期 N 天」徽标；列宽之和超过容器时，
+     横向滚到最右的表头与行仍铺满可视区（否则底色/分隔线在容器宽处提前收口） */
+  const cols = await evaluate(`(() => {
+    const sc = document.querySelector("#view-tree .list-scroll");
+    const cells = [...document.querySelectorAll("#view-tree .tree-row .cell.over .row-inline-edit-t")];
+    const clipped = cells.filter(s => s.scrollWidth > s.clientWidth + 1).map(s => s.textContent.trim()).slice(0, 3);
+    const row = sc.querySelector(".tree-row");
+    const head = sc.querySelector(".tree-head");
+    sc.scrollLeft = sc.scrollWidth;
+    const boxRight = Math.round(sc.getBoundingClientRect().right - 1);
+    const out = {
+      overCells: cells.length, clipped,
+      headRight: Math.round(head.getBoundingClientRect().right),
+      rowRight: Math.round(row.getBoundingClientRect().right), boxRight,
+      scrollW: sc.scrollWidth, clientW: sc.clientWidth
+    };
+    sc.scrollLeft = 0;
+    return out;
+  })()`);
+  assert(cols.clipped.length === 0,
+    `截止列容下「逾期 N 天」徽标（${cols.overCells} 行逾期）` + (cols.clipped.length ? "，被截断：" + cols.clipped.join(" / ") : ""));
+  if(cols.scrollW > cols.clientW + 1){
+    assert(Math.abs(cols.headRight - cols.boxRight) <= 2 && Math.abs(cols.rowRight - cols.boxRight) <= 2,
+      `横向滚到最右时表头/行铺满可视区（表头 ${cols.headRight}、行 ${cols.rowRight}、可视 ${cols.boxRight}）`);
+  }else{
+    pass("1440 下列宽不溢出，无需横向滚动");
+  }
+
   /* 3. 折叠 / 展开 */
   const before = leafRows;
   await evaluate(`document.querySelector("#view-tree [data-tree-node] .tree-caret").click(); true`);
@@ -292,8 +320,17 @@ try{
     return true;
   })()`);
   await sleep(300);
-  const groupedMeta = await evaluate(`document.getElementById("treeMeta").textContent`);
-  assert(groupedMeta.indexOf("父级进度") !== -1, "分组时说明父级聚合口径");
+  /* 聚合口径常驻文案已挪进工具栏「?」弹层，meta 只保留「N 个分组」这类状态 */
+  const groupedHint = await evaluate(`(async () => {
+    document.getElementById("treeHelp").click();
+    await new Promise(r => setTimeout(r, 200));
+    const pop = document.querySelector(".type-help-pop");
+    const text = pop ? pop.textContent : "";
+    document.getElementById("treeHelp").click();
+    return { meta: document.getElementById("treeMeta").textContent, text };
+  })()`);
+  assert(groupedHint.meta.indexOf("个分组") !== -1 && groupedHint.text.indexOf("父级进度") !== -1,
+    "分组时在「?」里说明父级聚合口径（" + groupedHint.meta + "）");
 
   /* 5. 隐藏已完成 */
   await evaluate(`document.getElementById("btnTreeHideDone").click(); true`);

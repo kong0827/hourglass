@@ -26,8 +26,12 @@ public class ReleasePlanRow {
     private String projectNames;
     private Integer versionCount;
     private Integer planNo;
+    /** 计划名称（sql/138）；空时前端回退「版本名 + 环境」 */
+    private String name;
     private LocalDateTime plannedAt;
     private LocalDateTime updatedAt;
+    /** 收口时间：覆盖版本最近一次生产成功（非回滚）的 occurred_at；未收口为 null */
+    private LocalDateTime completedAt;
     /** 就绪检查：pass / warn / block；null 表示草稿未检查或超出列表检查预算。覆盖版本取最差结论。 */
     private String checkVerdict;
     private Integer checkBlockers;

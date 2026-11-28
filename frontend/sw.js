@@ -7,7 +7,7 @@
    1) 发布时 tools/stamp-sw.js 按 SHELL 内容哈希改写 CACHE_NAME，前端一改 sw.js 就变；
    2) 页面每次打开主动 registration.update()，不等浏览器最多约 24 小时的自动检查；
    3) 安装与后台回源一律 cache:"no-cache"，不吃 HTTP 缓存里的旧副本。 */
-var CACHE_NAME = "hourglass-shell-v296";
+var CACHE_NAME = "hourglass-shell-v298";
 var SHELL = [
   "./",
   "index.html",
@@ -29,6 +29,7 @@ var SHELL = [
   "css/views-testcases.css",
   "css/workcolumn.css",
   "css/version.css",
+  "css/plan-wizard.css",
   "css/gantt.css",
   "css/manager.css",
   "css/investment.css",
@@ -43,6 +44,7 @@ var SHELL = [
   "css/stage-hours.css",
   "css/share.css",
   "css/auth.css",
+  "css/tour.css",
   "js/core/ai-progress.js",
   "js/core/api.js",
   "js/core/activity-ui.js",
@@ -97,6 +99,7 @@ var SHELL = [
   "js/core/templates/overlays.js",
   "js/core/templates/task-drawer.js",
   "js/core/theme.js",
+  "js/core/tour.js",
   "js/core/transitions.js",
   "js/core/ui.js",
   "js/core/utils.js",
@@ -134,10 +137,12 @@ var SHELL = [
   "js/views/mine.js",
   "js/views/phase.js",
   "js/views/release.js",
+  "js/views/plan-wizard.js",
   "js/views/portfolio.js",
   "js/views/profile.js",
   "js/views/project.js",
   "js/views/projects.js",
+  "js/views/record.js",
   "js/views/report.js",
   "js/views/investment.js",
   "js/views/requirements.js",

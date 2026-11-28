@@ -157,6 +157,12 @@
 [data-layout="mobile"] body[data-view="settings"] #pageActions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;}
 [data-layout="mobile"] body[data-view="settings"] #pageActions[hidden]{display:none;}
 [data-layout="mobile"] body[data-view="settings"] #pageActions .btn{height:30px;padding:0 10px;font-size:12px;}
+/* 发布计划：导出/新建两个页级按钮在手机上保留一行，避免零高页头把按钮顶进顶栏 */
+[data-layout="mobile"] body[data-view="release"] .pagehead{height:auto;padding:6px 16px 8px;}
+[data-layout="mobile"] body[data-view="release"] .ph-acts{height:auto;overflow:visible;}
+[data-layout="mobile"] body[data-view="release"] #pageActions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;}
+[data-layout="mobile"] body[data-view="release"] #pageActions[hidden]{display:none;}
+[data-layout="mobile"] body[data-view="release"] #pageActions .btn{height:30px;padding:0 10px;font-size:12px;}
 /* #newMenu 交给 UI.openPop 按 FAB 的位置自动定位（上方/下方避让），不要再用 CSS 固定 top/bottom */
 
 /* ===================== 筛选：首屏只留一行摘要，完整条件进底部面板 ===================== */

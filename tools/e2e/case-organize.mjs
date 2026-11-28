@@ -264,6 +264,12 @@ try{
 
   await openView("testcases");
   await waitFor(`!!document.getElementById("tcReq")`, "用例页");
+  /* 测试域默认落在「工作台」，本脚本验证用例列表与分组，先切到「用例」模式 */
+  await evaluate(`(() => {
+    const b = document.querySelector('#tcModeSeg [data-tc-mode="cases"]');
+    if(b && b.getAttribute("aria-pressed") !== "true") b.click();
+    return true;
+  })()`);
   await setSelect("tcReq", reqId);
   await waitFor(`document.querySelectorAll("#tcList .tc-row").length > 0`, "用例行");
   await sleep(900);
@@ -343,6 +349,29 @@ try{
   assert(allScope.dims.length === 1 && allScope.dims[0] === "按项目" && allScope.dimVal === "project",
     "全部项目下分组维度只剩「按项目」且已选中（" + allScope.dims.join("/") + "）");
   assert(allScope.dimLocked && allScope.secs > 0, "「按项目」为展示口径不可改，列表按项目分段");
+  /* 段头分组 chip：名称放在可收缩位里截断，计数固定在胶囊内；长分组名不能把计数顶出边框 */
+  const chips = await evaluate(`(() => {
+    const list = [...document.querySelectorAll("#tcList .tc-gchip")].filter(c => c.querySelector(".tc-gchip-n"));
+    const fit = list.map(c => {
+      const n = c.querySelector(".tc-gchip-n"), b = c.querySelector("b");
+      const cr = c.getBoundingClientRect(), br = b.getBoundingClientRect();
+      return { inside: br.right <= cr.right + 0.5, clip: getComputedStyle(n).textOverflow, over: c.scrollWidth - c.clientWidth };
+    });
+    let longOK = null;
+    const c = list[0];
+    if(c){
+      const n = c.querySelector(".tc-gchip-n"), b = c.querySelector("b");
+      const orig = n.textContent;
+      n.textContent = "在途流程支持运维设置委托代理人（很长的分组名称）";
+      const cr = c.getBoundingClientRect(), br = b.getBoundingClientRect();
+      longOK = br.right <= cr.right + 0.5 && n.scrollWidth > n.clientWidth && c.scrollWidth <= c.clientWidth + 1;
+      n.textContent = orig;
+    }
+    return { n: list.length, fit, longOK };
+  })()`);
+  assert(chips.n > 0 && chips.fit.every(x => x.inside && x.clip === "ellipsis" && x.over <= 1),
+    "段头分组 chip 名称有截断位、计数在胶囊内（" + chips.n + " 个）：" + JSON.stringify(chips.fit.slice(0, 3)));
+  assert(chips.longOK === true, "注入超长分组名后名称走省略号、计数仍留在胶囊内");
   await setSelect("tcReq", reqId);
   await sleep(1200);
   const backSingle = await evaluate(`(() => ({

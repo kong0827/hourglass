@@ -266,12 +266,13 @@ export function openStageDrill(opts){
       var table = '<div class="tbl-wrap drill-table-wrap"><table class="phase-tbl drill-tbl"><thead><tr>'
         + '<th>工作项</th><th>类型</th><th>分类</th><th>负责人</th><th class="num">阶段工时</th><th class="num">总实际</th>'
         + '</tr></thead><tbody>' + list.map(function(r){
+          var typeLabel = stageTypeName(r.type), catLabel = r.category || "未分类", ownerLabel = r.owner || "未指派";
           return '<tr tabindex="0" data-drill-task="' + esc(r.id) + '" title="打开工作项">'
             + '<td><span class="drill-title"><b>' + esc(r.title) + '</b>'
             + (r.versionName ? '<small>' + esc(r.versionName) + '</small>' : '') + '</span></td>'
-            + '<td>' + esc(stageTypeName(r.type)) + '</td>'
-            + '<td>' + esc(r.category || "未分类") + '</td>'
-            + '<td>' + esc(r.owner || "未指派") + '</td>'
+            + '<td class="drill-clip" title="' + esc(typeLabel) + '">' + esc(typeLabel) + '</td>'
+            + '<td class="drill-clip" title="' + esc(catLabel) + '">' + esc(catLabel) + '</td>'
+            + '<td class="drill-clip" title="' + esc(ownerLabel) + '">' + esc(ownerLabel) + '</td>'
             + '<td class="num">' + stageCell(r) + '</td>'
             + '<td class="num">' + esc(stageHoursText(totalOf(r))) + '</td></tr>';
         }).join("") + '</tbody></table></div>';

@@ -78,6 +78,16 @@ public class TestCaseController {
         return ApiResult.ok(caseService.stats(ws.getId(), userId, reqId));
     }
 
+    /** 载入示例用例包（新手引导）：一个事务建 20 条合成用例 + pack 分组，可整包删除 */
+    @PostMapping("/api/test-cases/sample-pack")
+    public ApiResult<java.util.Map<String, Object>> samplePack(@RequestBody java.util.Map<String, String> body,
+                                                               @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        String reqId = body == null ? null : body.get("reqId");
+        return ApiResult.ok(caseService.samplePack(userId, ws.getId(), reqId));
+    }
+
     /** 执行流水聚合：按执行人 / 环境 / 轮次的结果分布与通过率 */
     @GetMapping("/api/test-cases/run-stats")
     public ApiResult<com.hourglass.dto.CaseRunStatsView> runStats(@RequestParam String reqId,

@@ -21,6 +21,8 @@ public class CaseSetView {
     private String ownerUserId;
     /** manual / dynamic */
     private String kind;
+    /** 示例包标记：1=示例用例包（合成数据，前端据此常驻「一键删除」提示） */
+    private int pack;
     /** 动态分组收录规则 JSON（manual 为 null），前端据此渲染规则 chip */
     private String ruleJson;
     /** visibility=members 时的可见成员账号ID列表 */

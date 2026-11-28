@@ -352,6 +352,15 @@ const BASELINE_FAIL = /\/api\/(branches\/options|branches\/board|repos|my-work\/
       return w ? { scrollW: w.scrollWidth, clientW: w.clientWidth } : null;
     })()`);
     assert(drawerWide && drawerWide.scrollW <= drawerWide.clientW + 1, "抽屉表格横向溢出：" + JSON.stringify(drawerWide));
+    const clip = await evaluate(`(() => {
+      const rows = [...document.querySelectorAll(".stage-drill.open tr[data-drill-task]")].slice(0, 5);
+      return rows.flatMap(tr => [1, 2, 3].map(i => {
+        const cs = getComputedStyle(tr.children[i]);
+        return { overflow: cs.overflowX, ellipsis: cs.textOverflow };
+      }));
+    })()`);
+    assert(clip.length && clip.every(c => c.overflow === "hidden" && c.ellipsis === "ellipsis"),
+      "类型 / 分类 / 负责人 列缺截断，长文本会压到下一列：" + JSON.stringify(clip.slice(0, 2)));
     verdict(`下钻 ${drillKey}：${drawer.rows} 行，宽 ${drawer.width}px`);
     await shot("01b-阶段下钻-1440");
 

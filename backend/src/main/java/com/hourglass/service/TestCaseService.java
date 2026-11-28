@@ -18,6 +18,7 @@ import com.hourglass.dto.TestCasePage;
 import com.hourglass.dto.TestCaseSaveRequest;
 import com.hourglass.dto.TestCaseView;
 import com.hourglass.entity.Attachment;
+import com.hourglass.entity.CaseSet;
 import com.hourglass.entity.Demand;
 import com.hourglass.entity.Requirement;
 import com.hourglass.entity.Task;
@@ -849,6 +850,158 @@ public class TestCaseService {
                 "新建测试用例「" + caseNoText(c) + " " + c.getTitle() + "」", null);
         demandCompletion.refreshCompletion(workspaceId, c.getDemandId());
         return caseMapper.selectById(c.getId());
+    }
+
+    /** 示例用例包的分组名：一项目只允许一个示例包，整包删除时按组名之外再加 pack 标记双保险 */
+    public static final String PACK_GROUP_NAME = "示例用例包";
+
+    /**
+     * 载入示例用例包（新手引导）：一个事务里建 20 条合成用例 + 一个 pack 标记的手工分组。
+     * 用例标题统一带「（示例）」后缀，分组常驻「可一键删除」提示，避免合成数据冒充真实用例。
+     */
+    @Transactional
+    public Map<String, Object> samplePack(String userId, String workspaceId, String reqId) {
+        projectAccess.assertWrite(workspaceId, userId, reqId);
+        ensureProject(workspaceId, reqId);
+        /* 一项目一个示例包：重复载入只会制造数据垃圾，提示先删旧的 */
+        for (CaseSet existing : setMapper.selectByReqAll(workspaceId, reqId)) {
+            if (existing.getPack() != null && existing.getPack() == 1) {
+                throw AppException.badRequest("本项目已有示例用例包，请先删除旧示例包再重新载入");
+            }
+        }
+        List<String> caseIds = new ArrayList<String>();
+        for (TestCaseSaveRequest def : sampleCaseDefs()) {
+            TestCase c = new TestCase();
+            c.setId(Ids.gen("C"));
+            c.setWorkspaceId(workspaceId);
+            c.setCreatedBy(CurrentUser.get().getDisplayName());
+            c.setCreatedByUserId(userId);
+            apply(c, reqId, def);
+            insertWithNo(c);
+            caseIds.add(c.getId());
+        }
+        CaseSet group = new CaseSet();
+        group.setId(Ids.gen("CS"));
+        group.setWorkspaceId(workspaceId);
+        group.setReqId(reqId);
+        group.setParentId("");
+        group.setSortOrder(setMapper.maxSortOrder(workspaceId, reqId, "") + 1);
+        group.setName(PACK_GROUP_NAME);
+        group.setNote("新手引导载入的合成数据：可整包删除（组内用例一并删除）");
+        group.setVisibility(CaseSetService.VIS_TEAM);
+        group.setKind(CaseSetService.KIND_MANUAL);
+        group.setPack(1);
+        group.setOwnerUserId("");
+        group.setCreatedBy(CurrentUser.get().getDisplayName());
+        group.setCreatedByUserId(userId);
+        setMapper.insert(group);
+        for (int i = 0; i < caseIds.size(); i += 500) {
+            setMapper.insertItems(workspaceId, group.getId(),
+                    caseIds.subList(i, Math.min(caseIds.size(), i + 500)), userId);
+        }
+        auditService.recordCurrent(workspaceId, "test_case_sample_pack", "case_set", group.getId(),
+                PACK_GROUP_NAME, true,
+                "载入示例用例包：新建 " + caseIds.size() + " 条合成用例并归入分组「" + PACK_GROUP_NAME + "」（可一键删除）",
+                null);
+        Map<String, Object> out = new LinkedHashMap<String, Object>();
+        out.put("groupId", group.getId());
+        out.put("caseCount", caseIds.size());
+        return out;
+    }
+
+    /**
+     * 示例包内容：4 个常见模块 × 5 条用例，覆盖 P0–P3 与正反路径。
+     * 步骤两列式（操作｜预期），与手工建单一致；数据为合成演示，不指向任何真实系统。
+     */
+    private static List<TestCaseSaveRequest> sampleCaseDefs() {
+        String[][] rows = {
+            {"登录认证", "P0", "登录-正确账号密码进入首页（示例）",
+                "已注册账号 test_user，密码正确，账号未锁定",
+                "打开登录页，输入正确账号密码，点击登录|进入首页并显示当前用户;"
+                + "退出登录后再次登录|正常进入，无异常提示"},
+            {"登录认证", "P1", "登录-错误密码提示与锁定计数（示例）",
+                "已注册账号 lock_user",
+                "输入错误密码点击登录|提示「账号或密码错误」，不区分是哪一项错;"
+                + "连续错误 5 次后再登录|账号临时锁定并提示解锁方式"},
+            {"登录认证", "P1", "登录-连续错误后出现图形验证码（示例）",
+                "已注册账号 captcha_user",
+                "第一次输错密码|再次登录出现图形验证码;"
+                + "输入正确验证码与正确密码|登录成功"},
+            {"登录认证", "P2", "登录-记住我下次免登录（示例）",
+                "账号 remember_user 勾选「记住我」登录成功",
+                "关闭浏览器后重新打开站点|直接进入首页无需再登录;"
+                + "退出登录后再访问|跳回登录页"},
+            {"登录认证", "P2", "登录-未登录访问内页跳回登录（示例）",
+                "未登录状态",
+                "直接访问内部页面地址|跳回登录页，登录成功后回到原目标页"},
+            {"搜索下单", "P0", "搜索-关键词命中商品列表（示例）",
+                "商品库已上架商品「机械键盘」",
+                "搜索框输入机械键盘回车|列表展示名称含关键词的商品，结果数与总数一致"},
+            {"搜索下单", "P1", "搜索-无结果给出推荐与纠错（示例）",
+                null,
+                "搜索不存在的关键词 zzxxyy|显示无结果引导文案，并给出热门推荐;"
+                + "输入带错别字的词|提示纠错后的搜索结果"},
+            {"搜索下单", "P0", "下单-正常提交生成订单（示例）",
+                "已登录，购物车有货商品 1 件",
+                "购物车勾选商品点击结算，确认地址后提交|生成订单并扣减库存，跳转支付页;"
+                + "在我的订单查看|订单状态为待支付"},
+            {"搜索下单", "P1", "下单-并发重复提交只生成一单（示例）",
+                "已登录，购物车有货商品 1 件",
+                "快速连点两次提交按钮|只生成一笔订单，提示请勿重复提交"},
+            {"搜索下单", "P1", "下单-库存不足拦截并提示（示例）",
+                "目标商品库存为 1，另一账号已下单未支付",
+                "加入购物车 2 件并提交|提交被拦截，提示库存不足并允许调整数量"},
+            {"订单查询", "P1", "查询-按订单号精确查到详情（示例）",
+                "存在订单号 E20261128001",
+                "查询页输入订单号搜索|展示该订单详情：商品、金额、状态、时间"},
+            {"订单查询", "P2", "查询-按时间范围筛选列表（示例）",
+                "近 30 天有多笔订单",
+                "选择起止时间查询|列表只显示范围内订单，条数与汇总一致"},
+            {"订单查询", "P1", "查询-导出 CSV 内容与列表一致（示例）",
+                "当前筛选结果 5 条",
+                "点击导出 CSV|文件可打开，行数与字段和当前列表一致"},
+            {"订单查询", "P2", "查询-空结果显示引导文案（示例）",
+                null,
+                "用无命中条件查询|显示空态说明与重置筛选入口，不报错"},
+            {"订单查询", "P2", "查询-翻页不丢筛选条件（示例）",
+                "筛选结果跨 3 页",
+                "设置筛选后翻到第 2 页再翻回|筛选条件保留，每页结果不重复不遗漏"},
+            {"权限管理", "P0", "权限-无权限用户访问被拒并提示（示例）",
+                "普通账号 viewer_user 未授权后台管理",
+                "直接访问后台管理地址|拒绝访问并提示无权限，不出现数据内容"},
+            {"权限管理", "P1", "权限-管理员改角色即时生效（示例）",
+                "管理员账号登录",
+                "把 viewer_user 角色改为运营|viewer_user 重新登录后看到运营菜单;"
+                + "再改回普通用户|菜单随权限收缩"},
+            {"权限管理", "P2", "权限-只读用户看不到写操作按钮（示例）",
+                "只读账号 readonly_user 登录",
+                "打开任意列表页|不显示新建、编辑、删除等写操作入口"},
+            {"权限管理", "P2", "权限-禁用账号无法登录并提示（示例）",
+                "账号 disabled_user 状态为禁用",
+                "用该账号登录|登录被拒并提示账号已禁用，联系管理员"},
+            {"权限管理", "P3", "权限-角色变更留痕可查（示例）",
+                "管理员账号登录",
+                "修改任一用户角色|操作日志记录修改人、时间、改动前后的角色"},
+        };
+        List<TestCaseSaveRequest> defs = new ArrayList<TestCaseSaveRequest>();
+        for (String[] row : rows) {
+            TestCaseSaveRequest req = new TestCaseSaveRequest();
+            req.setTitle(row[2]);
+            req.setPrecondition(row[3]);
+            req.setModule(row[0]);
+            req.setPriority(row[1]);
+            List<TestCaseSaveRequest.StepItem> steps = new ArrayList<TestCaseSaveRequest.StepItem>();
+            for (String pair : row[4].split(";")) {
+                String[] cols = pair.split("\\|", -1);
+                TestCaseSaveRequest.StepItem step = new TestCaseSaveRequest.StepItem();
+                step.setAction(cols[0]);
+                step.setExpected(cols.length > 1 ? cols[1] : null);
+                steps.add(step);
+            }
+            req.setSteps(steps);
+            defs.add(req);
+        }
+        return defs;
     }
 
     /**

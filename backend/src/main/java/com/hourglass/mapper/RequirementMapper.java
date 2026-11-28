@@ -17,6 +17,9 @@ public interface RequirementMapper {
 
     int countVisible(@Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId);
 
+    /** 未归档项目数：与列表同口径，「我的工作」用它判断空间里是否还没有项目 */
+    int countActive(@Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId);
+
     Requirement selectById(String id);
 
     /** 项目行锁 + 当前读：抢到锁后复查归档状态，避免用加锁前的快照判断 */

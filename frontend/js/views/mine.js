@@ -11,6 +11,8 @@ import { canCreateNow, canEditReq, dueState, progressOf, rt, roleReadOnly, statu
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
 import { UI, esc, toast, toastAction } from "../core/ui.js";
+import { showView } from "../core/router.js";
+import { loadView } from "../core/view-loader.js";
 import { PRIORITIES, addDays, colName, dayDiff, fmtShortMD, fmtTs, parseDate } from "../lib/format.js";
 import { caliberMarkHTML, initCaliberHelp, registerHelp } from "../lib/caliber-help.js";
 import { effectiveMemberRole } from "../lib/member-labels.js";
@@ -184,6 +186,7 @@ var mw = {
   countsLoading: false,
   cseq: 0,
   claimable: 0,
+  projectCount: null,
   reviewAvailable: true,
   updatedAt: "",
   q: "",
@@ -414,6 +417,7 @@ function loadCounts(force) {
       mw.claimable = num(d.claimable);
       mw.reviewAvailable = d.reviewAvailable !== false;
       mw.updatedAt = d.updatedAt || "";
+      mw.projectCount = d.projectCount == null ? null : num(d.projectCount);
     }
     mw.countsErr = null;
   }).catch(function (ex) {
@@ -1104,6 +1108,9 @@ function briefHTML() {
     var items = data.dev.concat(data.test, data.plan, data.review);
     var total = mw.counts ? tabCount("pending") : items.length;
     if (!total && !items.length) {
+      if (noProjectYet()) {
+        return '<span class="mw-txt"><strong>这个空间还没有项目</strong><span> · 先新建项目，指派给你的事项会汇总到这里。</span></span>' + metaHTML();
+      }
       return '<span class="mw-txt"><strong>今天没有需要你处理的事项</strong><span> · 可以去「我发起的」看看进展，或从关注列表挑一件推进。</span></span>' + metaHTML();
     }
     if (!items.length) {
@@ -1133,6 +1140,9 @@ function briefHTML() {
     var taskTotal = mw.counts ? num(mw.counts.createdTasks) : 0;
     var createdTotal = Math.max(demandTotal + taskTotal, rows.length);
     if (!createdTotal && !rows.length) {
+      if (noProjectYet()) {
+        return '<span class="mw-txt"><strong>这个空间还没有项目</strong><span> · 需求、版本与工作项都挂在项目下，新建项目后可在这里跟踪进展。</span></span>' + metaHTML();
+      }
       return '<span class="mw-txt"><strong>你还没有发起过事项</strong> · 提交需求或创建工作项后可在这里跟踪进展。</span>' + metaHTML();
     }
     var sc = mw.src.created.statusCounts || {};
@@ -1156,6 +1166,9 @@ function briefHTML() {
   var plans = Math.max(mw.counts ? num(mw.counts.watchedPlans) : 0, (mw.src.watched.plans.items || []).length);
   var watchedTotal = Math.max(mw.counts ? num(mw.counts.watched) : 0, wrows.length, tasks + demands + plans);
   if (!watchedTotal && !wrows.length) {
+    if (noProjectYet()) {
+      return '<span class="mw-txt"><strong>这个空间还没有项目</strong><span> · 新建项目后，在工作项、需求或发布计划上点「关注」，变更会汇总到这里。</span></span>' + metaHTML();
+    }
     return '<span class="mw-txt"><strong>你还没有关注任何事项</strong> · 在工作项、缺陷、需求或发布计划里点「关注」，变更会出现在这里。</span>' + metaHTML();
   }
   var today = 0;
@@ -1464,10 +1477,33 @@ function filterEmptyHTML() {
     '<h3>当前筛选下没有事项</h3><p>筛选与搜索只作用于已载入的这部分；清除后可看到全部内容。</p>' +
     '<div class="mw-bigact"><button class="btn primary" type="button" data-clear-filter>清除筛选</button></div></div>';
 }
+/* 共享空间里一个未归档项目都没有：新建工作项会落在「无项目」，项目看板与统计里都看不到。
+   只对空间主/管理员生效——成员看到的项目数按可见范围裁剪，0 不代表空间里没有项目。 */
+function noProjectYet() {
+  if (!rt.currentWs || rt.currentWs.type === "personal") return false;
+  if (myRole() !== "owner" && myRole() !== "admin") return false;
+  return mw.projectCount === 0;
+}
 function emptyHTML() {
   var tab = currentTab();
   var canNew = canCreateNow();
-  var conf = {
+  var conf = noProjectYet() ? {
+    pending: {
+      t: "这个空间还没有项目",
+      d: "工作项归属项目后才会进入项目看板与统计。先新建一个项目，指派给你的事项会汇总到这里。",
+      a: [["新建项目", "primary", "project"]]
+    },
+    created: {
+      t: "这个空间还没有项目",
+      d: "需求、版本与工作项都挂在项目下。先新建一个项目，之后提交的事项会在评审、排期与完成时更新到这里。",
+      a: [["新建项目", "primary", "project"]]
+    },
+    watched: {
+      t: "这个空间还没有项目",
+      d: "暂时没有可关注的事项。先新建一个项目，再在工作项、需求或发布计划上点「关注」，变更会汇总到这里。",
+      a: [["新建项目", "primary", "project"]]
+    }
+  }[tab] : {
     pending: {
       t: "本周还没有待处理事项",
       d: canNew
@@ -1497,7 +1533,7 @@ function emptyHTML() {
   return '<div class="mw-bigstate"><span class="mw-bigico">' + icon("inbox", 20) + '</span>' +
     '<h3>' + esc(conf.t) + '</h3><p>' + esc(conf.d) + '</p><div class="mw-bigact">' +
     conf.a.map(function (a) {
-      var action = a[2] === "task" || a[2] === "demand"
+      var action = a[2] === "task" || a[2] === "demand" || a[2] === "project"
         ? ' data-empty-new="' + a[2] + '"'
         : ' data-go="' + a[2] + '"';
       return '<button class="btn ' + a[1] + '" type="button"' + action + '>' + esc(a[0]) + '</button>';
@@ -1557,7 +1593,8 @@ function syncPageHead() {
   var tail;
   if (st === "error") tail = "数据加载失败";
   else if (st === "empty") {
-    tail = currentTab() === "created" ? "还没有发起过事项" : currentTab() === "watched" ? "还没有关注任何事项" : currentTab() === "team" ? "本周团队交付概览" : "本周没有待处理事项";
+    tail = noProjectYet() ? "还没有项目"
+      : currentTab() === "created" ? "还没有发起过事项" : currentTab() === "watched" ? "还没有关注任何事项" : currentTab() === "team" ? "本周团队交付概览" : "本周没有待处理事项";
   } else if (currentTab() === "team") {
     tail = "团队交付概览";
   } else if (currentTab() === "pending") {
@@ -1907,6 +1944,13 @@ function newDemand() {
   window.location.hash = "#/demands?new=1";
   window.dispatchEvent(new CustomEvent("ds:route-go", { detail: { view: "demands" } }));
 }
+/* 与看板引导卡同一做法：先切到项目页，等视图挂载后再开新建弹窗 */
+function openNewProject() {
+  showView("projects");
+  setTimeout(function () {
+    loadView("projects").then(function (m) { m.openProjectDialog(null); }).catch(function () { /* 加载失败已由 view-loader 提示 */ });
+  }, 80);
+}
 
 /* ---------------- 跨空间切换（保留页签） ---------------- */
 
@@ -2176,6 +2220,7 @@ function initEvents() {
     if (go) { goView(go.dataset.go); return; }
     var neo = e.target.closest("[data-empty-new]");
     if (neo) {
+      if (neo.dataset.emptyNew === "project") { openNewProject(); return; }
       if (!canCreateNow()) { toast("当前没有可写项目，无法新建；请联系空间主或管理员分配", "warn"); return; }
       if (neo.dataset.emptyNew === "task") openTaskDrawer("backlog");
       else newDemand();

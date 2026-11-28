@@ -1,13 +1,13 @@
 /* views/project · 项目管理总览：单项目看板 + 全部项目透视表 */
 
 import { API } from "../core/api.js";
-import { $, viewTitle } from "../core/dom.js";
+import { $, searchInput, searchWrap, viewTitle } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { fullscreenButtonHTML } from "../core/fullscreen.js";
 import * as listPrefs from "../core/list-preferences.js";
-import { activeView, setReturnOrigin } from "../core/router.js";
+import { activeView, setReturnOrigin, showView } from "../core/router.js";
 import { openTaskById } from "../core/task-actions.js";
-import { canEditReq, canManageProject, catNameById, dueState, projectOptionsHTML, rt, statusBucket } from "../core/state.js";
+import { canEditReq, canManageProject, catNameById, dueState, projectOptionsHTML, rt, state, statusBucket } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { loadCategories } from "../core/app.js";
 import { PRIORITIES, assocLinkHTML, avatarHTML, demandNoText, fmtMinutesShort, itemNoText, priName, priTagHTML,
@@ -1831,6 +1831,22 @@ function onProjectContentInput(e){
   }, 220);
 }
 
+/* 项目排期：清掉工作项域的旧筛选，只留当前项目，进入工作项甘特。
+   单项目筛选时甘特会自动带出该项目里程碑轨道；返回胶囊回到本驾驶舱。 */
+function openProjectGantt(pid){
+  var pname = (cache && cache.project && cache.project.name) || "";
+  state.q = ""; state.owners = []; state.testOwners = []; state.pris = []; state.cats = [];
+  state.tags = []; state.types = []; state.versions = []; state.columns = [];
+  state.completion = ""; state.pubState = null; state.due = null; state.noDue = false;
+  state.dueFrom = null; state.dueTo = null; state.startFrom = null; state.startTo = null;
+  state.focus = false; state.blocked = false;
+  state.reqs = [pid];
+  searchInput.value = "";
+  searchWrap.classList.remove("has");
+  setReturnOrigin({ view:"project", label: pname ? "项目 " + pname : "项目详情" });
+  showView("gantt");
+  toast("已按项目筛选甘特", "fs");
+}
 function renderProject(){
   var p = cache.project || {}, m = cache.metrics || {}, c = cache.counts || {}, tasks = cache.tasks || [];
   var total = tasks.length, done = c.done || 0, progress = m.progressPct || 0;
@@ -1843,7 +1859,9 @@ function renderProject(){
     ? '<span class="tag tag-ghost" title="所属项目集（只读归组）">项目集 · ' + esc(reqMeta.setName) + '</span>' : '';
   if(reqMeta && reqMeta.containerKind) setTag += '<span class="tag tag-ghost" title="拆分后的公共容器：承接版本、发布与文档">公共容器</span>';
   var toolbar = '<div class="manager-toolbar"><div>' + projectSwitchButton() + '</div>'
-    + '<div class="toolbar-right">' + setTag + modeSeg() + '<span class="tag tag-primary">整体完成 ' + progress + '%</span>' + fullscreenButtonHTML() + '</div></div>';
+    + '<div class="toolbar-right">' + setTag + modeSeg()
+    + '<button class="btn sm ghost" type="button" data-project-gantt title="在工作项甘特中查看本项目排期，可调整起止与依赖">' + icon("calendar", 14) + '排期</button>'
+    + '<span class="tag tag-primary">整体完成 ' + progress + '%</span>' + fullscreenButtonHTML() + '</div></div>';
   var overview = caliberHTML('整体进度 = Σ工作项完成度 ÷ 工作项数；指标由工作项流转、预估与自动计时汇总，不提供手填项目进度。各指标卡右上角的 ? / ! 说明该数字的细分口径与边界。分布按看板列的处理规则归类：待处理含「等待接续」列，进行中含「正常处理」的自定义列，「执行结束」列单独计数、不计未完成。')
     + projectBrief(p, m, c, cache.members)
     + '<div class="manager-kpis">'
@@ -2158,6 +2176,11 @@ function onClick(e){
   if(pcDemandRow){ openProjectDemand(pcDemandRow.dataset.pcDemand); return; }
   var pcTaskRow = e.target.closest("[data-pc-task]");
   if(pcTaskRow){ openTaskById(pcTaskRow.dataset.pcTask); return; }
+  if(e.target.closest("[data-project-gantt]")){
+    var ganttPid = (cache && cache.project && cache.project.id) || rt.managerProjectId;
+    if(ganttPid) openProjectGantt(ganttPid);
+    return;
+  }
   var openRes = e.target.closest("[data-project-open]");
   if(openRes){
     var kind = openRes.dataset.projectOpen;

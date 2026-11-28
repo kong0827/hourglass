@@ -79,7 +79,9 @@ var SORT_DEFAULT_DIR = {
 };
 var HEAD_SORT_MAP = { dueDate:"due", updatedAt:"updated", work:"actual" };
 var LIST_SORTS = ["default"].concat(Object.keys(SORT_DEFAULT_DIR));
-var COL_WIDTHS = { title:"minmax(240px,1fr)", no:"76px", type:"80px", column:"96px", publication:"104px", priority:"72px", owner:"96px", dueDate:"104px", progress:"108px", project:"132px", demand:"180px", version:"112px", category:"100px", startDate:"110px", tags:"160px", subtasks:"90px", work:"100px", comments:"80px", updatedAt:"168px" };
+/* 截止要同时放 MM-DD 与「逾期 N 天」徽标（行内直改还带 caret）；更新列悬停换成图标操作，
+   144px 够用。两者宽度对调，总宽不变 */
+var COL_WIDTHS = { title:"minmax(240px,1fr)", no:"76px", type:"80px", column:"96px", publication:"104px", priority:"72px", owner:"96px", dueDate:"128px", progress:"108px", project:"132px", demand:"180px", version:"112px", category:"100px", startDate:"110px", tags:"160px", subtasks:"90px", work:"100px", comments:"80px", updatedAt:"144px" };
 
 function renderSmartTabs(){
   updateMobFilterSummary();

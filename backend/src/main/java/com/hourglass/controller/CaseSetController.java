@@ -76,6 +76,15 @@ public class CaseSetController {
         return ApiResult.ok(null);
     }
 
+    /** 整包删除（仅示例用例包）：组内用例一并删除，二次确认由前端完成 */
+    @DeleteMapping("/api/case-sets/{id}/with-cases")
+    public ApiResult<Map<String, Object>> deleteWithCases(@PathVariable String id,
+                                                          @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(setService.deletePack(userId, ws.getId(), id));
+    }
+
     /** 同级分组手动排序：整体提交该父级下的分组顺序 */
     @PutMapping("/api/case-sets/order")
     public ApiResult<Map<String, Object>> order(@Valid @RequestBody com.hourglass.dto.CaseSetOrderRequest req,

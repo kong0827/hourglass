@@ -500,9 +500,11 @@ function createPlanFromAllVersions(){
     .filter(function(r){ return r && r.canManage && !versionEnded({ status: r.versionStatus }) && r.versionStatus !== "released"; });
   if(!picked.length){ toast("先勾选至少一个可管理、未关闭/取消且未发布的版本", "warn"); return; }
   var anchor = picked[0];
-  var known = { id: anchor.versionId, reqId: anchor.reqId, name: anchor.versionName, status: anchor.versionStatus,
-    targetDate: anchor.targetDate, canManageReleasePlan: true, canPublish: false };
-  openReleaseDetail(anchor.versionId, "plan", null, known, picked.map(function(r){ return r.versionId; }), true);
+  /* 原型：跨项目勾选后进入 4 步向导，第 1 步带着已勾版本继续；保存仍走同一计划接口 */
+  import("./plan-wizard.js").then(function(m){
+    m.openPlanWizard({ from:"phase", anchor:anchor.versionId, reqId:anchor.reqId,
+      ids:picked.map(function(r){ return r.versionId; }) });
+  }).catch(function(ex){ toast(ex && ex.message || "打不开新建计划向导", "bad"); });
 }
 
 /* ---------- 发布计划入口（跨项目列表已独立成菜单：这里只做跳转） ---------- */
@@ -2424,7 +2426,7 @@ function openVersionTool(reqId, versionId, tool){
     if(tool === "edit") return openVersionDialog(versionId);
     if(tool === "tasks") return openVersionTasks(versionId);
     if(tool === "plan") return openReleaseDetail(versionId, "plan", function(){ notifyDeliveryChanged(reqId); });
-    if(tool === "actual") return openReleaseDetail(versionId, "actual", function(){ notifyDeliveryChanged(reqId); });
+    if(tool === "actual") return publishVersion(versionId);
     if(tool === "note") return showReleaseNote(versionId);
     if(tool === "start") return startVersion(versionId);
     if(tool === "close") return endVersion(versionId, "closed");
@@ -2681,7 +2683,13 @@ function exportReleaseRecordCSV(record){
   var a = document.createElement("a"); a.href = url; a.download = "发布快照-" + (record.versionName || "版本") + "-" + (releaseNoText(record.releaseNo) || record.id) + ".csv";
   document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 0);
 }
-function publishVersion(id){ openReleaseDetail(id, "actual"); }
+/* 版本卡的「记录发布」落到独立记录页；计划编辑仍走发布工作区 */
+function publishVersion(id){
+  var v = findVersion(id);
+  import("../core/view-loader.js").then(function(m){ return m.loadView("record"); }).then(function(mod){
+    mod.openRecordPage({ versionId:id, reqId:(v && v.reqId) || rt.phaseReqId || "" });
+  }).catch(function(ex){ toast(ex.message || "打不开记录发布页", "bad"); });
+}
 export function mountReleaseWorkspace(pageHost, opts){
   var id = opts.id, v = opts.version, entry = opts.entry || "plan";
   if(!id || !v) return null;

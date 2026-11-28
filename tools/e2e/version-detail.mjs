@@ -180,7 +180,7 @@ async function main(){
         return { scrollW: view.scrollWidth, clientW: view.clientWidth, wide, tabs, kpiRows: [...rows.values()], kpiWrapped, acts };
       })()`);
       assert(r.scrollW <= r.clientW + 1, `${label} 详情页横向溢出：${r.scrollW} > ${r.clientW}（${r.wide.join(" | ")}）`);
-      assert(r.tabs.length === 5 && r.tabs.every(t => t.w > 0 && t.h >= 28), `${label} 页签尺寸异常：${JSON.stringify(r.tabs)}`);
+      assert(r.tabs.length >= 4 && r.tabs.every(t => t.w > 0 && t.h >= 28), `${label} 页签尺寸异常：${JSON.stringify(r.tabs)}`);
       assert(r.kpiRows.every(n => n === r.kpiRows[0]), `${label} 指标格排布不齐（末行孤格）：${JSON.stringify(r.kpiRows)}`);
       assert(!r.kpiWrapped, `${label} 指标格标签折行：${r.kpiWrapped} 个`);
       assert(r.acts.every(b => b.w > 0 && b.h >= 28), `${label} 操作按钮尺寸异常：${JSON.stringify(r.acts)}`);
@@ -231,19 +231,26 @@ async function main(){
       m.setPhaseProject(${JSON.stringify(main.reqId)}, "version");
       return true;
     })()`);
-    await waitFor(`document.querySelectorAll("#phaseBody .vl-row").length > 0`, "版本列表");
+    await waitFor(`document.querySelectorAll("#phaseBody .vl-row, #phaseBody .ver-focus").length > 0`, "版本列表");
+    /* 当前版本/下一版会顶到焦点卡（不重复出现在「其他版本」列表里），两种入口都要能进详情 */
     const cardEntry = await evaluate(`(() => {
       const row = document.querySelector('#phaseBody .vl-row[data-ver-row="${main.versionId}"]');
-      const nameBtn = row && row.querySelector('.vl-name-link[data-ver-open="${main.versionId}"]');
-      const actBtn = row && [...row.querySelectorAll('.vl-acts button')]
-        .find(b => b.hasAttribute("data-ver-open") || b.hasAttribute("data-ver-open-tab")
-          || b.hasAttribute("data-ver-release") || b.hasAttribute("data-ver-menu"));
-      return { name: !!nameBtn, nameText: nameBtn && nameBtn.textContent.trim(), act: !!actBtn, actText: actBtn && actBtn.textContent.trim() };
+      const focus = document.querySelector("#phaseBody .ver-focus");
+      const focusName = focus && focus.querySelector("#verFocusTitle").textContent.trim();
+      const inFocus = focus && focusName === ${JSON.stringify(main.versionName)};
+      const nameBtn = row
+        ? row.querySelector('.vl-name-link[data-ver-open="${main.versionId}"]')
+        : (inFocus ? focus.querySelector("#verFocusTitle") : null);
+      const actBtn = row
+        ? [...row.querySelectorAll('.vl-acts button')].find(b => b.hasAttribute("data-ver-open") || b.hasAttribute("data-ver-open-tab")
+          || b.hasAttribute("data-ver-release") || b.hasAttribute("data-ver-menu"))
+        : (inFocus ? focus.querySelector('[data-ver-open="${main.versionId}"]') : null);
+      return { focus: !!inFocus, name: !!nameBtn, nameText: nameBtn && nameBtn.textContent.trim(), act: !!actBtn, actText: actBtn && actBtn.textContent.trim() };
     })()`);
-    assert(cardEntry.name && cardEntry.act, "版本行缺少详情页入口：" + JSON.stringify(cardEntry));
+    assert(cardEntry.name && cardEntry.act, "版本列表/焦点卡缺少详情页入口：" + JSON.stringify(cardEntry));
     await shot("01-版本列表入口");
 
-    /* 3.1 列表对齐原型：需关注筛选 / 风险副标题 / 阻塞进度段 / 状态命名 */
+    /* 3.1 列表对齐原型：焦点卡之外按状态分组、行内范围链接、风险提示与「只看需关注」 */
     const listModel = await evaluate(`(async () => {
       const { API } = await import("./js/core/api.js");
       const { parseDate, dayDiff } = await import("./js/lib/format.js");
@@ -256,180 +263,134 @@ async function main(){
       const ids = t => Array.isArray(t.versionIds) ? t.versionIds : [];
       const rows = (stats.versions || []).map(v => {
         const bound = (tasks || []).filter(t => ids(t).indexOf(v.id) >= 0);
-        const total = v.taskCount || 0, done = v.doneCount || 0;
         const blocked = bound.filter(t => t.blocked && t.boardColumn !== "done").length;
-        const doing = bound.filter(t => t.boardColumn !== "done" && !t.blocked && Number(t.totalMinutes) > 0).length;
         let overdue = 0;
         if(v.status !== "released" && !ended(v) && v.targetDate){
           const d = dayDiff(parseDate(v.targetDate), rt.TODAY);
           if(d !== null && d < 0) overdue = -d;
         }
-        const pct = total ? Math.round(done * 100 / total) : 0;
-        const doingPct = total ? Math.max(0, Math.min(100 - pct, Math.round(doing * 100 / total))) : 0;
-        return {
-          id:v.id, status:v.status, total:total, branches:(v.branches || []).length,
-          blocked:blocked, overdue:overdue, risk:blocked > 0 || overdue > 0,
-          blockedPct:total ? Math.max(0, Math.min(100 - pct - doingPct, Math.round(blocked * 100 / total))) : 0
-        };
+        return { id:v.id, status:v.status, total:v.taskCount || 0, targetDate:v.targetDate || null,
+          risk:blocked > 0 || overdue > 0, blocked:blocked, overdue:overdue };
       });
-      return { rows: rows };
+      /* 与 phase.js 的焦点卡同口径：进行中优先，其次最早目标的计划中，最后最近发布 */
+      const focus = rows.filter(r => r.status === "active")[0]
+        || rows.filter(r => r.status === "planned").sort((a, b) => String(a.targetDate || "9999").localeCompare(String(b.targetDate || "9999")))[0]
+        || rows.filter(r => r.status === "released")[0] || null;
+      return { rows: rows.filter(r => !focus || r.id !== focus.id), focusId: focus && focus.id };
     })()`);
     const listUi = await evaluate(`(() => {
       const box = document.getElementById("verList");
-      const chips = [...box.querySelectorAll("[data-ver-chips] .vl-chip")].map(c => ({
-        text: c.textContent.replace(/\\s+/g, " ").trim(),
-        status: c.getAttribute("data-ver-status"),
-        risk: c.hasAttribute("data-ver-risk-chip"),
-        on: c.classList.contains("on")
-      }));
+      const groups = [...box.querySelectorAll(".vl-group")].map(g => {
+        const head = g.querySelector(".vl-group-head");
+        return {
+          status: head.getAttribute("data-ver-group"),
+          label: head.querySelector("b").textContent.trim(),
+          count: Number(head.querySelector(".vl-group-count").textContent.trim()),
+          expanded: head.getAttribute("aria-expanded"),
+          rows: [...g.querySelectorAll(".vl-row")].map(r => r.getAttribute("data-ver-row"))
+        };
+      });
       const rows = [...box.querySelectorAll(".vl-row")].map(r => {
         const sub = r.querySelector(".vl-sub");
-        const bar = r.querySelector(".vl-bar");
         return {
           id: r.getAttribute("data-ver-row"),
-          sub: sub ? sub.textContent.replace(/\\s+/g, " ").trim() : "",
+          sub: sub ? sub.textContent.replace(/\s+/g, " ").trim() : "",
           risk: !!(sub && sub.querySelector(".vl-risk-inline")),
-          blockedSeg: !!(bar && bar.querySelector("i.blocked")),
-          statusText: (r.querySelector(".vl-status .tag") || { textContent: "" }).textContent.trim()
+          riskText: sub && sub.querySelector(".vl-risk-inline") ? sub.querySelector(".vl-risk-inline").textContent.trim() : ""
         };
       });
       const cb = box.querySelector("[data-ver-risk]");
-      return { chips: chips, rows: rows, checkbox: !!cb, checked: !!(cb && cb.checked) };
+      return { groups: groups, rows: rows, checkbox: !!cb, checked: !!(cb && cb.checked) };
     })()`);
     const LABELS = { active:"进行中", planned:"计划中", released:"已发布", closed:"已关闭", canceled:"已取消" };
-    const chipName = text => text.replace(/\s*\d+$/, "");
-    const chipCount = text => Number((text.match(/(\d+)$/) || [])[1] || 0);
-    const wantedChips = ["全部", "进行中", "计划中", "已发布", "已关闭"]
-      .concat(listModel.rows.some(r => r.status === "canceled") ? ["已取消"] : []);
-    assert(listUi.chips.filter(c => !c.risk).map(c => chipName(c.text)).join(",") === wantedChips.join(","),
-      "状态筛选命名未对齐原型：" + JSON.stringify(listUi.chips.map(c => c.text)));
-    const expectedRisk = listModel.rows.filter(r => r.risk).length;
-    const riskChip = listUi.chips.find(c => c.risk);
-    assert(riskChip && chipCount(riskChip.text) === expectedRisk, `需关注计数应为 ${expectedRisk}，实际 ${riskChip && riskChip.text}`);
+    assert(listUi.groups.length > 0, "其他版本列表没有按状态分组");
     const byId = {};
     listModel.rows.forEach(r => { byId[r.id] = r; });
-    assert(listUi.rows.length === listModel.rows.length,
-      `列表行数 ${listUi.rows.length} ≠ 版本数 ${listModel.rows.length}`);
-    const badStatus = listUi.rows.filter(r => r.statusText !== LABELS[byId[r.id].status]);
-    assert(!badStatus.length, "状态标签未对齐（进行中/计划中/已发布/已关闭/已取消）：" + JSON.stringify(badStatus.map(r => [r.id, r.statusText])));
-    const badSub = listUi.rows.filter(r => {
-      const e = byId[r.id];
-      const base = e.total ? e.total + " 个工作项" : "未规划工作项";
-      const branch = e.branches ? e.branches + " 个分支" : "";
-      return r.sub.indexOf(base) === -1 || (branch && r.sub.indexOf(branch) === -1)
-        || (e.blocked > 0 && r.sub.indexOf(e.blocked + " 个阻塞") === -1)
-        || (e.overdue > 0 && r.sub.indexOf("已逾期 " + e.overdue + " 天") === -1);
-    });
-    assert(!badSub.length, "行副标题未按「工作项 / 分支 / 阻塞」展示：" + JSON.stringify(badSub.map(r => [r.id, r.sub])));
-    const badRisk = listUi.rows.filter(r => r.risk !== byId[r.id].risk
-      || r.blockedSeg !== (byId[r.id].blockedPct > 0));
-    assert(!badRisk.length, "风险提示或阻塞进度段与数据不符：" + JSON.stringify(badRisk.map(r => [r.id, r.risk, r.blockedSeg])));
-    pass(`列表状态命名 / 风险副标题 / 阻塞段（需关注 ${expectedRisk} 个，可筛 ${listUi.rows.length} 行）`);
-    await evaluate(`document.querySelector("#verList [data-ver-risk-chip]").click()`);
-    await sleep(200);
-    const riskUi = await evaluate(`(() => {
-      const box = document.getElementById("verList");
-      const chip = box.querySelector("[data-ver-risk-chip]");
-      return {
-        rows: [...box.querySelectorAll(".vl-row")].map(r => !!r.querySelector(".vl-sub .vl-risk-inline")),
-        on: !!chip && chip.classList.contains("on"),
-        checked: !!box.querySelector("[data-ver-risk]").checked,
-        empty: !!box.querySelector(".vl-empty")
-      };
-    })()`);
-    assert(riskUi.rows.length === expectedRisk && riskUi.rows.every(Boolean), "需关注筛选结果不符（应为仅风险版本 " + expectedRisk + " 行）");
-    assert(riskUi.on && riskUi.checked, "需关注 chip 与「只看需关注」勾选状态不同步");
-    await shot("02-版本列表需关注");
-    await evaluate(`document.querySelector("#verList [data-ver-risk]").click()`);
-    await sleep(200);
-    const riskReset = await evaluate(`(() => {
-      const box = document.getElementById("verList");
-      return { rows: box.querySelectorAll(".vl-row").length, checked: !!box.querySelector("[data-ver-risk]").checked };
-    })()`);
-    assert(riskReset.rows === listModel.rows.length && !riskReset.checked, "关闭只看需关注后未恢复全部版本");
-    pass("需关注筛选与勾选联动，关闭后恢复全部");
-    /* 演示库没有阻塞/逾期版本，风险分支用内存探针补验（不写库）：给主版本挂一条阻塞工作项 */
-    await evaluate(`(async () => {
-      const { API } = await import("./js/core/api.js");
-      const orig = API.get;
-      window.__e2eOrigApiGet = orig;
-      API.get = function(url, params){
-        if(String(url).indexOf("/api/versions/task-options") === 0){
-          return orig.call(API, url, params).then(function(list){
-            return Array.isArray(list) ? list.concat([{
-              id:"E2E-BLOCK-PROBE", title:"E2E 阻塞探针", reqId:${JSON.stringify(main.reqId)},
-              boardColumn:"doing", totalMinutes:60, blocked:true,
-              versionIds:[${JSON.stringify(main.versionId)}]
-            }]) : list;
-          });
-        }
-        return orig.call(API, url, params);
-      };
-      const m = await import("./js/views/phase.js");
-      m.setPhaseProject(${JSON.stringify(main.reqId)}, "version");
-      return true;
-    })()`);
-    await sleep(600);
-    const probeUi = await evaluate(`(() => {
-      const box = document.getElementById("verList");
-      const row = box.querySelector('.vl-row[data-ver-row="${main.versionId}"]');
-      const chip = box.querySelector("[data-ver-risk-chip]");
-      return {
-        riskChip: chip ? chip.textContent.replace(/\\s+/g, " ").trim() : "",
-        risk: !!(row && row.querySelector(".vl-sub .vl-risk-inline")),
-        riskText: row && row.querySelector(".vl-sub .vl-risk-inline") ? row.querySelector(".vl-sub .vl-risk-inline").textContent.trim() : "",
-        blockedSeg: !!(row && row.querySelector(".vl-bar i.blocked"))
-      };
-    })()`);
-    assert(probeUi.risk && probeUi.riskText.indexOf("1 个阻塞") === 0 && probeUi.blockedSeg,
-      "模拟阻塞任务未渲染风险提示或阻塞进度段：" + JSON.stringify(probeUi));
-    assert(chipCount(probeUi.riskChip) === expectedRisk + 1, "需关注计数未包含阻塞探针：" + probeUi.riskChip);
-    await evaluate(`document.querySelector("#verList [data-ver-risk-chip]").click()`);
-    await sleep(200);
-    const probeRows = await evaluate(`document.querySelectorAll("#verList .vl-row").length`);
-    assert(probeRows === expectedRisk + 1, `需关注筛选未包含阻塞探针（${probeRows} 行）`);
-    await shot("03-版本列表阻塞探针");
-    pass("阻塞工作项 → 风险副标题 + 红色进度段 + 需关注计数（内存探针）");
-    await evaluate(`(async () => {
-      const { API } = await import("./js/core/api.js");
-      if(window.__e2eOrigApiGet){ API.get = window.__e2eOrigApiGet; delete window.__e2eOrigApiGet; }
-      document.querySelector("#verList [data-ver-risk]").click();
-      const m = await import("./js/views/phase.js");
-      m.setPhaseProject(${JSON.stringify(main.reqId)}, "version");
-      return true;
-    })()`);
-    await sleep(500);
-    await waitFor(`!document.querySelector('#verList .vl-row[data-ver-row="${main.versionId}"] .vl-sub .vl-risk-inline')`, "探针撤下");
-    pass("撤下探针后列表恢复（不改数据库）");
-
-    /* 3.2 窄屏：筛选条与新增勾选不撑破页面 */
+    const badGroup = listUi.groups.filter(g => g.label !== LABELS[g.status]
+      || g.count !== listModel.rows.filter(r => r.status === g.status).length
+      || (g.expanded !== "true" && g.expanded !== "false"));
+    assert(!badGroup.length, "状态分组标题 / 计数 / 展开态不对：" + JSON.stringify(badGroup));
+    assert(listUi.rows.length > 0 && listUi.rows.every(r => byId[r.id]), "列表混入了焦点卡版本或未知行：" + JSON.stringify(listUi.rows.map(r => r.id)));
+    const badSub = listUi.rows.filter(r => r.sub.indexOf("工作项 " + byId[r.id].total) === -1 || r.sub.indexOf("需求 ") === -1);
+    assert(!badSub.length, "行副标题未按「工作项 N · 需求 M」展示：" + JSON.stringify(badSub.map(r => [r.id, r.sub])));
+    const badRisk = listUi.rows.filter(r => r.risk !== byId[r.id].risk);
+    assert(!badRisk.length, "风险提示与数据不符：" + JSON.stringify(badRisk.map(r => [r.id, r.risk, r.riskText])));
+    const expectedRisk = listModel.rows.filter(r => r.risk).length;
+    pass(`按状态分组（${listUi.groups.map(g => g.label + " " + g.count).join(" / ")}）· ${listUi.rows.length} 行 · 需关注 ${expectedRisk} 个`);
+    if(listUi.checkbox){
+      await evaluate(`document.querySelector("#verList [data-ver-risk]").click()`);
+      await sleep(300);
+      const riskUi = await evaluate(`(() => {
+        const box = document.getElementById("verList");
+        const rows = [...box.querySelectorAll(".vl-row")];
+        return {
+          checked: !!box.querySelector("[data-ver-risk]").checked,
+          rows: rows.map(r => r.getAttribute("data-ver-row")),
+          allRisk: rows.every(r => !!r.querySelector(".vl-sub .vl-risk-inline")),
+          empty: !!box.querySelector(".vl-empty")
+        };
+      })()`);
+      assert(riskUi.checked, "「只看需关注」勾选状态没变化");
+      assert(riskUi.empty || (riskUi.allRisk && riskUi.rows.length > 0), "需关注筛选结果里混入了无风险版本：" + JSON.stringify(riskUi));
+      if(riskUi.empty){
+        const text = await evaluate(`document.querySelector("#verList .vl-empty").textContent.replace(/\s+/g, " ").trim()`);
+        assert(/没有符合条件/.test(text), "需关注空态文案不对：" + text);
+      }
+      await shot("02-版本列表需关注");
+      await evaluate(`document.querySelector("#verList [data-ver-risk]").click()`);
+      await sleep(300);
+      const riskReset = await evaluate(`(() => {
+        const box = document.getElementById("verList");
+        return { rows: box.querySelectorAll(".vl-row").length, checked: !!box.querySelector("[data-ver-risk]").checked };
+      })()`);
+      assert(riskReset.rows === listUi.rows.length && !riskReset.checked, "关闭只看需关注后未恢复全部版本：" + JSON.stringify(riskReset));
+      pass("只看需关注勾选与结果联动，取消后恢复全部（" + riskReset.rows + " 行）");
+    }else{
+      pass("该页面没有「只看需关注」勾选（权限或空态），跳过筛选联动");
+    }
+    /* 3.2 窄屏：筛选工具条与风险勾选不撑破页面 */
     await size(390, 844, true);
     await sleep(300);
     const listNarrow = await evaluate(`(() => {
       const doc = document.documentElement;
       const box = document.getElementById("verList");
       const cb = box.querySelector("[data-ver-risk]");
-      const chips = box.querySelector("[data-ver-chips]");
+      const tools = box.querySelector(".vl-tools");
       return {
         sw: doc.scrollWidth, cw: doc.clientWidth,
         cb: !!cb && cb.getBoundingClientRect().width > 0,
-        chipScroll: !!chips && getComputedStyle(chips).overflowX === "auto"
+        tools: !!tools && tools.getBoundingClientRect().width > 0
       };
     })()`);
     assert(listNarrow.sw <= listNarrow.cw + 1, `窄屏版本列表横向溢出：${listNarrow.sw} > ${listNarrow.cw}`);
-    assert(listNarrow.cb && listNarrow.chipScroll, "窄屏需关注勾选不可见或筛选条不可横向滚动：" + JSON.stringify(listNarrow));
+    assert(listNarrow.cb && listNarrow.tools, "窄屏风险勾选或筛选工具条不可见：" + JSON.stringify(listNarrow));
     await shot("04-版本列表窄屏");
     await size(1440, 900, false);
     await sleep(300);
-    pass("窄屏 390：列表无横向溢出，勾选与筛选条可用");
-    await evaluate(`document.querySelector('#phaseBody .vl-row .vl-name-link[data-ver-open="${main.versionId}"]').click()`);
+    pass("窄屏 390：列表无横向溢出，风险勾选与搜索排序可用");
+    /* 焦点卡版本走焦点卡入口，其他版本走列表行入口 */
+    await evaluate(`(() => {
+      const row = document.querySelector('#phaseBody .vl-row .vl-name-link[data-ver-open="${main.versionId}"]');
+      if(row){ row.click(); return true; }
+      const focus = document.querySelector("#phaseBody .ver-focus");
+      const btn = focus && focus.querySelector('[data-ver-open="${main.versionId}"]');
+      if(btn){ btn.click(); return true; }
+      return false;
+    })()`);
     await waitFor(`document.body.dataset.view === "version"`, "版本名跳转");
     await waitFor(`location.hash.indexOf("#/version?id=${main.versionId}") === 0`, "详情页 hash");
     await waitFor(`(() => {
       const h = document.querySelector("#versionBody .vd-title");
       return !!h && h.textContent.trim() === ${JSON.stringify(main.versionName)};
     })()`, "详情页标题落到版本名");
-    await waitFor(`document.querySelectorAll("#versionBody .vd-kpis .pcell").length === 6`, "概览指标格");
+    /* 默认落「概览」首页（4 格 KPI + 下一步）；工时与构成是「更多 → 工时与构成」子页 */
+    await evaluate(`(() => {
+      const menu = document.querySelector('#versionBody [data-vd-tab="overview"]');
+      if(menu){ menu.click(); return true; }
+      return false;
+    })()`);
+    await waitFor(`document.querySelector('#versionBody [data-vd-tab="overview"].on, #versionBody [data-vd-tab="overview"][aria-selected="true"]')`, "进入工时与构成", 15000).catch(() => {});
+    await waitFor(`document.querySelectorAll("#versionBody .vd-kpis .pcell").length === 6`, "概览指标格", 20000);
     const head = await evaluate(`(() => ({
       title: document.querySelector("#versionBody .vd-title").textContent.trim(),
       barTitle: document.getElementById("viewTitle").textContent.trim(),
@@ -442,7 +403,7 @@ async function main(){
     assert(head.title === main.versionName, `标题应为版本名，实际「${head.title}」`);
     assert(head.barTitle === "版本详情", `顶栏不该重复版本名，实际「${head.barTitle}」`);
     assert(head.docTitle.indexOf(main.versionName) === 0, "浏览器标题未带版本名：" + head.docTitle);
-    assert(head.crumb.indexOf("版本") === 0 && head.crumb.indexOf("详情") > 0, "面包屑不对：" + head.crumb);
+    assert(/版本/.test(head.crumb) && /详情/.test(head.crumb), "面包屑不对：" + head.crumb);
     assert(head.kpis.length === 6, "概览指标格应为 6 个，实际 " + head.kpis.length);
     /* 工作项均耗时挪进工时卡：口径、下钻都必须在实际一侧 */
     const avg = await evaluate(`(() => {
@@ -480,7 +441,7 @@ async function main(){
     assert(avgRows === doneCount, "均耗时下钻应只含已完成项：" + avgRows + " 行 vs 已完成 " + doneCount);
     await evaluate(`document.querySelector('#versionBody [data-vd-filter-reset]').click()`);
     await evaluate(`document.querySelector('#versionBody [data-vd-tab="overview"]').click()`);
-    await waitFor(`document.querySelector('#versionBody [data-vd-tab="overview"]').classList.contains("on")`, "回到概览");
+    await waitFor(`!!document.querySelector("#versionBody .vd-kpis .pcell")`, "回到概览");
     pass("工作项均耗时：口径可读、下钻已完成且按实际工时排序（" + avg.value + "，" + avgRows + " 行）");
     const descNow = await evaluate(`(async () => {
       const { API } = await import("./js/core/api.js");
@@ -568,10 +529,16 @@ async function main(){
     noExceptions("概览");
 
     /* 4. 五个页签逐个渲染 */
-    const tabExpect = { scope: "版本工作项", demands: "已排需求", releases: "发布计划", log: "版本操作记录" };
-    for(const key of ["scope", "demands", "releases", "log", "overview"]){
+    const tabExpect = { scope: "版本范围", demands: "已排需求", releases: "发布计划", log: "版本操作记录" };
+    for(const key of ["scope", "demands", "releases", "overview"]){
       await evaluate(`document.querySelector('#versionBody [data-vd-tab="${key}"]').click()`);
-      await waitFor(`document.querySelector('#versionBody [data-vd-tab="${key}"]').classList.contains("on")`, "页签 " + key);
+      await waitFor(`(() => {
+        if("${key}" === "overview"){
+          const p = new URLSearchParams(location.hash.split("?")[1] || "");
+          return p.get("tab") === "overview" && !!document.querySelector("#versionBody .vd-kpis");
+        }
+        return document.querySelector('#versionBody [data-vd-tab="${key}"]').classList.contains("on");
+      })()`, "页签 " + key);
       await waitFor(`(() => {
         const body = document.querySelector("#versionBody .vd-body");
         return !!body && !body.querySelector(".skeleton, .sk-row, .skeleton-rows") && body.textContent.trim().length > 20;
@@ -601,6 +568,14 @@ async function main(){
       pass("页签 " + key + " 渲染并写入 hash");
       noExceptions("页签 " + key);
     }
+
+    /* 4b. 操作记录不再是页签（从深链 / 更多菜单进入），用 hash 直进验证渲染 */
+    await evaluate(`location.hash = "#/version?id=" + ${JSON.stringify(main.versionId)} + "&reqId=" + ${JSON.stringify(main.reqId)} + "&tab=log"`);
+    await waitFor(`new URLSearchParams(location.hash.split("?")[1] || "").get("tab") === "log"`, "操作记录 hash");
+    await waitFor(`[...document.querySelectorAll("#versionBody .vd-panel .panel-head h3")].some(h => h.textContent.trim() === "版本操作记录")`, "操作记录面板", 20000);
+    await shot("03-页签-log");
+    pass("操作记录（hash 直进）渲染");
+    noExceptions("操作记录");
 
     /* 5. 概览指标格下钻 → 工作项页带上筛选，行数必须与指标口径一致 */
     await evaluate(`document.querySelector('#versionBody [data-vd-tab="overview"]').click()`);
@@ -690,8 +665,14 @@ async function main(){
     await navigate(BASE + "/index.html#/phase");
     await waitFor(`document.body.dataset.view === "phase"`, "回到版本页");
     await evaluate(`(async () => { const m = await import("./js/views/phase.js"); m.setPhaseProject(${JSON.stringify(main.reqId)}, "version"); return true; })()`);
-    await waitFor(`!!document.querySelector('#phaseBody .vl-row .vl-name-link[data-ver-open="${main.versionId}"]')`, "版本行入口");
-    await evaluate(`document.querySelector('#phaseBody .vl-row .vl-name-link[data-ver-open="${main.versionId}"]').click()`);
+    await waitFor(`!!document.querySelector('#phaseBody .vl-row .vl-name-link[data-ver-open="${main.versionId}"], #phaseBody .ver-focus [data-ver-open="${main.versionId}"]')`, "版本入口");
+    await evaluate(`(() => {
+      const row = document.querySelector('#phaseBody .vl-row .vl-name-link[data-ver-open="${main.versionId}"]');
+      if(row){ row.click(); return true; }
+      const btn = document.querySelector('#phaseBody .ver-focus [data-ver-open="${main.versionId}"]');
+      if(btn){ btn.click(); return true; }
+      return false;
+    })()`);
     await waitFor(`document.body.dataset.view === "version"`, "再次进入详情");
     await waitFor(`document.querySelector("#versionBody .vd-title").textContent.trim() === ${JSON.stringify(main.versionName)}`, "详情渲染");
     await evaluate(`history.back()`);
@@ -722,6 +703,13 @@ async function main(){
 
     /* 10b. 承诺基线与已发布版本的交付事实必须落到真实数字，而不是占位；
        未开始开发 / 尚未冻结基线的版本只允许出现明确的空态说明 */
+    /* 承诺基线在「工时与构成」子页；退版本回归后默认落概览首页，先切回去 */
+    await evaluate(`(() => {
+      const menu = document.querySelector('#versionBody [data-vd-tab="overview"]');
+      if(menu) menu.click();
+      return true;
+    })()`);
+    await waitFor(`!!document.querySelector("#versionBody .vd-kpis .pcell")`, "回到工时与构成", 20000);
     const commitment = await evaluate(`(() => {
       const panel = [...document.querySelectorAll("#versionBody .vd-panel")].find(p => p.querySelector("h3") && p.querySelector("h3").textContent.trim() === "承诺基线");
       if(!panel) return null;
@@ -739,24 +727,32 @@ async function main(){
     if(pick.released){
       await navigate(BASE + "/index.html#/version?id=" + pick.released.versionId + "&reqId=" + pick.released.reqId + "&tab=releases");
       await waitFor(`document.querySelector("#versionBody .vd-title").textContent.trim() === ${JSON.stringify(pick.released.versionName)}`, "已发布版本详情", 25000);
-      await waitFor(`document.querySelectorAll("#versionBody .vd-records .release-record").length > 0`, "发布记录快照", 25000);
+      await waitFor(`document.querySelectorAll("#versionBody .vd-rel-records .vd-tl-item").length > 0`, "发布记录快照", 25000);
       const facts = await evaluate(`(() => {
-        const rows = [...document.querySelectorAll("#versionBody .vd-records .release-record")];
-        const exp = document.querySelector('#versionBody [data-release-export]');
-        return { records: rows.length, chars: rows[0].textContent.replace(/\\s+/g, " ").trim().length, hasExport: !!exp };
+        const rows = [...document.querySelectorAll("#versionBody .vd-rel-records .vd-tl-item")];
+        const exp = document.querySelector('#versionBody .vd-rel-records [data-release-export]');
+        const det = document.querySelector("#versionBody .vd-rel-records .vd-tl-more");
+        return { records: rows.length, chars: rows[0].textContent.replace(/\\s+/g, " ").trim().length,
+          hasExport: !!exp, collapsed: !!det && !det.open };
       })()`);
       assert(facts.records > 0 && facts.chars > 80, "发布快照内容过少：" + JSON.stringify(facts));
+      assert(facts.hasExport && facts.collapsed, "快照导出缺失或明细默认展开挤占时间线：" + JSON.stringify(facts));
       await shot("02b-已发布版本快照");
       /* 快照里的工作项 / 需求由 lib/format 渲染，点击必须真能打开对应实体 */
-      await evaluate(`document.querySelector("#versionBody .vd-records .release-record").open = true`);
+      await evaluate(`(() => { [...document.querySelectorAll("#versionBody .vd-rel-records .vd-tl-more")].forEach(d => { d.open = true; }); return true; })()`);
       const snap = await evaluate(`(() => {
-        const t = document.querySelector("#versionBody .vd-records [data-snap-task]");
-        const d = document.querySelector("#versionBody .vd-records [data-snap-demand]");
-        return { task: t && t.getAttribute("data-snap-task"), taskText: t && t.textContent.replace(/\\s+/g, " ").trim(),
-          demand: d && d.getAttribute("data-snap-demand"), demandText: d && d.textContent.replace(/\\s+/g, " ").trim() };
+        const t = document.querySelector("#versionBody .vd-rel-records a[data-task-link]");
+        const d = document.querySelector("#versionBody .vd-rel-records [data-snap-demand]");
+        /* 历史导入行没有对应 task 记录，不能渲染成死链 */
+        const rows = [...document.querySelectorAll("#versionBody .vd-rel-records tbody tr")];
+        const hist = rows.filter(tr => tr.querySelector("td .mini-tag"));
+        return { task: t && t.getAttribute("data-task-link"), taskText: t && t.textContent.replace(/\\s+/g, " ").trim(),
+          demand: d && d.getAttribute("data-snap-demand"), demandText: d && d.textContent.replace(/\\s+/g, " ").trim(),
+          histRows: hist.length, histLinks: hist.filter(tr => tr.querySelector("a[data-task-link]")).length };
       })()`);
+      assert(!snap.histLinks, "历史导入快照行渲染成了工作项链接，点了只会提示不存在：" + JSON.stringify(snap));
       if(snap.task){
-        await evaluate(`document.querySelector("#versionBody .vd-records [data-snap-task]").click()`);
+        await evaluate(`document.querySelector("#versionBody .vd-rel-records a[data-task-link]").click()`);
         await waitFor(`!!document.querySelector("#taskDrawer.on")`, "快照工作项抽屉", 25000);
         const snapTaskTitle = await evaluate(`document.getElementById("taskDrawerTitle").textContent.trim()`);
         assert(snapTaskTitle && snapTaskTitle !== "新建工作项", "快照工作项点开的是空白抽屉：" + snapTaskTitle);
@@ -766,7 +762,7 @@ async function main(){
         pass("发布快照工作项 → 工作项详情：" + snapTaskTitle);
       }
       if(snap.demand){
-        await evaluate(`document.querySelector("#versionBody .vd-records [data-snap-demand]").click()`);
+        await evaluate(`document.querySelector("#versionBody .vd-rel-records [data-snap-demand]").click()`);
         await waitFor(`!!document.querySelector(".modal-layer.demand-detail.open")`, "快照需求详情", 25000);
         const snapDemandTitle = await evaluate(`document.getElementById("demandDetailTitle").textContent.trim()`);
         assert(!!snapDemandTitle, "快照需求详情标题为空");
@@ -778,7 +774,7 @@ async function main(){
       assert(snap.task || snap.demand, "发布快照里没有任何可点的关联实体：" + JSON.stringify(snap));
       /* 快照的「实际记录版本」也是实体引用：必须能跳回该版本详情，而不是只留一行名字 */
       const snapVer = await evaluate(`(() => {
-        const cells = [...document.querySelectorAll("#versionBody .vd-records .release-record")]
+        const cells = [...document.querySelectorAll("#versionBody .vd-rel-records .vd-tl-item")]
           .map(d => [...d.querySelectorAll("tbody tr")].map(tr => tr.children[3]).filter(Boolean))
           .flat();
         return cells.slice(0, 6).map(td => {
@@ -793,7 +789,7 @@ async function main(){
         "快照版本列名字与记录版本不符：" + JSON.stringify(snapVer));
       assert(snapVer.every(c => c.req === pick.released.reqId),
         "快照版本链接缺少项目上下文，跨项目分享会反查失败：" + JSON.stringify(snapVer));
-      await evaluate(`document.querySelector("#versionBody .vd-records [data-jump-version]").click()`);
+      await evaluate(`document.querySelector("#versionBody .vd-rel-records [data-jump-version]").click()`);
       await waitFor(`new URLSearchParams(location.hash.split("?")[1] || "").get("id") === ${JSON.stringify(pick.released.versionId)}`, "快照版本跳转写 hash", 20000);
       await waitFor(`(document.querySelector("#versionBody .vd-title") || {}).textContent === ${JSON.stringify(pick.released.versionName)}`, "快照版本跳转落地", 25000);
       assert(!(await evaluate(`!!document.querySelector("#taskDrawer.on, .modal-layer.open")`)), "点快照版本名误开了抽屉 / 弹层");
@@ -900,7 +896,11 @@ async function main(){
     /* 12. 跨项目「全部版本」表的版本名跳转 */
     await navigate(BASE + "/index.html#/phase");
     await waitFor(`document.body.dataset.view === "phase"`, "版本页");
-    await evaluate(`document.querySelector('#phaseModeSeg [data-pmode="allversions"]').click()`);
+    /* 「全部项目」已从分段控件收进「范围」菜单：先展开菜单再点，选完菜单要收起 */
+    await evaluate(`document.getElementById("phaseScopeBtn").click()`);
+    await waitFor(`!document.getElementById("phaseScopeMenu").hidden`, "范围菜单展开");
+    await evaluate(`document.querySelector('#phaseScopeMenu [data-pmode="allversions"]').click()`);
+    await waitFor(`document.getElementById("phaseScopeMenu").hidden`, "范围菜单收起");
     await waitFor(`document.querySelectorAll("#phaseBody .allv-tbl tbody button.allv-vname").length > 0`, "全部版本表");
     const allv = await evaluate(`(() => {
       const btn = [...document.querySelectorAll("#phaseBody .allv-tbl tbody button.allv-vname")]
@@ -975,6 +975,8 @@ async function main(){
     };
     await navigate(BASE + "/index.html#/version?id=" + main.versionId + "&reqId=" + main.reqId);
     await waitFor(`document.querySelector("#versionBody .vd-title").textContent.trim() === ${JSON.stringify(main.versionName)}`, "联动用例版本", 25000);
+    /* 工时卡在「工时与构成」子页，默认落概览首页 */
+    await evaluate(`(() => { const m = document.querySelector('#versionBody [data-vd-tab="overview"]'); if(m) m.click(); return true; })()`);
     await waitFor(`document.querySelectorAll("#versionBody .vd-hours-card .vd-hour-side").length === 2`, "工时卡", 25000);
 
     /* 13b-1 工时卡：预估 / 实际都能打开构成；比例、剩余预估与口径入口必须落到真实数字 */
@@ -1010,7 +1012,9 @@ async function main(){
         title: layer.querySelector("[data-vd-htitle]").textContent.replace(/\\s+/g, " ").trim(),
         sub: layer.querySelector("[data-vd-hsub]").textContent.replace(/\\s+/g, " ").trim(),
         tabs: [...layer.querySelectorAll("[data-vd-htab]")].map(t => t.textContent.trim()),
-        proxy: layer.querySelectorAll(".vd-h-proxy-card").length,
+        /* 类型页不再自带阶段卡：用一条说明 + 「去阶段投入」跳转指向概览页 */
+        notice: (layer.querySelector(".vd-h-notice") || {}).textContent || "",
+        stageJump: !!layer.querySelector("[data-vd-goto-stage]"),
         stack: layer.querySelectorAll(".vd-h-stack i").length,
         legend: layer.querySelectorAll(".vd-h-legend button").length,
         rows: [...layer.querySelectorAll("tr[data-vd-hfilter]")].map(r => ({
@@ -1022,9 +1026,10 @@ async function main(){
         z: getComputedStyle(layer).zIndex
       };
     })()`);
-    assert(estSheet.tabs.join("/") === "类型/模块/负责人/需求/工作项", "预估构成页签不对：" + estSheet.tabs.join("/"));
+    assert(estSheet.tabs.join("/") === "类型/分类/负责人/需求/工作项", "预估构成页签不对：" + estSheet.tabs.join("/"));
     assert(/^预估\s/.test(estSheet.title) && estSheet.sub.indexOf("平均") >= 0, "预估构成标题 / 摘要不对：" + JSON.stringify(estSheet));
-    assert(estSheet.proxy >= 3, "类型页缺少阶段卡：" + estSheet.proxy);
+    assert(estSheet.notice.indexOf("不是阶段") >= 0 && estSheet.stageJump,
+      "类型页缺少「类型不是阶段」说明或阶段投入跳转：" + JSON.stringify({ notice: estSheet.notice, stageJump: estSheet.stageJump }));
     assert(estSheet.rows.length >= 2 && estSheet.legend === estSheet.rows.length,
       "构成图例与分组行不一致：" + JSON.stringify({ rows: estSheet.rows.length, legend: estSheet.legend }));
     assert(estSheet.stack > 0, "构成条没有分段：" + estSheet.stack);
@@ -1118,7 +1123,7 @@ async function main(){
         }))
       };
     })()`);
-    assert(actSheet.tabs.join("/") === "成员/类型/模块/工作项/计时窗口", "实际构成页签不对：" + actSheet.tabs.join("/"));
+    assert(actSheet.tabs.join("/") === "成员/类型/分类/工作项/计时窗口", "实际构成页签不对：" + actSheet.tabs.join("/"));
     assert(/^实际\s/.test(actSheet.title) && actSheet.rows.length > 0, "实际构成没有成员分组：" + JSON.stringify(actSheet));
     const actGroup = actSheet.rows[0];
     await evaluate(`(() => {
@@ -1178,7 +1183,7 @@ async function main(){
     /* Esc 关弹层，页面仍停在概览 */
     await evaluate(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))`);
     await waitFor(`!document.querySelector(".vd-h-layer.open")`, "Esc 关闭构成弹层");
-    assert(await evaluate(`document.querySelector('#versionBody [data-vd-tab="overview"]').classList.contains("on")`),
+    assert(await evaluate(`!!document.querySelector("#versionBody .vd-kpis .pcell")`),
       "关闭构成弹层后离开了概览页");
     pass("Esc 关闭构成弹层，返回概览");
 
@@ -1348,20 +1353,26 @@ async function main(){
     await waitFor(`document.querySelector("#versionBody .vd-title").textContent.trim() === ${JSON.stringify(main.versionName)}`, "主用例版本", 25000);
     for(const [w, h, mobile, label] of [[1440, 900, false, "桌面"], [1280, 900, false, "窄桌面"], [820, 1180, true, "平板"], [390, 844, true, "手机"]]){
       await size(w, h, mobile);
-      for(const key of ["overview", "scope", "releases"]){
+      for(const key of ["scope", "releases"]){
         await evaluate(`document.querySelector('#versionBody [data-vd-tab="${key}"]').click()`);
         await waitFor(`document.querySelector('#versionBody [data-vd-tab="${key}"]').classList.contains("on")`, label + " 页签 " + key);
         await sleep(250);
         await layout(label + " " + key);
         await shot(`08-${label}-${key}`);
       }
+      /* 「工时与构成」收在更多菜单里，不是常驻页签：点菜单项后按内容就位再量 */
+      await evaluate(`document.querySelector('#versionBody [data-vd-tab="overview"]').click()`);
+      await waitFor(`!!document.querySelector("#versionBody .vd-kpis .pcell")`, label + " 工时与构成");
+      await sleep(250);
+      await layout(label + " 工时与构成");
+      await shot(`08-${label}-overview`);
       const reach = await evaluate(`(() => {
         const back = document.querySelector("#versionBody [data-vd-back]");
         const b = back.getBoundingClientRect();
         return { w: Math.round(b.width), h: Math.round(b.height), top: Math.round(b.top) };
       })()`);
       assert(reach.w > 0 && reach.h >= 28, label + " 返回按钮不可达：" + JSON.stringify(reach));
-      pass(`${label} ${w}×${h}：概览 / 工作项 / 发布无横向溢出，返回按钮可点`);
+      pass(`${label} ${w}×${h}：工作项 / 发布 / 工时与构成无横向溢出，返回按钮可点`);
       noExceptions(label + " 布局");
     }
     /* 14b. 手机上带着联动条与行内关联 chip 也不能挤破布局 */

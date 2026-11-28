@@ -118,6 +118,8 @@
 .manager-tbl tbody tr[data-open-task],.manager-tbl tbody tr[data-member-key]{cursor:pointer;}
 .manager-tbl tbody tr[data-open-task]:hover,.manager-tbl tbody tr[data-member-key]:hover{background:var(--surface-hover);}
 .manager-tbl .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+/* 需求编号（DM-004）：短号在 47px 列里会被连字符折成两行 */
+.manager-tbl .dem-no{white-space:nowrap;font-variant-numeric:tabular-nums;}
 .manager-task-title{max-width:320px;display:flex;align-items:center;gap:5px;color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .manager-task-title>.tag{flex:0 0 auto;}
 .manager-person{display:inline-flex;align-items:center;gap:7px;min-width:0;white-space:nowrap;}

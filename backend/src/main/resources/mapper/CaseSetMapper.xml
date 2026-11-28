@@ -19,7 +19,7 @@
   <select id="selectVisibleWithCounts" resultType="com.hourglass.dto.CaseSetView">
     <include refid="subtreeCte"/>
     SELECT s.id, s.req_id, s.parent_id, COALESCE(s.sort_order, 0) AS sort_order,
-           s.name, s.note, s.visibility, s.owner_user_id, s.kind, s.rule_json,
+           s.name, s.note, s.visibility, s.owner_user_id, s.kind, s.rule_json, s.pack,
            s.created_by, s.created_by_user_id, s.created_at, s.updated_at,
            (SELECT COUNT(*) FROM case_set_item i WHERE i.set_id = s.id) AS case_count,
            (SELECT COUNT(DISTINCT i.case_id)
@@ -133,11 +133,11 @@
   <insert id="insert">
     INSERT INTO case_set
       (id, workspace_id, req_id, parent_id, sort_order, name, note, visibility, kind, rule_json,
-       owner_user_id, created_by, created_by_user_id)
+       pack, owner_user_id, created_by, created_by_user_id)
     VALUES
       (#{id}, #{workspaceId}, #{reqId}, COALESCE(#{parentId}, ''), COALESCE(#{sortOrder}, 0),
        #{name}, #{note}, #{visibility}, #{kind}, #{ruleJson},
-       COALESCE(#{ownerUserId}, ''), #{createdBy}, #{createdByUserId})
+       COALESCE(#{pack}, 0), COALESCE(#{ownerUserId}, ''), #{createdBy}, #{createdByUserId})
   </insert>
 
   <update id="update">

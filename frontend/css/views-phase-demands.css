@@ -375,6 +375,15 @@ a.rel-plan-row:hover .rp-go svg{transform:translateX(2px);}
 .rel-plan-foot .hint{flex:1 1 260px;margin:0;}
 .rel-empty-acts{display:flex;flex-wrap:wrap;gap:8px;}
 .rel-plan-foot .rel-empty-acts{margin-left:auto;}
+/* 发布计划表内的操作列不折行：表格随内容撑开并横向滚动，避免末列被压到 66px、按钮竖排把行高翻倍 */
+.pl-table td .rel-empty-acts{flex-wrap:nowrap;}
+.pl-table td .rel-empty-acts>.btn{flex:0 0 auto;white-space:nowrap;}
+.pl-table-wrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+/* 横向滚动时操作列吸在右侧，窄屏也能直接点「打开 / 记录发布」 */
+@media (min-width:640px){
+  .pl-table th:last-child,.pl-table td:last-child{position:sticky;right:0;background:var(--surface);z-index:1;box-shadow:-10px 0 10px -12px rgba(15,23,42,.35);}
+  .pl-table th:last-child{background:var(--tbl-head);}
+}
 @media (max-width:639px){
   .rel-plan-head{display:none;}
   .rel-plan-row{grid-template-columns:minmax(0,1fr) auto;grid-auto-rows:auto;gap:6px 10px;padding:12px 10px;}
@@ -392,14 +401,33 @@ a.rel-plan-row:hover .rp-go svg{transform:translateX(2px);}
 .pl-kpi b{font-size:22px;line-height:1.15;font-weight:650;}
 .pl-kpi .pl-kpi-label{font-size:12px;color:var(--text-2);}
 .pl-kpi .pl-kpi-sub{font-size:11px;color:var(--text-3);}
+.pl-table .pl-win{font-variant-numeric:tabular-nums;}
+.pl-table .pl-actual{color:var(--success-fg);font-variant-numeric:tabular-nums;}
+.pl-table .pl-pill .dot{width:5px;height:5px;}
 @media (max-width:1100px){
   .pl-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}
 }
-/* 环境只读标识：圆点 + 文案，颜色只作辅助，文案本身已能区分 */
-.rel-env{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:550;color:var(--text-2);white-space:nowrap;}
-.rel-env::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--text-3);flex:0 0 auto;}
-.rel-env.is-production::before{background:var(--info);}
-.rel-env.is-staging::before{background:var(--plum);}
+/* 手机档位：计划表转卡片，筛选条与 KPI 保留在卡片上方 */
+[data-layout="mobile"] .pl-table thead{display:none;}
+[data-layout="mobile"] .pl-table,
+[data-layout="mobile"] .pl-table tbody{display:block;width:100%;}
+[data-layout="mobile"] .pl-table tbody tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px;padding:12px;border-bottom:1px solid var(--border);}
+[data-layout="mobile"] .pl-table tbody tr:last-child{border-bottom:0;}
+[data-layout="mobile"] .pl-table td{display:flex;flex-direction:column;gap:3px;min-width:0;padding:0;border:0;white-space:normal;}
+[data-layout="mobile"] .pl-table td::before{content:attr(data-l);font-size:10.5px;font-weight:550;color:var(--text-3);}
+[data-layout="mobile"] .pl-table td[data-l="计划"],
+[data-layout="mobile"] .pl-table td[data-l="覆盖版本"],
+[data-layout="mobile"] .pl-table td[data-l="操作"]{grid-column:1 / -1;}
+[data-layout="mobile"] .pl-table td[data-l="计划"]::before,
+[data-layout="mobile"] .pl-table td[data-l="覆盖版本"]::before,
+[data-layout="mobile"] .pl-table td[data-l="操作"]::before{display:none;}
+[data-layout="mobile"] .pl-table td[data-l="操作"]{margin-top:2px;}
+[data-layout="mobile"] .pl-table td[data-l="操作"] .rel-empty-acts{justify-content:flex-end;}
+/* 环境与状态统一用「淡底深字 + 圆点」胶囊（原型 11-27）：颜色只作辅助，文案本身可区分 */
+.rel-env{display:inline-flex;align-items:center;gap:6px;padding:1px 8px;border-radius:var(--r-pill);background:var(--surface-sunken);font-size:11.5px;font-weight:550;color:var(--text-3);white-space:nowrap;}
+.rel-env::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:0 0 auto;}
+.rel-env.is-production{background:var(--info-soft);color:var(--info-fg);}
+.rel-env.is-staging{background:var(--plum-soft);color:var(--plum-fg);}
 /* 就绪检查结论：取覆盖版本最差结论；草稿 / 已取消不计算 */
 .rel-check{display:inline-flex;align-items:center;gap:6px;padding:1px 8px;border-radius:var(--r-pill);background:var(--surface-sunken);color:var(--text-3);font-size:11.5px;font-weight:550;white-space:nowrap;}
 .rel-check::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:0 0 auto;}

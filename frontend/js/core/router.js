@@ -73,7 +73,9 @@ var VIEWS = {
   projects: { title:"项目", sub:"项目集下的项目与全局健康度", enter:lazyEnter("projects", "enterProjectsView") },
   phase:    { title:"版本", sub:"版本计划、工作项范围与交付情况", enter:lazyEnter("phase", "enterPhaseView") },
   version:  { title:"版本详情", sub:"计划与实际、工时构成与发布记录", enter:lazyEnter("version", "enterVersionView") },
+  record:   { title:"记录发布", sub:"记录已经发生的发布事实；与计划不符会要求写偏差理由", enter:lazyEnter("record", "enterRecordView") },
   release:  { title:"发布计划", sub:"跨项目统一排期；计划存意图，实际结果以发布记录为准", enter:lazyEnter("release", "enterReleaseView") },
+  "plan-wizard": { title:"新建发布计划", sub:"计划描述「打算什么时候、交付哪些内容」；实际交付以发布记录为准", enter:lazyEnter("plan-wizard", "enterPlanWizardView") },
   delivery: { title:"交付报告", sub:"面向使用方的变更说明", enter:lazyEnter("delivery", "enterDeliveryView") },
   demands:  { title:"需求池", sub:"未进入版本的需求与来源", enter:lazyEnter("demands", "enterDemandsView") },
   requirements: { title:"文档", sub:"空间文档、分类与协作记录", enter:enterRequirementsLazy },
@@ -95,7 +97,7 @@ var VIEWS = {
 /* 视图 → 侧栏一级入口。多个视图共用一个入口时，靠页内子导航切换 */
 var NAV_OF = {
   mine:"mine", catchup:"mine", review:"review", messages:"messages",
-  demands:"demands", projects:"projects", portfolio:"projects", project:"projects", phase:"phase", version:"phase", release:"phase", delivery:"delivery",
+  demands:"demands", projects:"projects", portfolio:"projects", project:"projects", phase:"phase", version:"phase", record:"phase", release:"phase", "plan-wizard":"phase", delivery:"delivery",
   board:"workitems", list:"workitems", tree:"workitems", chain:"workitems", calendar:"workitems", gantt:"workitems", workcolumn:"workitems", canceled:"workitems",
   requirements:"requirements", dochistory:"requirements", testcases:"testcases", branches:"projects",
   analysis:"insight", report:"insight", investment:"insight",
@@ -119,8 +121,10 @@ var SUBNAV = {
     { view:"chain", group:"分析", label:"影响链", title:"沿前置/后继依赖展开，动一个看一串" }
   ],
   testcases: [
+    { view:"testcases", tab:"bench", label:"工作台", title:"新手引导与测试全景： checklist、待办与进行中的计划" },
     { view:"testcases", tab:"cases", label:"用例", title:"用例库：录入、筛选与标记执行结果" },
     { view:"testcases", tab:"plans", label:"测试计划", title:"从用例库圈选一批，按版本留痕" },
+    { view:"testcases", tab:"report", label:"报告", title:"按轮次与计划聚合的测试结论与导出" },
     { view:"testcases", tab:"defects", label:"缺陷", title:"按缺陷收敛质量问题：默认未关闭，按严重度排序" }
   ],
   insight: [
@@ -324,8 +328,8 @@ function subnavCurrentTab(navKey){
   if(navKey === "testcases"){
     var m = viewModule("testcases");
     var mode = (m && m.currentTcMode) ? m.currentTcMode() : "cases";
-    /* 覆盖 / 报告已收进「测试计划」页签，侧栏仍停在测试计划 */
-    return (mode === "coverage" || mode === "report") ? "plans" : mode;
+    /* 覆盖收进「测试计划」页签；工作台/报告各有独立入口 */
+    return mode === "coverage" ? "plans" : mode;
   }
   return "";
 }
@@ -436,7 +440,7 @@ function syncViewHash(name){
   if(window.location.hash === h) return;
   /* 分支、工作项列、需求主状态工作页、版本详情与文档深链：保留查询参数，避免 showView 抹掉下钻位置；
      phase/testcases/requirements/branches/demands 还承载全局「新建」菜单的 ?new=1 跨视图创建参数 */
-  if((name === "branches" || name === "workcolumn" || name === "canceled" || name === "delivery" || name === "demands" || name === "version" || name === "release" || name === "requirements" || name === "dochistory" || name === "workload" || name === "phase" || name === "testcases")
+  if((name === "branches" || name === "workcolumn" || name === "canceled" || name === "delivery" || name === "demands" || name === "version" || name === "record" || name === "release" || name === "plan-wizard" || name === "requirements" || name === "dochistory" || name === "workload" || name === "phase" || name === "testcases")
       && String(window.location.hash || "").indexOf(h + "?") === 0) return;
   /* pushState：让浏览器后退能回到上一个视图；file:// 等受限环境降级为直接改 hash */
   try{ history.pushState(null, "", h); }
@@ -474,10 +478,17 @@ window.addEventListener("popstate", function(){
     /* 同一版本内换页签 / 改筛选，或后退到另一个版本：都交给详情页对齐 */
     var vdMod = viewModule("version");
     if(vdMod && vdMod.refreshFromHash) vdMod.refreshFromHash();
+  }else if(n === "record"){
+    /* 记录发布：后退/前进换版本或换计划都交给子页对齐 */
+    var recMod = viewModule("record");
+    if(recMod && recMod.refreshFromHash) recMod.refreshFromHash();
   }else if(n === "release"){
     /* 发布工作台：后退/前进换页签或换版本都交给子页对齐，不整页重进 */
     var relMod = viewModule("release");
     if(relMod && relMod.refreshFromHash) relMod.refreshFromHash();
+  }else if(n === "plan-wizard"){
+    var pwMod = viewModule("plan-wizard");
+    if(pwMod && pwMod.refreshFromHash) pwMod.refreshFromHash();
   }else if(n === "delivery"){
     /* 交付报告：深链换版本时跟着 hash 重新聚合 */
     var dlMod = viewModule("delivery");
@@ -500,6 +511,11 @@ window.addEventListener("hashchange", function(){
   if(viewFromHash() === "release" && activeView === "release"){
     var relMod = viewModule("release");
     if(relMod && relMod.refreshFromHash) relMod.refreshFromHash();
+    return;
+  }
+  if(viewFromHash() === "plan-wizard" && activeView === "plan-wizard"){
+    var pwMod = viewModule("plan-wizard");
+    if(pwMod && pwMod.refreshFromHash) pwMod.refreshFromHash();
     return;
   }
   if(viewFromHash() === "dochistory" && activeView === "dochistory"){
@@ -679,4 +695,4 @@ window.addEventListener("ds:route-go", function(e){
   if(to && VIEWS[to]) showView(to);
 });
 
-export { VIEWS, activeView, refreshActiveView, showView, viewFromHash, setReturnOrigin };
+export { VIEWS, activeView, refreshActiveView, showView, updateSubnavState, viewFromHash, setReturnOrigin };

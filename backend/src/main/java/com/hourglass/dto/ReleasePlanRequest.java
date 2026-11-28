@@ -12,6 +12,9 @@ import javax.validation.constraints.NotBlank;
 public class ReleasePlanRequest {
     @Size(max = 32, message = "发布计划ID不合法")
     private String id;
+    /** 计划名称：向导第 1 步必填；接口保持可选，存量计划与旧客户端不带名称时回退为版本名。 */
+    @Size(max = 120, message = "计划名称不能超过 120 字")
+    private String name;
     /** 计划覆盖的版本；省略时使用 URL 中的版本（更新时沿用原计划版本）。 */
     @Size(max = 50, message = "一个计划最多包含 50 个版本")
     private List<@NotBlank(message = "计划版本ID不能为空") @Size(max = 32, message = "计划版本ID不合法") String> versionIds;

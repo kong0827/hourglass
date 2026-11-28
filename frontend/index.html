@@ -32,6 +32,8 @@
 <link rel="stylesheet" href="css/stage-hours.css" />
 <link rel="stylesheet" href="css/workcolumn.css" />
 <link rel="stylesheet" href="css/version.css" />
+<link rel="stylesheet" href="css/tour.css" />
+<link rel="stylesheet" href="css/plan-wizard.css" />
 <link rel="stylesheet" href="css/gantt.css" />
 <link rel="stylesheet" href="css/manager.css" />
 <link rel="stylesheet" href="css/investment.css" />
@@ -94,6 +96,7 @@
 <link rel="modulepreload" href="js/core/templates/overlays.js" />
 <link rel="modulepreload" href="js/core/templates/task-drawer.js" />
 <link rel="modulepreload" href="js/core/theme.js" />
+<link rel="modulepreload" href="js/core/tour.js" />
 <link rel="modulepreload" href="js/core/transitions.js" />
 <link rel="modulepreload" href="js/core/ui.js" />
 <link rel="modulepreload" href="js/core/utils.js" />
@@ -1228,6 +1231,16 @@
         <div id="releaseBody"></div>
       </section>
 
+      <!-- ===== 记录发布（#/record?versionId=&reqId=&planId=&from=） ===== -->
+      <section class="view" id="view-record" aria-label="记录发布">
+        <div id="recordBody"></div>
+      </section>
+
+      <!-- ===== 新建发布计划 4 步向导（#/plan-wizard?from=&anchor=&reqId=&ids=） ===== -->
+      <section class="view" id="view-plan-wizard" aria-label="新建发布计划">
+        <div id="planWizardBody"></div>
+      </section>
+
       <!-- ===== 交付：一页式交付报告（从版本卡 / 发布记录下钻） ===== -->
       <section class="view" id="view-delivery" aria-label="一页式交付报告">
         <div class="view-page" id="deliveryBody"></div>
@@ -1890,9 +1903,9 @@
             <span class="seg mini" id="tcPlanTabs" role="group" aria-label="测试计划视图" hidden>
               <button type="button" data-tc-mode="plans" aria-pressed="true">计划</button>
               <button type="button" data-tc-mode="coverage" aria-pressed="false">覆盖</button>
-              <button type="button" data-tc-mode="report" aria-pressed="false">报告</button>
             </span>
             <span class="seg mini" id="tcModeSeg" role="group" aria-label="测试视图">
+              <button type="button" data-tc-mode="bench" aria-pressed="false">工作台</button>
               <button type="button" data-tc-mode="cases" aria-pressed="true">用例</button>
               <button type="button" data-tc-mode="defects" aria-pressed="false">缺陷<span class="tc-tabcount" id="tcDefectCount" hidden></span></button>
               <button type="button" data-tc-mode="plans" aria-pressed="false">测试计划</button>
@@ -2027,6 +2040,7 @@
           <div class="tc-coverage" id="tcCoverage" hidden></div>
           <div class="tc-report" id="tcReport" hidden></div>
           <div class="tc-plans" id="tcPlans" hidden></div>
+          <div class="tc-bench" id="tcBench" hidden></div>
           <div class="tc-cases-wrap" id="tcCasesWrap">
             <aside class="tc-side tc-side-groups" id="tcSidePanel" hidden aria-label="自定义分组">
               <div class="tc-side-body" id="tcSideBody"></div>
@@ -2034,6 +2048,7 @@
             </aside>
             <div class="tc-cases-main">
               <div class="tc-drop-banner" id="tcDropBanner" hidden></div>
+              <div class="tc-pack-banner" id="tcPackBanner" hidden></div>
               <div class="tc-setd" id="tcSetDetail" hidden></div>
               <div class="tc-scope" id="tcScopeBar" hidden></div>
               <div class="tc-listhead" id="tcQueryBar" hidden>
@@ -2531,6 +2546,78 @@
               <div class="row row-gap">
                 <button class="btn primary" type="button" id="btnDoPlanPick">加入计划</button>
               </div>
+            </div>
+          </div>
+        </div></div></div>
+
+        <!-- 新建测试计划 · 三步向导（新手友好版，替代直接弹表单） -->
+        <div class="modal-layer" id="dlgPlanWizard" role="dialog" aria-modal="true" aria-labelledby="pwTitle"><div class="sheet sm"><div class="sheet-body">
+          <div class="panel">
+            <div class="panel-head"><h3 id="pwTitle">新建测试计划</h3><button class="icon-btn sm" type="button" id="dlgPlanWizardX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
+            <!-- 步骤条 -->
+            <ol class="pw-steps" id="pwSteps">
+              <li data-step="1" class="on"><span class="pw-step-no">1</span><span class="pw-step-name">名称与范围</span></li>
+              <li data-step="2"><span class="pw-step-no">2</span><span class="pw-step-name">圈选用例</span></li>
+              <li data-step="3"><span class="pw-step-no">3</span><span class="pw-step-name">检查并创建</span></li>
+            </ol>
+            <!-- 第 1 步：名称与范围 -->
+            <div class="stack pw-pane" id="pwPane1">
+              <div class="field" id="fPwName">
+                <label for="pwName">计划名称 <span class="req">*</span></label>
+                <input id="pwName" type="text" maxlength="60" placeholder="如：v1.2 上线前回归" autocomplete="off" />
+                <span class="err">请填写计划名称</span>
+              </div>
+              <div class="row row-gap">
+                <div class="field" style="flex:1 1 50%">
+                  <label for="pwVersion">关联版本 <small class="tc-optional">选填</small></label>
+                  <select id="pwVersion"></select>
+                </div>
+                <div class="field" style="flex:1 1 50%">
+                  <label for="pwExecutor">执行人 <small class="tc-optional">选填</small></label>
+                  <select id="pwExecutor"></select>
+                </div>
+              </div>
+              <div class="row row-gap">
+                <div class="field" style="flex:1 1 50%">
+                  <label for="pwStart">计划开始</label>
+                  <input id="pwStart" type="date" />
+                </div>
+                <div class="field" style="flex:1 1 50%">
+                  <label for="pwEnd">计划截止</label>
+                  <input id="pwEnd" type="date" />
+                </div>
+              </div>
+              <div class="field">
+                <label for="pwNote">说明</label>
+                <textarea id="pwNote" maxlength="500" placeholder="选填：范围、准出标准、环境…"></textarea>
+              </div>
+            </div>
+            <!-- 第 2 步：圈选方式 -->
+            <div class="stack pw-pane" id="pwPane2" hidden>
+              <p class="foot-note">决定计划里放哪些用例。创建后随时可以「圈选用例」继续调整。</p>
+              <div class="pw-modes" id="pwModes" role="radiogroup" aria-label="圈选方式">
+                <label class="pw-mode"><input type="radio" name="pwMode" value="project" checked />
+                  <span class="pw-mode-name">整个项目</span>
+                  <span class="pw-mode-desc">把所选项目的全部用例加入计划，适合全量回归</span>
+                  <span class="pw-mode-meta" id="pwMetaProject"></span></label>
+                <label class="pw-mode"><input type="radio" name="pwMode" value="filter" />
+                  <span class="pw-mode-name">按条件筛选</span>
+                  <span class="pw-mode-desc">按模块、优先级、状态等条件圈选，适合定向测试</span></label>
+                <label class="pw-mode"><input type="radio" name="pwMode" value="manual" />
+                  <span class="pw-mode-name">手动圈选</span>
+                  <span class="pw-mode-desc">创建后从列表逐条勾选，适合抽查</span></label>
+              </div>
+            </div>
+            <!-- 第 3 步：检查并创建 -->
+            <div class="stack pw-pane" id="pwPane3" hidden>
+              <ul class="pw-review" id="pwReview"></ul>
+            </div>
+            <!-- 底部操作 -->
+            <div class="row row-gap pw-foot">
+              <button class="btn ghost" type="button" id="pwPrev" hidden>上一步</button>
+              <span style="flex:1"></span>
+              <button class="btn" type="button" id="pwNext">下一步</button>
+              <button class="btn primary" type="button" id="pwCreate" hidden>创建计划</button>
             </div>
           </div>
         </div></div></div>

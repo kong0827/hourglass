@@ -40,7 +40,6 @@ function base() {
   if (isPlan()) return "/api/release-plans/" + encodeURIComponent(planId) + "/delivery-note";
   return "/api/versions/" + encodeURIComponent(versionId) + "/delivery-note";
 }
-function scopeKey() { return isPlanData(data) ? (planId || data.scopeId) : versionId; }
 function resetDocState() {
   editMode = false; editingField = null; dirty = false; saveState = "idle"; risksExpanded = false;
   saveQueued = false;
@@ -387,7 +386,11 @@ function renderAll() {
     + '<aside class="dl-sidenav" aria-label="文档区块目录">'
     + '<div class="dl-sidenav-head" id="dlNavHead"></div>'
     + '<nav class="dl-secnav" id="dlSecnav" aria-label="文档区块导航"></nav>'
-    + '<div class="dl-sidenav-foot">数字来自系统记录，只读且可点回原始记录；文字由系统草拟，逐段确认后导出。</div>'
+    + '<div class="dl-sidenav-foot">'
+    + '<span><i class="sv-mark ok" aria-hidden="true">✓</i>内容已定稿</span>'
+    + '<span><i class="sv-mark warn" aria-hidden="true">!</i>含待确认对外表述</span>'
+    + '<span class="ft-note">正文改动不影响发布记录</span>'
+    + "</div>"
     + "</aside>"
     + '<div class="dl-paper-col">'
     + '<div id="dlSheetHost"></div>'
@@ -419,9 +422,9 @@ function bannerHTML() {
     desc = "测试环境发布、失败与回滚都不构成对外交付依据；请在控制区换一条成功的生产发布记录。";
   } else if (g.pending.length) {
     kind = "warn"; ic = "edit"; title = g.pending.length + " 处对外表述待确认";
-    desc = "系统按事实草拟了这些段落，核对无误后点「确认这段」；也可以改写。全部确认后才能导出与分享，确认后可撤回。";
-    acts = '<button class="btn sm" type="button" data-dl-act="accept-all">全部确认</button>'
-      + '<button class="btn sm ghost" type="button" data-dl-act="goto-pending">逐项查看</button>';
+    desc = "系统按事实草拟了这些段落，核对无误后逐段确认；确认后才会出现在导出的对外版本中，已确认的可撤回，也可以改写。";
+    acts = '<button class="btn sm ghost" type="button" data-dl-act="goto-pending">逐项查看</button>'
+      + '<button class="btn sm primary" type="button" data-dl-act="accept-all">全部确认</button>';
   } else {
     kind = "ok"; ic = "checkCircle"; title = "事实与文字均已就绪";
     desc = "可导出不可变快照并生成只读分享链接；导出后系统记录再变化也不影响已发出的这一份。";
@@ -429,8 +432,8 @@ function bannerHTML() {
   /* 「不是生产发布」与「文字待确认」会同时成立：前一条横幅不能把后一条的下一步吞掉，
      否则管理版草稿被待确认闸门拦住，页面上却找不到确认入口。 */
   if (!isLocked && data.canEdit && !g.customerBlocked && g.pending.length && acts.indexOf("accept-all") < 0) {
-    acts += '<button class="btn sm" type="button" data-dl-act="accept-all">全部确认</button>'
-      + '<button class="btn sm ghost" type="button" data-dl-act="goto-pending">逐项查看</button>';
+    acts += '<button class="btn sm ghost" type="button" data-dl-act="goto-pending">逐项查看</button>'
+      + '<button class="btn sm primary" type="button" data-dl-act="accept-all">全部确认</button>';
     desc += "另有 " + g.pending.length + " 处对外表述待确认，核对后才能导出。";
   }
   return '<div class="dl-banner ' + kind + '"><span class="bi">' + icon(ic, 15) + "</span>"
@@ -460,16 +463,16 @@ function planBannerHTML() {
     acts = '<button class="btn sm ghost" type="button" data-dl-act="goto-plan-release">去发布计划</button>';
   } else if (g.pending.length) {
     kind = "warn"; ic = "edit"; title = g.pending.length + " 处对外表述待确认";
-    desc = "系统按各版本事实草拟了这些段落，核对无误后点「确认这段」；也可以改写。全部确认后才能导出与分享。";
-    acts = '<button class="btn sm" type="button" data-dl-act="accept-all">全部确认</button>'
-      + '<button class="btn sm ghost" type="button" data-dl-act="goto-pending">逐项查看</button>';
+    desc = "系统按各版本事实草拟了这些段落，核对无误后逐段确认；确认后才会出现在导出的对外版本中，已确认的可撤回，也可以改写。";
+    acts = '<button class="btn sm ghost" type="button" data-dl-act="goto-pending">逐项查看</button>'
+      + '<button class="btn sm primary" type="button" data-dl-act="accept-all">全部确认</button>';
   } else {
     kind = "ok"; ic = "checkCircle"; title = "事实与文字均已就绪";
     desc = "可导出不可变快照并生成只读分享链接；导出后各版本记录再变化也不影响已发出的这一份。";
   }
   if (!isLocked && data.canEdit && !g.customerBlocked && g.pending.length && acts.indexOf("accept-all") < 0) {
-    acts += '<button class="btn sm" type="button" data-dl-act="accept-all">全部确认</button>'
-      + '<button class="btn sm ghost" type="button" data-dl-act="goto-pending">逐项查看</button>';
+    acts += '<button class="btn sm ghost" type="button" data-dl-act="goto-pending">逐项查看</button>'
+      + '<button class="btn sm primary" type="button" data-dl-act="accept-all">全部确认</button>';
     desc += "另有 " + g.pending.length + " 处对外表述待确认，核对后才能导出。";
   }
   return '<div class="dl-banner ' + kind + '"><span class="bi">' + icon(ic, 15) + "</span>"
@@ -512,7 +515,7 @@ function renderDoc() {
   var navHead = document.getElementById("dlNavHead");
   if (navHead) {
     var secTotal = doc.sectionList(data).length, pendTotal = doc.pendingFields(data).length;
-    navHead.textContent = secTotal + " 个区块" + (pendTotal ? " · " + pendTotal + " 处待确认" : "");
+    navHead.textContent = "章节 · " + secTotal + " 节" + (pendTotal ? " · " + pendTotal + " 处待确认" : "");
   }
   if (sheetHost) sheetHost.innerHTML = doc.sheetMarkup(data, view());
   updateMeter();
@@ -549,6 +552,8 @@ function measurePages() {
     box = document.createElement("div");
     box.id = "dlMeasure";
     box.setAttribute("aria-hidden", "true");
+    /* 离屏副本只为量页数：inert 挡住焦点与点击，否则页面里会多出一份可操作的「确认/改写」 */
+    box.setAttribute("inert", "");
     document.body.appendChild(box);
   }
   var clone = sheet.cloneNode(true);
@@ -556,6 +561,12 @@ function measurePages() {
   clone.removeAttribute("id");
   /* 离屏副本不能带着区块 id，否则 getElementById 会撞上它，导航跳转就定位错了 */
   clone.querySelectorAll("[id]").forEach(function (n) { n.removeAttribute("id"); });
+  clone.querySelectorAll("[contenteditable]").forEach(function (n) { n.removeAttribute("contenteditable"); });
+  clone.querySelectorAll("button").forEach(function (n) {
+    n.setAttribute("tabindex", "-1");
+    n.removeAttribute("data-dl-act");
+    n.removeAttribute("data-dl-key");
+  });
   box.innerHTML = "";
   box.appendChild(clone);
   return countPages(clone);
@@ -741,6 +752,15 @@ function saveBody() {
     confirmed: data.confirmed || []
   };
 }
+/* 版本响应用 scopeId=null，不能拿 scopeId 统一比较；否则保存成功也被当成旧响应丢弃，
+   修订号停在旧值，下一次保存必然 409 */
+function respScopeId(resp) {
+  if (!resp) return "";
+  return resp.scopeType === "plan" ? "plan:" + (resp.scopeId || "") : "version:" + (resp.versionId || "");
+}
+function currentScopeId() {
+  return planId ? "plan:" + planId : "version:" + (versionId || "");
+}
 function saveNow(silent) {
   if (!data || D().locked(data) || !data.canEdit) return Promise.resolve(null);
   if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
@@ -748,15 +768,25 @@ function saveNow(silent) {
   saving = true;
   saveState = "saving";
   paintSaveState();
-  return API.put(base(), saveBody()).then(function (resp) {
+  var reqScope = currentScopeId();
+  var body = saveBody();
+  /* 提交的这一版已经发出去；之后再改会重新把 dirty 置真，响应回来时据此决定是否覆盖 */
+  dirty = false;
+  return API.put(base(), body).then(function (resp) {
     /* 保存期间又切了对象：这份响应属于旧对象，丢弃 */
-    if (resp && resp.scopeId === scopeKey()) {
-      resp.options = resp.options || data.options;
-      data = resp;
-      dirty = false;
-      saveState = "saved";
+    if (resp && respScopeId(resp) === reqScope) {
+      if (dirty) {
+        /* 请求在途时又确认/撤回了：只吸收新修订号，别用旧响应覆盖刚做的改动 */
+        data.revision = resp.revision;
+      } else {
+        resp.options = resp.options || data.options;
+        data = resp;
+        saveState = "saved";
+      }
       var banner = document.getElementById("dlBanner");
       if (banner) banner.innerHTML = bannerHTML();
+      var nav = document.getElementById("dlSecnav");
+      if (nav) nav.innerHTML = secnavHTML();
       updateMeter();
     }
     if (!silent) toast("草稿已保存", "fs");

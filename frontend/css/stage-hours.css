@@ -151,6 +151,8 @@
 .drill-tbl th:nth-child(5){width:96px;}
 .drill-tbl th:nth-child(6){width:78px;}
 .drill-tbl td{padding:9px 8px;border-bottom:1px solid var(--border);color:var(--text-2);}
+/* 类型 / 分类 / 负责人是定宽列：长分类名截断，不能压到下一列 */
+.drill-tbl td.drill-clip{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .drill-tbl tr:last-child td{border-bottom:0;}
 .drill-tbl tbody tr{cursor:pointer;}
 .drill-tbl tbody tr:hover{background:var(--surface-hover);}

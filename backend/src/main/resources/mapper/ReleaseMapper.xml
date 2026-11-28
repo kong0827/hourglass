@@ -225,7 +225,14 @@
         WHERE x2.workspace_id = rp.workspace_id AND x2.plan_id = rp.id) AS projectNames,
       (SELECT COUNT(*) FROM version_release_plan_version x2
         WHERE x2.workspace_id = rp.workspace_id AND x2.plan_id = rp.id) AS versionCount,
-      rp.plan_no AS planNo, rp.planned_at AS plannedAt, rp.updated_at AS updatedAt,
+      rp.plan_no AS planNo, rp.name AS name, rp.planned_at AS plannedAt, rp.updated_at AS updatedAt,
+      (SELECT MAX(vr.occurred_at) FROM version_release vr
+        WHERE vr.workspace_id = rp.workspace_id
+          AND vr.environment = 'production' AND vr.result = 'success' AND vr.operation != 'rollback'
+          AND (vr.version_id = rp.version_id
+               OR EXISTS (SELECT 1 FROM version_release_plan_version vx
+                          WHERE vx.workspace_id = rp.workspace_id AND vx.plan_id = rp.id
+                            AND vx.version_id = vr.version_id))) AS completedAt,
       rp.owner_user_id AS ownerUserId, u.display_name AS ownerName,
       rp.environment AS environment, rp.coverage AS coverage, rp.status AS status,
       rp.revision AS revision, rp.notes AS notes, rp.risks AS risks,
@@ -260,13 +267,13 @@
   </select>
   <insert id="insertPlan">
     INSERT INTO version_release_plan
-      (id, workspace_id, version_id, plan_no, planned_at, owner_user_id, notes, risks, status, revision, scope_token, environment, target_keys, coverage)
-    VALUES (#{id}, #{workspaceId}, #{versionId}, #{planNo}, #{plannedAt}, #{ownerUserId}, #{notes}, #{risks}, #{status}, 0, #{scopeToken},
+      (id, workspace_id, version_id, plan_no, name, planned_at, owner_user_id, notes, risks, status, revision, scope_token, environment, target_keys, coverage)
+    VALUES (#{id}, #{workspaceId}, #{versionId}, #{planNo}, #{name}, #{plannedAt}, #{ownerUserId}, #{notes}, #{risks}, #{status}, 0, #{scopeToken},
       #{environment}, #{targetKeys,typeHandler=com.hourglass.mapper.ReleaseMapper$StringListTypeHandler}, #{coverage})
   </insert>
 
   <update id="updatePlan">
-    UPDATE version_release_plan SET version_id = #{versionId}, planned_at = #{plannedAt}, owner_user_id = #{ownerUserId},
+    UPDATE version_release_plan SET version_id = #{versionId}, name = #{name}, planned_at = #{plannedAt}, owner_user_id = #{ownerUserId},
       notes = #{notes}, risks = #{risks}, status = #{status}, scope_token = #{scopeToken},
       environment = #{environment}, target_keys = #{targetKeys,typeHandler=com.hourglass.mapper.ReleaseMapper$StringListTypeHandler}, coverage = #{coverage},
       revision = revision + 1, updated_at = NOW()

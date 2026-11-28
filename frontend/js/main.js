@@ -9,6 +9,7 @@ import { initMobileGestures } from "./core/gestures.js";
 import { initAssistant } from "./core/assistant.js";
 import { initReleaseAi } from "./core/release-ai.js";
 import { initSimilarHints } from "./core/similar-hints.js";
+import { initTour } from "./core/tour.js";
 import { initLayout, isMobile } from "./core/layout.js";
 import { loadMe } from "./core/app.js";
 import { API } from "./core/api.js";
@@ -68,7 +69,7 @@ function boot(){
   var deepNewTask = startView === "board" && hashParam("new") === "1";
   /* 工作页深链带 query：空 hash 才落默认视图，带参数时保留原 hash */
   var startHash = String(window.location.hash || "");
-  var keepHash = (startView === "branches" || startView === "workcolumn" || startView === "demands" || startView === "version" || startView === "release" || startView === "requirements" || startView === "dochistory" || startView === "phase")
+  var keepHash = (startView === "branches" || startView === "workcolumn" || startView === "demands" || startView === "version" || startView === "record" || startView === "release" || startView === "requirements" || startView === "dochistory" || startView === "phase" || startView === "plan-wizard")
     && startHash.indexOf("#/" + startView + "?") === 0;
   if(!keepHash){
     try{ history.replaceState(null, "", "#/" + startView); }
@@ -116,6 +117,8 @@ function startAuthenticatedApp(meUser, startView, deepTaskId, deepNewTask){
   initAssistant();
   initReleaseAi();
   initSimilarHints();
+  /* 首次进入的欢迎卡与分步指引：失败不影响主流程 */
+  try{ initTour(); }catch(e){ /* noop */ }
   /* 侧栏摆件是纯装饰：首屏之后再挂，不占关键路径 */
   import("./core/side-ornament.js").then(function(m){ m.initSideOrnament(); }).catch(function(){});
   /* 沙漏说同样在本机计算、纯展示：失败也不影响主流程 */

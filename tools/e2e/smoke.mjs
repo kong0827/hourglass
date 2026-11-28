@@ -175,13 +175,12 @@ async function main(){
     await waitFor(`import("./js/core/state.js").then(({rt}) => !!rt.currentUser && !!rt.currentWs && rt.reqsLoaded)`, "应用初始化", 20000);
     pass("登录 " + USER);
 
-    /* 2. 15 个侧栏入口（与全站改版 IA 一致：消息、交付说明、设置也进入侧栏） */
+    /* 2. 侧栏一级入口（与当前 IA 一致：测试与洞察用域内子导航，消息 / 分支 / 负载等收进域内） */
     const navs = [
-      ["mine", "mine"], ["messages", "messages"], ["review", "review"],
-      ["demands", "demands"], ["projects", "projects"], ["phase", "phase"],
-      ["delivery", "delivery"], ["branches", "branches"], ["workitems", "board"],
-      ["requirements", "requirements"], ["testcases", "testcases"], ["insight", "analysis"],
-      ["workload", "workload"], ["risks", "risks"], ["settings", "settings"]
+      ["mine", "mine"], ["review", "review"], ["demands", "demands"],
+      ["projects", "projects"], ["phase", "phase"], ["delivery", "delivery"],
+      ["workitems", "board"], ["requirements", "requirements"], ["testcases", "testcases"],
+      ["insight", "analysis"], ["settings", "settings"]
     ];
     const navCount = await evaluate(`document.querySelectorAll('#sideNav .nav-item[data-view]').length`);
     assert(navCount === navs.length, `侧栏入口应为 ${navs.length} 个，实际 ${navCount}`);

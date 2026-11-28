@@ -16,6 +16,8 @@ public class CrossProjectVersionRow {
     private LocalDate targetDate;
     private LocalDateTime releasedAt;
     private Integer taskCount;
+    /** 同口径已完成工作项数（board_column='done'），计划向导按版本显示「已完成/总数」。 */
+    private Integer doneTaskCount;
     private LocalDate latestReleaseDate;
     private Boolean canManage;
 }

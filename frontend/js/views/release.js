@@ -7,7 +7,7 @@ import { API } from "../core/api.js";
 import { showView } from "../core/router.js";
 import { projectOptionsHTML, projectRefsEnriched, reqSetId, rt } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
-import { planStatusName, planStatusTagHTML, releaseEnvironmentName, releasePlanNoText } from "../lib/format.js";
+import { planStatusName, planStatusTone, releaseEnvironmentName, releasePlanNoText } from "../lib/format.js";
 import { mountReleaseWorkspace, takeReleaseIntent } from "./phase.js";
 
 var TAB_KEYS = ["plan", "actual", "history", "content"];
@@ -65,6 +65,11 @@ function goPhase(mode){
   catch(e){ window.location.hash = h; }
   showView("phase");
 }
+/* 原型：新建发布计划一律走 4 步向导；从列表进入不带预选版本 */
+function goPlanWizard(opts){
+  import("./plan-wizard.js").then(function(m){ m.openPlanWizard(opts || {}); })
+    .catch(function(ex){ toast(ex && ex.message || "打不开新建计划向导", "bad"); });
+}
 function emptyState(msg){
   destroy();
   host.innerHTML = '<div class="release-page"><div class="panel"><div class="panel-head"><h3>没有可打开的发布计划</h3></div>'
@@ -81,7 +86,9 @@ function emptyState(msg){
 /* #/release 无参数：跨项目发布计划列表（独立菜单入口）。
    计划存意图——什么时候发哪些版本；实际结果以发布记录为准。 */
 var planListCache = null, planListSeq = 0;
-var planListState = { scope:"all", status:"all", env:"", time:"all", q:"" };
+/* 默认看未来 90 天：与原型一致；已完成/已取消与未定时间保留，避免历史与风险被时间窗藏掉 */
+var planListState = { scope:"all", status:"all", env:"", time:"next90", q:"" };
+var PLAN_TIME_DEFAULT = "next90";
 
 function enterNoParamView(){
   destroy();
@@ -116,6 +123,9 @@ function fmtUpdated(iso){
 }
 /* 计划没有独立名称：用主版本 + 环境拼出可读标题，编号放副行做唯一标识 */
 function planTitle(r){
+  /* sql/138：有名称用名称；存量计划与旧接口没有名称时回退「版本名 + 环境」 */
+  var custom = String(r.name || "").trim();
+  if(custom) return custom;
   var name = r.versionName || splitList(r.versionNames, " / ")[0] || "发布计划";
   var env = { production:"生产", staging:"预发", test:"测试" }[r.environment] || "发布";
   return name + " " + env + "发布";
@@ -187,16 +197,80 @@ function planFiltered(scoped){
   return scoped.filter(function(r){
     if(planListState.status !== "all" && r.status !== planListState.status) return false;
     if(planListState.env && r.environment !== planListState.env) return false;
-    if(planListState.time === "next30" && !planTimeIn(r.plannedAt, now, now + 30 * day)) return false;
-    if(planListState.time === "last30" && !planTimeIn(r.plannedAt, now - 30 * day, now)) return false;
-    if(planListState.time === "quarter" && !planTimeIn(r.plannedAt, now - 90 * day, now + 90 * day)) return false;
+    if(planListState.time !== "all"){
+      /* 已收口计划按历史保留；未定时间的计划不因时间窗消失（否则新建草稿会看不见） */
+      var closed = r.status === "completed" || r.status === "canceled";
+      if(!closed && r.plannedAt){
+        var t = new Date(r.plannedAt).getTime();
+        if(!isNaN(t)){
+          if(planListState.time === "next30" && t > now + 30 * day) return false;
+          if(planListState.time === "next90" && t > now + 90 * day) return false;
+          if(planListState.time === "last30" && !planTimeIn(r.plannedAt, now - 30 * day, now)) return false;
+          if(planListState.time === "quarter" && !planTimeIn(r.plannedAt, now - 90 * day, now + 90 * day)) return false;
+        }
+      }
+    }
     if(q){
-      var text = [r.versionNames, r.versionName, r.projectNames, r.projectName, r.ownerName, planStatusName(r.status)]
+      var text = [r.name, r.planNo, r.versionNames, r.versionName, r.projectNames, r.projectName, r.ownerName, planStatusName(r.status)]
         .join(" ").toLowerCase();
       if(text.indexOf(q) === -1) return false;
     }
     return true;
   });
+}
+/* 列表与导出共用同一份可见行，避免「看到的」和「导出的」口径不一致 */
+function visiblePlanRows(){
+  return planFiltered(planScoped(planListCache || [])).sort(function(a, b){
+    var ao = a.status === "completed" || a.status === "canceled" ? 1 : 0;
+    var bo = b.status === "completed" || b.status === "canceled" ? 1 : 0;
+    if(ao !== bo) return ao - bo;
+    return String(a.plannedAt || "9999").localeCompare(String(b.plannedAt || "9999"));
+  });
+}
+function planCheckText(r){
+  if(r.status === "draft") return "未检查";
+  if(r.status === "canceled") return "—";
+  if(r.checkVerdict === "block") return (r.checkBlockers || 0) + " 项未通过";
+  if(r.checkVerdict === "warn") return (r.checkReminders || 0) + " 项提醒";
+  if(r.checkVerdict === "pass") return r.status === "completed" ? "已通过" : "通过";
+  return "未检查";
+}
+function csvCell(v){
+  var s = v == null ? "" : String(v);
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+/* 导出当前筛选下的计划排期：与列表同一份行，编号保留供对账 */
+function exportPlanSchedule(){
+  var rows = visiblePlanRows();
+  if(!rows.length){ toast("当前筛选没有可导出的计划", "warn"); return; }
+  var lines = [["计划", "计划编号", "覆盖版本", "项目", "环境", "计划窗口", "就绪检查", "执行人", "状态", "收口时间", "更新时间"]];
+  rows.forEach(function(r){
+    var projects = splitList(r.versionProjectNames || r.projectNames, " / ").filter(function(v, i, arr){ return arr.indexOf(v) === i; });
+    lines.push([
+      planTitle(r),
+      releasePlanNoText(r.planNo) || ("#" + r.id),
+      splitList(r.versionNames, " / ").join("、") || r.versionName || "",
+      projects.join("、"),
+      releaseEnvironmentName(r.environment),
+      fmtPlanWindow(r.plannedAt),
+      planCheckText(r),
+      r.ownerName || "未指定",
+      planStatusName(r.status),
+      r.status === "completed" && r.completedAt ? fmtPlanWindow(r.completedAt) : "",
+      fmtPlanWindow(r.updatedAt)
+    ]);
+  });
+  var url = URL.createObjectURL(new Blob(["\uFEFF" + lines.map(function(row){
+    return row.map(csvCell).join(",");
+  }).join("\r\n")], { type:"text/csv;charset=utf-8" }));
+  var d = new Date(), stamp = d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate());
+  var a = document.createElement("a");
+  a.href = url;
+  a.download = "发布计划排期-" + stamp + ".csv";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 1500);
+  toast("已导出 " + rows.length + " 份计划排期");
 }
 function planChips(r){
   var names = splitList(r.versionNames, " / ");
@@ -227,6 +301,7 @@ function planRowHTML(r, now){
   var meta = [no || ("#" + r.id), r.updatedAt ? "更新于 " + fmtUpdated(r.updatedAt) : null]
     .filter(Boolean).join(" · ");
   var scopeSub = planScopeSub(r);
+  var actual = planCompletedHTML(r);
   var acts = open
     ? '<button class="btn sm" type="button" data-rel-open-plan="' + esc(r.id) + '" data-rel-ver="' + esc(r.versionId)
       + '" data-rel-req="' + esc(r.reqId) + '" title="打开该计划覆盖版本的发布工作台">打开</button>'
@@ -235,18 +310,26 @@ function planRowHTML(r, now){
       + '<button class="btn sm ghost" type="button" data-rel-delivery-plan="' + esc(r.id) + '" title="按该计划生成逐版本分章的交付报告">交付报告</button>'
       + '<button class="btn sm ghost" type="button" data-rel-share-plan="' + esc(r.id) + '" title="生成只读链接：对方无需登录即可查看计划范围与时间">分享</button>'
     : '<span class="mute" title="该计划缺少版本关联">缺少版本</span>';
-  return '<tr>'
-    + '<td><b>' + esc(planTitle(r)) + '</b><div class="allv-vsub">' + esc(meta)
+  return '<tr data-plan-row="' + esc(r.id) + '">'
+    + '<td data-l="计划"><b>' + esc(planTitle(r)) + '</b><div class="allv-vsub">' + esc(meta)
       + (late ? ' <span class="tag tag-warning">已过期</span>' : "") + '</div></td>'
-    + '<td>' + planChips(r)
+    + '<td data-l="覆盖版本">' + planChips(r)
       + (scopeSub ? '<div class="allv-vsub" title="' + esc(scopeSub) + '">' + esc(scopeSub) + '</div>' : "") + '</td>'
-    + '<td>' + envDot(r.environment) + '</td>'
-    + '<td>' + esc(fmtPlanWindow(r.plannedAt)) + '</td>'
-    + '<td>' + checkPill(r) + '</td>'
-    + '<td>' + esc(r.ownerName || "未指定") + '</td>'
-    + '<td>' + planStatusTagHTML(r.status) + '</td>'
-    + '<td><div class="rel-empty-acts">' + acts + '</div></td>'
+    + '<td data-l="环境">' + envDot(r.environment) + '</td>'
+    + '<td data-l="计划窗口"><span class="pl-win">' + esc(fmtPlanWindow(r.plannedAt)) + '</span>' + actual + '</td>'
+    + '<td data-l="就绪检查">' + checkPill(r) + '</td>'
+    + '<td data-l="执行人">' + esc(r.ownerName || "未指定") + '</td>'
+    + '<td data-l="状态">' + planStatusPillHTML(r.status) + '</td>'
+    + '<td data-l="操作"><div class="rel-empty-acts">' + acts + '</div></td>'
     + '</tr>';
+}
+function planStatusPillHTML(st){
+  return '<span class="tag ' + planStatusTone(st) + ' pl-pill"><span class="dot"></span>' + esc(planStatusName(st)) + '</span>';
+}
+/* 已完成计划的收口时间来自覆盖版本最近一次生产成功（后端 completedAt） */
+function planCompletedHTML(r){
+  if(r.status !== "completed" || !r.completedAt) return "";
+  return '<div class="allv-vsub pl-actual">' + esc(fmtUpdated(r.completedAt)) + ' 成功</div>';
 }
 function planKpis(scoped){
   var now = Date.now(), day = 86400000;
@@ -291,7 +374,8 @@ function syncPlanListPageHead(scoped){
   if(sub) sub.textContent = "计划存「打算何时、发哪些版本」；实际结果以发布记录为准。一个计划可跨项目覆盖多个版本。";
   if(pill){ pill.textContent = meta; pill.hidden = false; }
   if(acts){
-    acts.innerHTML = '<button class="btn primary" type="button" data-rel-list-new>'
+    acts.innerHTML = '<button class="btn" type="button" data-rel-list-export>导出排期</button>'
+      + '<button class="btn primary" type="button" data-rel-list-new>'
       + '<svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 4.4v11.2M4.4 10h11.2"/></svg>新建发布计划</button>';
     acts.hidden = false;
   }
@@ -307,18 +391,13 @@ function renderPlanList(){
     host.innerHTML = '<div class="release-page"><div class="panel">' + UI.emptyState({
         icon:"layers", title:"还没有发布计划",
         text:"先定一个窗口，把要一起发的版本勾进来；计划可跨项目覆盖多个版本。",
-        actionLabel:"去勾选版本"
+        actionLabel:"新建发布计划"
       }) + '</div></div>';
     var emptyGo = host.querySelector("[data-empty-action]");
-    if(emptyGo) emptyGo.addEventListener("click", function(){ goPhase("allversions"); });
+    if(emptyGo) emptyGo.addEventListener("click", function(){ goPlanWizard({ from:"plans" }); });
     return;
   }
-  var filtered = planFiltered(scoped).sort(function(a, b){
-    var ao = a.status === "completed" || a.status === "canceled" ? 1 : 0;
-    var bo = b.status === "completed" || b.status === "canceled" ? 1 : 0;
-    if(ao !== bo) return ao - bo;
-    return String(a.plannedAt || "9999").localeCompare(String(b.plannedAt || "9999"));
-  });
+  var filtered = visiblePlanRows();
   var statusBtn = function(v, label){
     return '<button type="button" data-rel-list-status="' + v + '" aria-pressed="' + (planListState.status === v ? "true" : "false") + '">' + label + '</button>';
   };
@@ -339,12 +418,12 @@ function renderPlanList(){
     + '<label class="phase-filter">环境<select class="mini-select" data-rel-list-env aria-label="环境">'
     + envOpt("", "全部环境") + envOpt("production", "生产") + envOpt("staging", "预发布") + envOpt("test", "测试") + '</select></label>'
     + '<label class="phase-filter">时间<select class="mini-select" data-rel-list-time aria-label="计划窗口">'
-    + timeOpt("all", "全部时间") + timeOpt("next30", "未来 30 天") + timeOpt("last30", "近 30 天") + timeOpt("quarter", "前后 3 个月") + '</select></label>'
+    + timeOpt("all", "全部时间") + timeOpt("next30", "未来 30 天") + timeOpt("next90", "未来 90 天") + timeOpt("last30", "近 30 天") + timeOpt("quarter", "前后 3 个月") + '</select></label>'
     + '<input class="phase-filter-input" type="search" data-rel-list-q value="' + esc(planListState.q) + '" placeholder="搜索计划、项目或版本" aria-label="搜索发布计划">'
     + '<span class="phase-tbl-count">' + filtered.length + ' / ' + scoped.length + ' 份计划</span>'
     + '</div>'
     + (filtered.length
-      ? '<div class="tbl-wrap phase-tbl-wrap"><table class="phase-tbl"><thead><tr>'
+      ? '<div class="tbl-wrap phase-tbl-wrap pl-table-wrap"><table class="phase-tbl pl-table"><thead><tr>'
         + '<th>计划</th><th>覆盖版本</th><th>环境</th><th>计划窗口</th><th>就绪检查</th><th>执行人</th><th>状态</th><th>操作</th>'
         + '</tr></thead><tbody>' + filtered.map(function(r){ return planRowHTML(r, now); }).join("") + '</tbody></table></div>'
       : '<div class="allv-empty">没有匹配的发布计划，试试清空筛选。</div>'
@@ -374,11 +453,13 @@ function wirePlanList(){
   });
   var reset = host.querySelector("[data-rel-list-reset]");
   if(reset) reset.addEventListener("click", function(){
-    planListState = { scope:"all", status:"all", env:"", time:"all", q:"" };
+    planListState = { scope:"all", status:"all", env:"", time:PLAN_TIME_DEFAULT, q:"" };
     renderPlanList();
   });
   var fresh = document.querySelector("#pageActions [data-rel-list-new]");
-  if(fresh) fresh.addEventListener("click", function(){ goPhase("allversions"); });
+  if(fresh) fresh.addEventListener("click", function(){ goPlanWizard({ from:"plans" }); });
+  var exp = document.querySelector("#pageActions [data-rel-list-export]");
+  if(exp) exp.addEventListener("click", exportPlanSchedule);
   host.querySelectorAll("[data-rel-open-plan]").forEach(function(b){
     b.addEventListener("click", function(){
       openReleasePage({ id:b.dataset.relVer, reqId:b.dataset.relReq, planId:b.dataset.relOpenPlan });
@@ -386,7 +467,10 @@ function wirePlanList(){
   });
   host.querySelectorAll("[data-rel-record-plan]").forEach(function(b){
     b.addEventListener("click", function(){
-      openReleasePage({ id:b.dataset.relVer, reqId:b.dataset.relReq, planId:b.dataset.relRecordPlan, tab:"actual" });
+      var ver = b.dataset.relVer, req = b.dataset.relReq;
+      import("./record.js").then(function(m){
+        m.openRecordPage({ versionId:ver, reqId:req, planId:b.dataset.relRecordPlan, from:"plans" });
+      }).catch(function(ex){ toast(ex && ex.message || "打不开记录发布页", "bad"); });
     });
   });
   host.querySelectorAll("[data-rel-delivery-plan]").forEach(function(b){

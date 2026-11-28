@@ -1412,7 +1412,7 @@ function demandCell(d, key){
   if(key === "title") return '<button class="link-title dem-link-title" type="button" data-dem-detail="' + esc(d.id) + '" title="查看需求详情">' + esc(d.title) + demCreatorLine(d) + '</button>';
   if(key === "no"){
     var dNo = demandNoText(d.demandNo);
-    return dNo ? '<span title="需求编号">' + esc(dNo) + '</span>' : demEmptyCell();
+    return dNo ? '<span class="dem-no" title="需求编号">' + esc(dNo) + '</span>' : demEmptyCell();
   }
   if(key === "kind") return '<span class="tag ghost">' + esc(d.itemKind || "其他") + '</span>';
   if(key === "category") return demCategoryCell(d);
@@ -6660,6 +6660,11 @@ function renderDemandDetail(d, opts){
   }
   UI.openModal(layer, "[data-dem-x]");
   if(opts && opts.tab && layer.querySelector('[data-dem-tab="' + opts.tab + '"]')) setDemandTab(opts.tab);
+  /* 版本页「添加工作项 → 从需求拆解」直达：先开详情，再自动发起同一套 AI 拆解 */
+  if(opts && opts.autoSplit){
+    if(!canSplit) toast("已关闭或已完成的需求不能新拆工作项", "warn");
+    else setTimeout(function(){ if(layer.isConnected) runDemandAiSplit(d, layer); }, 120);
+  }
   refreshDemandWork(layer, id, d.versionId);
   loadDemandDocs(layer, id, d.reqId, writable);
   loadDemandAttachments(layer, id, writable);
@@ -7267,4 +7272,8 @@ function bindDemandAiDialog(){
 }
 bindDemandAiDialog();
 
-export { enterDemandsView, ensureDemandOptions, loadDemands, openDemandById, openDemandDetailById, openDemandVersionBackfill, openDemandsForReq, render };
+function openDemandSplitById(id){
+  return showDemandDetail(id, { autoSplit:true });
+}
+
+export { enterDemandsView, ensureDemandOptions, loadDemands, openDemandById, openDemandDetailById, openDemandSplitById, openDemandVersionBackfill, openDemandsForReq, render };

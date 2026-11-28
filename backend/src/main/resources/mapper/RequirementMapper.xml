@@ -34,6 +34,12 @@
     <include refid="visibleScope"/>
   </select>
 
+  <select id="countActive" resultType="int">
+    SELECT COUNT(*) FROM requirement r
+    WHERE r.workspace_id = #{workspaceId} AND r.archived_at IS NULL
+    <include refid="visibleScope"/>
+  </select>
+
   <select id="selectById" resultType="Requirement">
     SELECT <include refid="cols"/> FROM requirement WHERE id = #{id}
   </select>

@@ -196,6 +196,16 @@ body[data-view="board"] .filterbar{border-radius:11px 11px 0 0;border-bottom-col
   /* 底部留出悬浮助手的位置：滚到末行时操作列不被球压住 */
   padding-bottom:var(--fab-safe);
 }
+/* 定宽列之和常常大于容器（1440 下默认字段约 1336px）：表头和行要按内容宽铺开，
+   否则横向滚到「更新」列时，表头底色与行分隔线在容器宽处提前收口，右半截悬空无底 */
+[data-layout="desktop"] #view-list .list-head,
+[data-layout="desktop"] #view-list .list-row,
+[data-layout="tablet"] #view-list .list-head,
+[data-layout="tablet"] #view-list .list-row,
+[data-layout="desktop"] #view-tree .tree-head,
+[data-layout="desktop"] #view-tree .list-row,
+[data-layout="tablet"] #view-tree .tree-head,
+[data-layout="tablet"] #view-tree .list-row{width:fit-content;min-width:100%;}
 /* 列表行高单一口径：我的工作 / 需求工作页 / 工作项列状态页三处列表形态共用，档位由 body[data-list-density] 切换 */
 body{--list-row-h:56px;}
 body[data-list-density="relaxed"]{--list-row-h:62px;}

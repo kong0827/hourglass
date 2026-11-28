@@ -10,6 +10,8 @@ public class VersionReleasePlan {
     private String versionId;
     /** 空间内发布计划编号（sql/85，展示为 PL-001；null 表示存量尚未取号） */
     private Integer planNo;
+    /** 计划名称（sql/138）：给人读的窗口名；空时前端回退「版本名 + 环境」 */
+    private String name;
     private LocalDateTime plannedAt;
     private String ownerUserId;
     private String notes;

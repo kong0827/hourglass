@@ -8,6 +8,7 @@ import com.hourglass.entity.Demand;
 import com.hourglass.entity.ProjectMember;
 import com.hourglass.entity.WorkspaceMember;
 import com.hourglass.mapper.MyWorkMapper;
+import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.UserMapper;
 import com.hourglass.mapper.WorkspaceMemberMapper;
 import org.springframework.stereotype.Service;
@@ -39,16 +40,19 @@ public class MyWorkService {
     private final WorkspaceMemberMapper memberMapper;
     private final UserMapper userMapper;
     private final ReleasePrepService releasePrep;
+    private final RequirementMapper requirementMapper;
 
     public MyWorkService(TaskQueryService taskQuery, MyWorkMapper myWorkMapper,
                          ProjectAccessService projectAccess, WorkspaceMemberMapper memberMapper,
-                         UserMapper userMapper, ReleasePrepService releasePrep) {
+                         UserMapper userMapper, ReleasePrepService releasePrep,
+                         RequirementMapper requirementMapper) {
         this.taskQuery = taskQuery;
         this.myWorkMapper = myWorkMapper;
         this.projectAccess = projectAccess;
         this.memberMapper = memberMapper;
         this.userMapper = userMapper;
         this.releasePrep = releasePrep;
+        this.requirementMapper = requirementMapper;
     }
 
     /**
@@ -85,6 +89,10 @@ public class MyWorkService {
         /* 待我执行：测试计划执行人是我、未完成；只算当前空间 */
         int planCount = myWorkMapper.countMyTestPlans(workspaceId, userId);
 
+        /* 未归档项目数（按可见范围）：前端据此把空空间的「新建工作项」换成「新建项目」 */
+        int projectCount = requirementMapper.countActive(workspaceId,
+                projectAccess.viewerScope(workspaceId, userId));
+
         Map<String, Object> pending = new LinkedHashMap<String, Object>();
         pending.put("tasks", pendingTasks);
         pending.put("dev", devCount);
@@ -101,6 +109,7 @@ public class MyWorkService {
         res.put("watchedDemands", watchedDemands);
         res.put("watchedPlans", watchedPlans);
         res.put("claimable", claimable);
+        res.put("projectCount", projectCount);
         res.put("reviewAvailable", reviewAvailable(workspaceId, userId));
         res.put("matchedByNameOnly", createdNameOnly);
         res.put("updatedAt", LocalDateTime.now().format(TIME_FORMAT));

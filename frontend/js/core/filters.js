@@ -92,7 +92,7 @@ function updateBrand(){
     project:    { group:"项目", view:"projects",     page:"驾驶舱" },
     portfolio:  { group:"项目集", view:"portfolio",  page:"全部项目集" },
     version:    { group:"版本", view:"phase",        page:"详情" },
-    release:    { group:"版本", view:"phase",        page:"发布工作台" },
+    release:    { group:"发布计划", view:"release",      page:"" },
     delivery:   { group:"版本", view:"phase",        page:"交付报告" },
     dochistory: { group:"文档", view:"requirements", page:"历史" }
   };
@@ -106,10 +106,15 @@ function updateBrand(){
       : crumb.page;
     var segs = [];
     if(wsName) segs.push('<span title="' + esc(wsName) + '">' + esc(wsName) + '</span>');
-    segs.push('<button type="button" class="crumb-link" data-crumb-view="' + crumb.view + '" title="返回' + esc(crumb.group) + '列表">' + esc(crumb.group) + '</button>');
-    segs.push('<span title="' + esc(pageName) + '">' + esc(pageName) + '</span>');
+    /* page 为空的深页（如发布计划）只占两段：空间 / 页面名，组名不再可点回别的列表 */
+    if(pageName){
+      segs.push('<button type="button" class="crumb-link" data-crumb-view="' + crumb.view + '" title="返回' + esc(crumb.group) + '列表">' + esc(crumb.group) + '</button>');
+      segs.push('<span title="' + esc(pageName) + '">' + esc(pageName) + '</span>');
+    }else{
+      segs.push('<span title="' + esc(crumb.group) + '">' + esc(crumb.group) + '</span>');
+    }
     brandSub.classList.add("breadcrumb");
-    brandSub.title = (wsName ? wsName + " / " : "") + crumb.group + " / " + pageName;
+    brandSub.title = (wsName ? wsName + " / " : "") + crumb.group + (pageName ? " / " + pageName : "");
     brandSub.innerHTML = segs.join('<span class="sep">/</span>');
     return;
   }
