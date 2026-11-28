@@ -199,7 +199,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
                 <div class="tf-who-t"><b id="readTestOwner">—</b><span id="readTestOwnerSub"></span></div>
               </div>
               <ol class="tf-steps">
-                <li id="readTestStepReq"><i aria-hidden="true"></i><div><span class="tf-k">提测</span><b class="tf-v" id="readTestRequested">—</b></div></li>
+                <li id="readTestStepReq"><i aria-hidden="true"></i><div><span class="tf-k">提测</span><b class="tf-v" id="readTestRequested">—</b><span class="tf-sub" id="readTestRound" hidden></span></div></li>
                 <li id="readTestStepStart"><i aria-hidden="true"></i><div><span class="tf-k">开始</span><b class="tf-v" id="readTestStart">—</b></div></li>
                 <li id="readTestStepEnd"><i aria-hidden="true"></i><div><span class="tf-k">结束</span><b class="tf-v" id="readTestEnd">—</b></div></li>
               </ol>

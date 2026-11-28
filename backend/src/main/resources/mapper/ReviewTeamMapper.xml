@@ -125,11 +125,13 @@
     <include refid="taskReq"/>
   </sql>
 
+  <!-- 提测窗口按本轮起点统计：test_requested_at 是首次提测基线，重新提测只刷新本轮 -->
   <sql id="testRequestedIds">
     SELECT t.id
     FROM task t
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
-      AND t.test_requested_at &gt;= #{from} AND t.test_requested_at &lt; #{before}
+      AND COALESCE(t.test_round_requested_at, t.test_requested_at) &gt;= #{from}
+      AND COALESCE(t.test_round_requested_at, t.test_requested_at) &lt; #{before}
     <include refid="taskReq"/>
   </sql>
 
@@ -606,7 +608,8 @@
       SELECT t.owner_user_id, t.id
       FROM task t
       WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
-        AND t.test_requested_at &gt;= #{from} AND t.test_requested_at &lt; #{before}
+        AND COALESCE(t.test_round_requested_at, t.test_requested_at) &gt;= #{from}
+        AND COALESCE(t.test_round_requested_at, t.test_requested_at) &lt; #{before}
         AND t.owner_user_id IS NOT NULL
       <include refid="taskReq"/>
       UNION ALL
@@ -1054,13 +1057,14 @@
       <when test="toColumn == 'test'">
         SELECT t.id, 'task' AS kind, t.item_type AS type, t.title,
                r.name AS projectName, t.owner AS person,
-               t.test_requested_at AS at, '提测' AS extra
+               COALESCE(t.test_round_requested_at, t.test_requested_at) AS at, '提测' AS extra
         FROM task t
         LEFT JOIN requirement r ON r.id = t.req_id AND r.workspace_id = t.workspace_id
         WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
-          AND t.test_requested_at &gt;= #{from} AND t.test_requested_at &lt; #{before}
+          AND COALESCE(t.test_round_requested_at, t.test_requested_at) &gt;= #{from}
+          AND COALESCE(t.test_round_requested_at, t.test_requested_at) &lt; #{before}
         <include refid="taskReq"/>
-        ORDER BY t.test_requested_at DESC, BINARY t.id
+        ORDER BY COALESCE(t.test_round_requested_at, t.test_requested_at) DESC, BINARY t.id
         LIMIT #{limit}
       </when>
       <when test="toColumn == 'testing'">

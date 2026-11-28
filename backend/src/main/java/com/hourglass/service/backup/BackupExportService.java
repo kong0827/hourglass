@@ -191,6 +191,7 @@ public class BackupExportService {
             b.setTestOwnerUserId(t.getTestOwnerUserId());
             b.setTestOwner(t.getTestOwner());
             b.setTestRequestedAt(t.getTestRequestedAt() == null ? null : t.getTestRequestedAt().toString());
+            b.setTestRoundRequestedAt(t.getTestRoundRequestedAt() == null ? null : t.getTestRoundRequestedAt().toString());
             b.setTestStartedAt(t.getTestStartedAt() == null ? null : t.getTestStartedAt().toString());
             b.setTestFinishedAt(t.getTestFinishedAt() == null ? null : t.getTestFinishedAt().toString());
             b.setSubtasks(subMap.get(t.getId()));

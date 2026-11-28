@@ -436,12 +436,21 @@ function renderReadTestCard(){
     }
   }
   testStep("readTestStepReq", "readTestRequested", requested, "");
+  /* 提测步骤保留首次基线；本轮重新提测过时补一行，看板等待与预警按本轮计算 */
+  var roundEl = $("readTestRound");
+  if(roundEl){
+    var showRound = !!roundRequested && roundRequested !== requested;
+    roundEl.hidden = !showRound;
+    roundEl.textContent = showRound ? "本轮 " + fmtShortMD(parseDate(roundRequested)) : "";
+    if(showRound) roundEl.title = "本轮提测：" + fmtTs(roundRequested) + "（首次提测 " + fmtTs(requested) + "）";
+    else roundEl.removeAttribute("title");
+  }
   testStep("readTestStepStart", "readTestStart", start, "");
   testStep("readTestStepEnd", "readTestEnd", end, end ? (col === "done" ? "ok-end" : "bad-end") : "");
   var dur = "", durSub = "";
   if(end){ dur = "历时 " + spanText(start || requested, end); durSub = (start ? "开始" : "提测") + " → 结束"; }
   else if(start){ dur = "已测 " + elapsedText(start); durSub = "开始 → 现在"; }
-  else if(requested){ dur = "已等待 " + elapsedText(roundRequested); durSub = "提测 → 现在"; }
+  else if(requested){ dur = "已等待 " + elapsedText(roundRequested); durSub = (roundRequested !== requested ? "本轮提测" : "提测") + " → 现在"; }
   var testEst = Math.max(0, Number(t.testEstimateMinutes) || 0);
   if(testEst){
     var estText = "测试预估 " + fmtMinutesShort(testEst);

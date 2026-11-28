@@ -167,10 +167,13 @@ public class TaskCommandService {
                     ? req.getCompletedAt() : LocalDateTime.now().withSecond(0).withNano(0));
         }
         if (Consts.COL_TEST.equals(t.getBoardColumn())) {
-            t.setTestRequestedAt(LocalDateTime.now().withSecond(0).withNano(0));
+            LocalDateTime now = LocalDateTime.now().withSecond(0).withNano(0);
+            t.setTestRequestedAt(now);
+            t.setTestRoundRequestedAt(now);
         } else if (Consts.COL_TESTING.equals(t.getBoardColumn())) {
             LocalDateTime now = LocalDateTime.now().withSecond(0).withNano(0);
             t.setTestRequestedAt(now);
+            t.setTestRoundRequestedAt(now);
             t.setTestStartedAt(now);
             workflow.claimTestOwner(t, workspaceId, userId);
         }

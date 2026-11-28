@@ -474,7 +474,7 @@
     SELECT t.id, t.workspace_id, t.title, t.description, t.priority, t.owner, t.owner_user_id, t.created_by_user_id, t.category_id,
            t.board_column, t.item_type, t.start_date, t.due_date, t.req_id, t.req_doc_id, t.branch_id, t.progress, t.is_milestone, t.is_blocked AS blocked,
            t.blocked_reason, t.blocked_by_task_id, t.note, t.completed_at,
-           t.test_owner_user_id, t.test_owner, t.test_requested_at, t.test_started_at, t.test_finished_at,
+           t.test_owner_user_id, t.test_owner, t.test_requested_at, t.test_round_requested_at, t.test_started_at, t.test_finished_at,
            t.recur_type, t.recur_next_id,
            t.remind_at, t.remind_target, t.remind_sent, t.deleted_at, t.sort_order, t.created_at, t.updated_at,
            t.estimate_minutes, t.test_estimate_minutes, bc.processing_rule, w.name AS workspace_name
@@ -485,7 +485,7 @@
     <include refid="myTasksWhere"/>
     <choose>
       <when test="watchView or createdView">ORDER BY t.updated_at DESC, t.id</when>
-      <when test="strictTest">ORDER BY (t.test_requested_at IS NULL), t.test_requested_at, t.id</when>
+      <when test="strictTest">ORDER BY (COALESCE(t.test_round_requested_at, t.test_requested_at) IS NULL), COALESCE(t.test_round_requested_at, t.test_requested_at), t.id</when>
       <otherwise>ORDER BY (t.due_date IS NULL), t.due_date, FIELD(t.priority, 'P0', 'P1', 'P2', 'P3'), t.updated_at DESC, t.id</otherwise>
     </choose>
     LIMIT #{limit} OFFSET #{offset}

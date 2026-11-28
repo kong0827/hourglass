@@ -52,7 +52,7 @@ public class Task {
     private String testOwnerUserId;
     /** 测试负责人显示名快照；账号ID是权威绑定 */
     private String testOwner;
-    /** 提测时间：进入「待测试」或新一轮直接进入「测试中」时记录 */
+    /** 首次提测时间：只写一次，作为总周期基线；本轮等待与预警看 testRoundRequestedAt */
     private LocalDateTime testRequestedAt;
     /** 本轮提测时间：进入「待测试」（测试中退回队列除外）或跳过待测试直接进「测试中」时写入；空回退 test_requested_at */
     private LocalDateTime testRoundRequestedAt;

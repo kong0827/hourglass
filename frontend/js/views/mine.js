@@ -319,7 +319,9 @@ function taskRow(t, role) {
     pri: t.priority || "", blocked: !!t.blocked, col: t.boardColumn || "",
     dueKind: mineDueKind(t), dueN: dueN(t), dueDate: t.dueDate || "",
     updatedTs: tsOf(t.updatedAt), updatedRaw: t.updatedAt || "",
-    requested: t.testRequestedAt || "", requestedRaw: t.testRequestedAt || "",
+    /* 提测时间列看本轮：首次提测是总周期基线，重新提测后队列等待按新一轮算 */
+    requested: t.testRoundRequestedAt || t.testRequestedAt || "",
+    requestedRaw: t.testRoundRequestedAt || t.testRequestedAt || "",
     progress: progressOf(t), testDone: num(t.subtaskDone), testTotal: num(t.subtaskTotal),
     submitter: t.owner || "", expect: "", createdTs: 0, createdRaw: "",
     viewRole: role || "dev", raw: t

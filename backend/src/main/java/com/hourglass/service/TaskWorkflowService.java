@@ -146,7 +146,8 @@ public class TaskWorkflowService {
     }
 
     /**
-     * 测试时间口径：进入「待测试」记提测时间；进入「测试中」记开始时间（新一轮重置开始时间并清空结束时间）；
+     * 测试时间口径：首次提测只写一次（总周期基线），之后每轮只刷新本轮提测与测试窗口：
+     * 进入「待测试」写本轮提测时间；进入「测试中」记开始时间（新一轮重置开始时间并清空结束时间）；
      * 离开「测试中」记结束时间 —— 测试通过和退回都代表这一轮测试结束。
      * 直接拖到已完成不补开始时间：没有可靠测试过程就不伪造时间。
      */
@@ -156,20 +157,23 @@ public class TaskWorkflowService {
         }
         LocalDateTime now = minuteNow();
         boolean newRound = task.getTestFinishedAt() != null;
-        /* 从「测试中」退回待测队列不是重新提测：保留原提测时间，等待时长才不会被清零 */
+        /* 首次提测作为总周期基线不再改写；从「测试中」退回队列也不是重新提测，等待延续本轮 */
         if (Consts.COL_TEST.equals(to) && !Consts.COL_TESTING.equals(from)) {
-            task.setTestRequestedAt(now);
-            /* 本轮排队起点与进度同步刷新：看板等待/3 天预警只看本轮 */
+            if (task.getTestRequestedAt() == null) {
+                task.setTestRequestedAt(now);
+            }
+            /* 本轮排队起点每轮刷新：看板等待 / 3 天预警只看本轮 */
             task.setTestRoundRequestedAt(now);
         }
         if (Consts.COL_TESTING.equals(to)) {
             if (task.getTestStartedAt() == null || newRound) {
                 task.setTestStartedAt(now);
-                /* 从「待测试」进来时，提测时间已在移入待测试时记录，新一轮也应保留；
-                   只有跳过待测试直接进入「测试中」才用当前时间补提测证据。 */
-                if (task.getTestRequestedAt() == null
-                        || (newRound && !Consts.COL_TEST.equals(from))) {
+                /* 跳过待测试直接进「测试中」也补首次提测基线；本轮起点只在新一轮开始时刷新 */
+                if (task.getTestRequestedAt() == null) {
                     task.setTestRequestedAt(now);
+                }
+                if (task.getTestRoundRequestedAt() == null
+                        || (newRound && !Consts.COL_TEST.equals(from))) {
                     task.setTestRoundRequestedAt(now);
                 }
             }

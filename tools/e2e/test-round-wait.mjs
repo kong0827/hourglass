@@ -1,10 +1,11 @@
-/* 本轮提测时间批次 E2E：看板等待与 3 天预警读本轮起点（test_round_requested_at）
+/* 提测时间口径 E2E：首次提测不可变（总周期基线），看板等待与 3 天预警读本轮起点
    覆盖：
-     1 进入「待测试」写本轮起点，与提测时间一致；
+     1 进入「待测试」写本轮起点，与首次提测一致；
      2 进入「测试中」不改本轮起点；
      3 退回队列（测试中 → 待测试）不重置本轮起点；
-     4 存量行没有本轮字段时看板回退首次提测时间（4 天前 → 3 天预警）；
-     5 补上本轮字段后看板改读本轮（2 小时前 → 预警消失），抽屉「已等待」同步。
+     4 第二轮重新提测只刷新本轮，首次提测时间不变；
+     5 存量行没有本轮字段时看板回退首次提测时间（4 天前 → 3 天预警）；
+     6 补上本轮字段后看板改读本轮（2 小时前 → 预警消失），抽屉「已等待」同步并标出本轮。
    数据：SXk01 演示空间内自建一条 E2E 工作项，按 id 精确清理。
    运行前需 8081 预览 + 8080 后端在线（deploy/local/stack.sh），本地库已执行 sql/137。 */
 import { spawn, spawnSync } from "node:child_process";
@@ -90,6 +91,7 @@ function cleanup(){
     sql(`DELETE FROM task_watch WHERE task_id='${TASK_ID}'`);
     sql(`DELETE FROM task_log WHERE task_id='${TASK_ID}'`);
     sql(`DELETE FROM time_log WHERE task_id='${TASK_ID}'`);
+    sql(`DELETE FROM task_completion_record WHERE task_id='${TASK_ID}'`);
     sql(`DELETE FROM work_activity WHERE workspace_id='${WS}' AND entity_type IN ('task','workitem') AND entity_id='${TASK_ID}'`);
     sql(`DELETE FROM task WHERE id='${TASK_ID}'`);
     console.log("  CLEAN 已删除样本工作项 " + TASK_ID);
@@ -227,6 +229,19 @@ try{
     "退回队列不重置本轮起点（等待延续本轮）");
   assert(!!requeued.testFinishedAt, "退回同时记录本轮结束时间：" + requeued.testFinishedAt);
 
+  /* ---------------- 3.5 第二轮重新提测：首次提测不变，本轮刷新 ----------------
+     模拟首次提测在 3 天前（存量基线），再走完整「离开待测试 → 重新提测」 */
+  await move("doing", {});
+  const firstBaseline = sql(`SELECT DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 3 DAY), '%Y-%m-%d %H:%i:00')`);
+  sql(`UPDATE task SET test_requested_at='${firstBaseline}' WHERE id='${TASK_ID}'`);
+  await move("test", { reason: "E2E 第二轮提测" });
+  const second = await taskNow();
+  assert(second.boardColumn === "test", "第二轮重新提测成功");
+  assert(second.testRequestedAt && second.testRequestedAt.indexOf(firstBaseline.slice(0, 10)) === 0,
+    "重新提测不改首次提测时间（总周期基线）：" + second.testRequestedAt);
+  assert(!!second.testRoundRequestedAt && second.testRoundRequestedAt !== second.testRequestedAt,
+    "本轮提测时间已刷新：" + second.testRoundRequestedAt);
+
   /* ---------------- 4. 存量回退：没有本轮字段时看板按首次提测计算 ---------------- */
   sql(`UPDATE task SET test_round_requested_at=NULL, test_requested_at=DATE_SUB(NOW(), INTERVAL 4 DAY) WHERE id='${TASK_ID}'`);
   await openBoard();
@@ -248,12 +263,22 @@ try{
   await evaluate(`document.querySelector('.card[data-id="${TASK_ID}"]').click()`);
   await waitFor(`document.getElementById("taskDrawer").classList.contains("on")`, "抽屉打开");
   await waitFor(`!document.getElementById("readTestCard").hidden`, "测试卡可见");
-  const drawer = await evaluate(`(() => ({
-    dur: document.getElementById("readTestDur").textContent,
-    requested: document.getElementById("readTestRequested").textContent
-  }))()`);
+  const drawer = await evaluate(`(() => {
+    const round = document.getElementById("readTestRound");
+    return {
+      dur: document.getElementById("readTestDur").textContent,
+      durSub: document.getElementById("readTestDurSub").textContent,
+      roundHidden: !round || round.hidden,
+      roundText: round ? round.textContent : "",
+      requested: document.getElementById("readTestRequested").textContent
+    };
+  })()`);
   assert(drawer.dur.indexOf("已等待") !== -1 && drawer.dur.indexOf("2 小时") !== -1,
     "抽屉「已等待」读本轮起点（" + drawer.dur + "）");
+  assert(!drawer.roundHidden && drawer.roundText.indexOf("本轮") !== -1,
+    "抽屉提测步骤副行展示本轮提测（" + drawer.roundText + "）");
+  assert(drawer.durSub.indexOf("本轮提测") !== -1,
+    "抽屉等待口径注明本轮提测（" + drawer.durSub + "）");
   assert(drawer.requested !== "—" && drawer.requested.indexOf("4 天") === -1 && /\d{2}-\d{2}/.test(drawer.requested),
     "抽屉提测时间仍展示首次提测日期（" + drawer.requested + "）");
 

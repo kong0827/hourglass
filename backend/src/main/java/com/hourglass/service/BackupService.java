@@ -847,6 +847,7 @@ public class BackupService {
             t.setTestOwnerUserId(Texts.trimToNull(b.getTestOwnerUserId()));
             t.setTestOwner(Texts.trimToNull(b.getTestOwner()));
             t.setTestRequestedAt(parseDateTime(b.getTestRequestedAt()));
+            t.setTestRoundRequestedAt(parseDateTime(b.getTestRoundRequestedAt()));
             t.setTestStartedAt(parseDateTime(b.getTestStartedAt()));
             t.setTestFinishedAt(parseDateTime(b.getTestFinishedAt()));
             t.setCreatedAt(parseTs(b.getCreatedAt()));

@@ -143,7 +143,7 @@ class TaskWorkflowServiceTestFlowTest {
     }
 
     @Test
-    void secondRoundQueueEntryResetsRoundRequestedTime() {
+    void secondRoundQueueEntryKeepsFirstRequestAndResetsRound() {
         Task task = new Task();
         task.setTestRequestedAt(LocalDateTime.of(2026, 11, 3, 9, 0));
         task.setTestRoundRequestedAt(LocalDateTime.of(2026, 11, 3, 9, 0));
@@ -153,10 +153,29 @@ class TaskWorkflowServiceTestFlowTest {
         service.applyTestTimestamps(task, Consts.COL_DONE, Consts.COL_TEST);
 
         LocalDateTime now = LocalDateTime.now().withSecond(0).withNano(0);
-        assertEquals(now, task.getTestRequestedAt());
+        /* 首次提测是总周期基线：重新提测只刷新本轮起点 */
+        assertEquals(LocalDateTime.of(2026, 11, 3, 9, 0), task.getTestRequestedAt());
         assertEquals(now, task.getTestRoundRequestedAt());
         assertEquals(LocalDateTime.of(2026, 11, 1, 9, 30), task.getTestStartedAt());
         assertEquals(LocalDateTime.of(2026, 11, 2, 10, 0), task.getTestFinishedAt());
+    }
+
+    @Test
+    void secondRoundDirectToTestingKeepsFirstRequestAndStartsNewRound() {
+        Task task = new Task();
+        LocalDateTime firstRequested = LocalDateTime.of(2026, 11, 1, 8, 0);
+        task.setTestRequestedAt(firstRequested);
+        task.setTestRoundRequestedAt(LocalDateTime.of(2026, 11, 3, 9, 0));
+        task.setTestStartedAt(LocalDateTime.of(2026, 11, 3, 10, 0));
+        task.setTestFinishedAt(LocalDateTime.of(2026, 11, 4, 11, 0));
+
+        service.applyTestTimestamps(task, Consts.COL_DOING, Consts.COL_TESTING);
+
+        LocalDateTime now = LocalDateTime.now().withSecond(0).withNano(0);
+        assertEquals(firstRequested, task.getTestRequestedAt());
+        assertEquals(now, task.getTestRoundRequestedAt());
+        assertEquals(now, task.getTestStartedAt());
+        assertNull(task.getTestFinishedAt());
     }
 
     @Test

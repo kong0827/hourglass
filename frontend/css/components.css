@@ -2603,6 +2603,7 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 .tf-steps li > div{display:flex;flex-direction:column;min-width:0;}
 .tf-k{font-size:11px;color:var(--text-3);}
 .tf-v{font-size:13px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums;}
+.tf-sub{font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;}
 .tf-steps li.todo .tf-v{color:var(--text-3);font-weight:500;}
 .tf-sum{flex:0 0 auto;display:flex;flex-direction:column;align-items:flex-end;padding-left:12px;border-left:1px solid var(--border);}
 .tf-sum b{font-size:13px;font-weight:650;color:var(--text);font-variant-numeric:tabular-nums;}

@@ -109,8 +109,10 @@ public class BackupData {
         /** 测试负责人账号与显示名快照 */
         private String testOwnerUserId;
         private String testOwner;
-        /** 提测时间 */
+        /** 首次提测时间（总周期基线） */
         private String testRequestedAt;
+        /** 本轮提测时间：恢复后看板等待与预警按它计算（旧备份没有该字段） */
+        private String testRoundRequestedAt;
         /** 测试窗口：进入测试中 / 离开测试中的时间（旧备份为日期） */
         private String testStartedAt;
         private String testFinishedAt;

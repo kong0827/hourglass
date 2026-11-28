@@ -85,7 +85,9 @@ public class TaskCompletionService {
         r.setOwnerUserId(t.getOwnerUserId());
         r.setTestOwnerUserId(t.getTestOwnerUserId());
         r.setTestOwner(t.getTestOwner());
-        r.setTestRequestedAt(t.getTestRequestedAt());
+        /* 完成快照记录最终一轮的提测时间（测试证据）；首次提测基线留在任务上，不随快照复制 */
+        r.setTestRequestedAt(t.getTestRoundRequestedAt() != null
+                ? t.getTestRoundRequestedAt() : t.getTestRequestedAt());
         r.setTestStartedAt(t.getTestStartedAt());
         r.setTestFinishedAt(t.getTestFinishedAt());
         /* 快照存完成当时的模块名：解析不到（异常数据）就留空，展示层显示「—」 */
