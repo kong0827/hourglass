@@ -7,6 +7,8 @@ import "./core/no-autofill.js";
 import { initNavTelemetry } from "./core/nav-telemetry.js";
 import { initMobileGestures } from "./core/gestures.js";
 import { initAssistant } from "./core/assistant.js";
+import { initReleaseAi } from "./core/release-ai.js";
+import { initSimilarHints } from "./core/similar-hints.js";
 import { initLayout, isMobile } from "./core/layout.js";
 import { loadMe } from "./core/app.js";
 import { API } from "./core/api.js";
@@ -112,6 +114,8 @@ function startAuthenticatedApp(meUser, startView, deepTaskId, deepNewTask){
   showView(startView);
   showBoardSkeleton();
   initAssistant();
+  initReleaseAi();
+  initSimilarHints();
   /* 侧栏摆件是纯装饰：首屏之后再挂，不占关键路径 */
   import("./core/side-ornament.js").then(function(m){ m.initSideOrnament(); }).catch(function(){});
   /* 沙漏说同样在本机计算、纯展示：失败也不影响主流程 */

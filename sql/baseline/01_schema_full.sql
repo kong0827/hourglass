@@ -1,8 +1,8 @@
 -- ============================================================================
 -- sql/baseline/01_schema_full.sql · 沙漏 Hourglass 完整基线 DDL（MySQL 8，utf8mb4）
--- Updated 2026-11-27: full schema after migrations 01-128 (94 tables；107/108 为数据回填、110/116/117/118/122/124/126/127/128 为列变更，均不改表数；123 新增周五补记承接表)。
+-- Updated 2026-11-28: full schema after migrations 01-137 (99 tables；107/108/130 为数据回填、110/116/117/118/122/124/126/127/128/129/132/137 为列变更，均不改表数；123 新增周五补记承接表、131 新增文档收藏表、133 新增 AI 用量日聚合表、134 新增交付说明计划草稿表并扩展快照范围列、135 新增文档引用表、136 新增发布计划分享表)。
 --
--- 完整结构与 sql/01-70、71-89 增量链等效（含 64 测试流程、65 计划-版本关联、66 新成员默认不参与、68 成员公司与项目角色标注、69 成员职能与标签选项、70 项目手动排序、71 富文本描述、74 用例编号、76 需求人工交付判定、77 测试负责人、78 版本终态、79 承诺基线、80 项目里程碑、81 交付说明、82 工作项编号、83 发布条目编号、84 需求编号、85 发布计划编号、86 快照需求编号、87 编号序列、88 用例-工作项追溯、89 发布测试检查策略、93 模块目录层级与用例集、94 文档分类树与空间级文档、95 团队共享 AI 配置、96 动态分组与指定成员可见、97 子任务排序、98 项目多仓库 Git 只读同步、99 文档可见范围、100 用例目录合并与嵌套分组、101 文档分类默认可见范围、102 工作项历史发布人工标记、103 需求池评论、104 需求关注人、105 需求已完成主状态、106 项目集与项目拆分、109 工作项终态已取消、110 评论正文放宽 2000 字、113 需求评审人、114 测试计划执行人、115 发布准备与计划关注、116 推送补充说明、117 企业微信群发送结果、118 保存视图参数放宽、119 交付说明分享补强、120 周五补记、121 轻量自动化与定时报告、123 周五补记未处理项承接、124 工作项创建人、125 文档表格格式、126 发布制品摘要选填、127 发布维护权限范围、128 文档回收站与分享复制开关）；不包含历史业务数据回填。
+-- 完整结构与 sql/01-70、71-89 增量链等效（含 64 测试流程、65 计划-版本关联、66 新成员默认不参与、68 成员公司与项目角色标注、69 成员职能与标签选项、70 项目手动排序、71 富文本描述、74 用例编号、76 需求人工交付判定、77 测试负责人、78 版本终态、79 承诺基线、80 项目里程碑、81 交付说明、82 工作项编号、83 发布条目编号、84 需求编号、85 发布计划编号、86 快照需求编号、87 编号序列、88 用例-工作项追溯、89 发布测试检查策略、93 模块目录层级与用例集、94 文档分类树与空间级文档、95 团队共享 AI 配置、96 动态分组与指定成员可见、97 子任务排序、98 项目多仓库 Git 只读同步、99 文档可见范围、100 用例目录合并与嵌套分组、101 文档分类默认可见范围、102 工作项历史发布人工标记、103 需求池评论、104 需求关注人、105 需求已完成主状态、106 项目集与项目拆分、109 工作项终态已取消、110 评论正文放宽 2000 字、113 需求评审人、114 测试计划执行人、115 发布准备与计划关注、116 推送补充说明、117 企业微信群发送结果、118 保存视图参数放宽、119 交付说明分享补强、120 周五补记、121 轻量自动化与定时报告、123 周五补记未处理项承接、124 工作项创建人、125 文档表格格式、126 发布制品摘要选填、127 发布维护权限范围、128 文档回收站与分享复制开关、129 人工标记发布的空间可配置、130 已有列偏好补入发布态列、131 文档收藏、132 用例执行逐步结果、133 AI 用量日聚合、134 交付说明按发布计划生成、135 文档引用与反链、136 发布计划只读分享、137 本轮提测时间）；不包含历史业务数据回填。
 -- 全新部署执行本文件即可，无需再跑 sql/ 目录；已有库的日常升级仍使用 sql/ 增量脚本。
 -- 可重复执行（DROP TABLE IF EXISTS + CREATE TABLE）。
 -- ⚠ 本文件含 USE hourglass 与 DROP TABLE，只适用于目标库就是 hourglass 的全新部署。
@@ -828,6 +828,19 @@ CREATE TABLE `doc_favorite` (
   KEY `idx_ws_user` (`workspace_id`,`user_id`,`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文档收藏（每人每篇一条）';
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `doc_link`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `doc_link` (
+  `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
+  `from_doc_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '引用方文档ID（requirement_doc.id）',
+  `to_doc_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '被引用文档ID',
+  `created_by` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '建立引用的账号',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '建立时间',
+  PRIMARY KEY (`workspace_id`,`from_doc_id`,`to_doc_id`),
+  KEY `idx_backlinks` (`workspace_id`,`to_doc_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文档间引用关系（保存正文时按 hgdoc:// 解析重建）';
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `doc_category`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -905,7 +918,8 @@ CREATE TABLE `requirement_doc` (
   `title` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '需求标题',
   `doc_type` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'other' COMMENT '文档分类：requirement 需求文档 / technical 技术方案 / acceptance 测试验收 / other 其他',
   `content` mediumtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '需求正文（清洗后的 HTML）',
-  `format` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'html' COMMENT '正文格式：html 富文本 / markdown',
+  `sheet_content` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '表格正文（Univer 工作簿快照 JSON；format=sheet 时使用）',
+  `format` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'html' COMMENT '正文格式：html 富文本 / markdown / univer / sheet',
   `content_brief` varchar(400) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '纯文本摘要（列表用）',
   `status` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'draft' COMMENT '状态：draft/active/done',
   `published_at` datetime DEFAULT NULL COMMENT '发布时间（空=草稿，仅作者与空间管理员可见）',
@@ -937,7 +951,8 @@ CREATE TABLE `requirement_doc_history` (
   `version_no` int NOT NULL COMMENT '同一文档内从 1 递增的版本号',
   `title` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '快照时的文档标题',
   `content` mediumtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '快照时的正文（与 requirement_doc.content 同口径）',
-  `format` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'markdown' COMMENT '正文格式：html / markdown',
+  `sheet_content` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '快照时的表格正文（与 requirement_doc.sheet_content 同口径）',
+  `format` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'markdown' COMMENT '正文格式：html / markdown / univer / sheet',
   `saved_by` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '保存人显示名',
   `saved_by_user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '保存人账号ID',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '快照时间',
@@ -1030,6 +1045,7 @@ CREATE TABLE `task` (
   `test_owner_user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '测试负责人账号ID；空=待领取',
   `test_owner` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '测试负责人显示名快照',
   `test_requested_at` datetime DEFAULT NULL COMMENT '进入待测试 / 新一轮直接开始测试的提测时间',
+  `test_round_requested_at` datetime DEFAULT NULL COMMENT '本轮提测时间：进入待测试（退回队列除外）或直接进测试中时写入；空回退 test_requested_at',
   `test_started_at` datetime DEFAULT NULL COMMENT '进入测试中的时间（新一轮测试重新记录）',
   `test_finished_at` datetime DEFAULT NULL COMMENT '离开测试中的时间：测试通过或退回',
   `test_estimate_minutes` int DEFAULT NULL COMMENT '测试预估（分钟，空=没估过）',
@@ -1284,6 +1300,7 @@ CREATE TABLE `test_case_run` (
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
   `status` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '执行结果：passed/failed/blocked/skipped',
   `note` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '执行备注（失败原因等）',
+  `step_results` mediumtext COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '逐步执行结果 JSON：[{"idx":1,"status":"passed|failed|blocked","note":""}]，空=未逐步勾选',
   `environment` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '执行环境（浏览器/版本/设备，转缺陷时预填）',
   `bug_task_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '由本次失败转出的缺陷任务ID',
   `plan_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '所属测试计划ID（计划批量执行时写入；空=单用例执行）',
@@ -1513,6 +1530,7 @@ CREATE TABLE `workspace_priority` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='优先级显示配置（按空间，未配置档位用内置默认）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `version_release_plan_version`;
+DROP TABLE IF EXISTS `release_plan_share`;
 DROP TABLE IF EXISTS `version_release_plan`;
 CREATE TABLE `version_release_plan` (
   `id` varchar(32) NOT NULL,
@@ -1538,6 +1556,18 @@ CREATE TABLE `version_release_plan` (
   KEY `idx_plan_workspace` (`workspace_id`,`status`),
   CONSTRAINT `fk_plan_version` FOREIGN KEY (`version_id`) REFERENCES `project_version` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE `release_plan_share` (
+  `workspace_id` varchar(32) NOT NULL,
+  `plan_id` varchar(32) NOT NULL,
+  `token` varchar(64) NOT NULL,
+  `created_by` varchar(32) DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `revoked_at` datetime DEFAULT NULL COMMENT '非空=已停止分享，旧链接立即失效',
+  PRIMARY KEY (`workspace_id`, `plan_id`),
+  UNIQUE KEY `uk_rps_token` (`token`),
+  CONSTRAINT `fk_rps_plan` FOREIGN KEY (`plan_id`, `workspace_id`)
+    REFERENCES `version_release_plan` (`id`, `workspace_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='发布计划只读分享链接（一计划一条，撤销即失效）';
 DROP TABLE IF EXISTS `version_release_plan_watch`;
 CREATE TABLE `version_release_plan_watch` (
   `workspace_id` varchar(32) NOT NULL COMMENT '归属空间ID',
@@ -1736,12 +1766,32 @@ CREATE TABLE `delivery_note` (
   PRIMARY KEY (`workspace_id`,`version_id`),
   KEY `idx_ws_req` (`workspace_id`,`req_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='交付说明草稿与生成控制（按版本记忆）';
+DROP TABLE IF EXISTS `delivery_note_plan`;
+CREATE TABLE `delivery_note_plan` (
+  `workspace_id` varchar(32) NOT NULL,
+  `plan_id` varchar(32) NOT NULL,
+  `audience` varchar(120) DEFAULT NULL COMMENT '交付对象（客户/验收方）',
+  `support_contact` varchar(200) DEFAULT NULL COMMENT '对外支持联系方式',
+  `options` json DEFAULT NULL COMMENT '生成控制：语气/范围/证据密度/排版',
+  `narratives` json DEFAULT NULL COMMENT '人工改写的叙述文字，key=区块字段',
+  `confirmed` json DEFAULT NULL COMMENT '已确认的待确认项 key 列表',
+  `acceptance` varchar(1000) DEFAULT NULL COMMENT '验收结论补充说明（人工填写，选填）',
+  `updated_by` varchar(32) DEFAULT NULL,
+  `revision` bigint NOT NULL DEFAULT '0',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`workspace_id`, `plan_id`),
+  KEY `idx_dnp_plan` (`workspace_id`, `plan_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='交付说明草稿与生成控制（按发布计划记忆）';
 DROP TABLE IF EXISTS `delivery_note_snapshot`;
 CREATE TABLE `delivery_note_snapshot` (
   `id` varchar(32) NOT NULL,
   `workspace_id` varchar(32) NOT NULL,
-  `version_id` varchar(32) NOT NULL,
-  `req_id` varchar(32) NOT NULL,
+  `scope_type` varchar(16) NOT NULL DEFAULT 'version' COMMENT 'version / plan',
+  `scope_id` varchar(32) NOT NULL COMMENT '版本ID或计划ID，与 scope_type 成对',
+  `scope_name` varchar(200) DEFAULT NULL COMMENT '冻结时的范围名称，便于列表与审计',
+  `version_id` varchar(32) DEFAULT NULL,
+  `req_id` varchar(32) DEFAULT NULL,
   `release_id` varchar(32) DEFAULT NULL COMMENT '取哪条发布记录；空=未确认发布的内部草稿',
   `seq` int NOT NULL COMMENT '同一版本内第几次导出，从 1 起',
   `doc_no` varchar(40) NOT NULL COMMENT '对外编号 DS-YYYYMMDD-NN',
@@ -1753,7 +1803,8 @@ CREATE TABLE `delivery_note_snapshot` (
   `created_by_name` varchar(80) DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_ws_version_seq` (`workspace_id`,`version_id`,`seq`),
+  UNIQUE KEY `uk_ws_scope_seq` (`workspace_id`,`scope_type`,`scope_id`,`seq`),
+  KEY `idx_ws_scope` (`workspace_id`,`scope_type`,`scope_id`,`created_at`),
   KEY `idx_ws_req` (`workspace_id`,`req_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='交付说明不可变快照';
 DROP TABLE IF EXISTS `delivery_note_share`;
