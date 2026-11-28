@@ -14,7 +14,7 @@ public class ReleasePlanPush {
     private String senderId;
     private String senderName;
     private Boolean onlyUnconfirmed;
-    /** 逗号分隔：in_app,email,group */
+    /** JSON 数组：in_app / email / wecom / group */
     private String channels;
     /** 发送时的补充说明（选填，最多 200 字） */
     private String note;
@@ -25,6 +25,7 @@ public class ReleasePlanPush {
     private String groupError;
     private Integer inAppCount;
     private Integer emailCount;
+    private Integer wecomCount;
     private Integer ackedCount;
     private LocalDateTime createdAt;
 }

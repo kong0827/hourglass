@@ -15,6 +15,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -27,7 +28,7 @@ class OpenApiConfigTest {
     }
 
     private OpenAPI customise() {
-        new OpenApiConfig().readOnlyCustomiser().customise(openApi);
+        new OpenApiConfig().apiCustomiser().customise(openApi);
         return openApi;
     }
 
@@ -75,16 +76,44 @@ class OpenApiConfigTest {
     }
 
     @Test
-    void removesNonGetOperationsAndEmptyPaths() {
+    void keepsWhitelistedWritesAndDropsTheRest() {
         openApi.getPaths().addPathItem("/api/demands", new PathItem()
                 .get(new Operation().parameters(new ArrayList<Parameter>(Arrays.asList(query("q")))))
                 .post(new Operation()));
+        openApi.getPaths().addPathItem("/api/demands/{id}/pass", new PathItem().post(new Operation()));
+        openApi.getPaths().addPathItem("/api/demands/{id}/version", new PathItem().post(new Operation()));
+        openApi.getPaths().addPathItem("/api/tasks", new PathItem().post(new Operation()));
+        openApi.getPaths().addPathItem("/api/tasks/{id}/purge", new PathItem().delete(new Operation()));
         openApi.getPaths().addPathItem("/api/auth/tokens", new PathItem().post(new Operation()));
 
         OpenAPI result = customise();
 
-        assertTrue(result.getPaths().containsKey("/api/demands"));
-        assertNull(result.getPaths().get("/api/demands").getPost());
+        assertNotNull(result.getPaths().get("/api/demands").getPost());
+        assertNotNull(result.getPaths().get("/api/demands/{id}/pass").getPost());
+        assertNotNull(result.getPaths().get("/api/tasks").getPost());
+        assertNull(result.getPaths().get("/api/demands/{id}/version"));
+        assertNull(result.getPaths().get("/api/tasks/{id}/purge"));
         assertFalse(result.getPaths().containsKey("/api/auth/tokens"));
+    }
+
+    @Test
+    void fixesParametersOnWhitelistedWrites() {
+        Operation operation = new Operation().parameters(new ArrayList<Parameter>(Arrays.asList(query("ctx"))));
+        openApi.getPaths().addPathItem("/api/tasks", new PathItem().post(operation));
+
+        Operation fixed = customise().getPaths().get("/api/tasks").getPost();
+
+        assertEquals(Arrays.asList("workspace"), names(fixed));
+    }
+
+    @Test
+    void alwaysDocumentsWorkspaceOnWhitelistedWrites() {
+        openApi.getPaths().addPathItem("/api/tasks", new PathItem().post(new Operation()));
+        openApi.getPaths().addPathItem("/api/tasks/{id}/move", new PathItem().post(new Operation()));
+
+        OpenAPI result = customise();
+
+        assertEquals(Arrays.asList("workspace"), names(result.getPaths().get("/api/tasks").getPost()));
+        assertEquals(Arrays.asList("workspace"), names(result.getPaths().get("/api/tasks/{id}/move").getPost()));
     }
 }

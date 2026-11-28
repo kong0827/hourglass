@@ -6,6 +6,7 @@ import com.hourglass.service.ApiTokenService;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.slf4j.Logger;
@@ -64,10 +65,15 @@ public class ApiTokenAuthFilter extends OncePerRequestFilter {
             writeJson(response, 403, "访问令牌无权调用该接口");
             return;
         }
-        if (!ApiTokenService.SCOPE_WRITE.equals(auth.getToken().getScope())
-                && !isSafeMethod(request.getMethod())) {
-            writeJson(response, 403, "只读令牌不能执行写操作");
-            return;
+        if (!isSafeMethod(request.getMethod())) {
+            if (!ApiTokenService.SCOPE_WRITE.equals(auth.getToken().getScope())) {
+                writeJson(response, 403, "只读令牌不能执行写操作");
+                return;
+            }
+            if (!ApiTokenWritePolicy.allows(request.getMethod(), path)) {
+                writeJson(response, 403, "令牌无权执行该写操作（只开放" + ApiTokenWritePolicy.summary() + "）");
+                return;
+            }
         }
 
         LoginUser principal = new LoginUser(auth.getUser().getId(), auth.getUser().getUsername(), "",
@@ -76,7 +82,12 @@ public class ApiTokenAuthFilter extends OncePerRequestFilter {
         authorities.add(new SimpleGrantedAuthority(AUTHORITY));
         UsernamePasswordAuthenticationToken authentication =
                 new UsernamePasswordAuthenticationToken(principal, null, authorities);
-        SecurityContextHolder.getContext().setAuthentication(authentication);
+        /* 必须换一个新的 SecurityContext：带 Bearer 的同源请求可能同时有登录会话，
+           直接改当前上下文会连会话里存的那份一起改成令牌身份（API_TOKEN），
+           之后普通页面请求就会被令牌管理/管理员接口按令牌拒绝。 */
+        SecurityContext context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(authentication);
+        SecurityContextHolder.setContext(context);
         request.setAttribute(ATTR_AUTH, auth);
         chain.doFilter(request, response);
     }

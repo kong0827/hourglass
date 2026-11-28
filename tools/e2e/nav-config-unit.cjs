@@ -1,5 +1,6 @@
 /* 菜单配置一致性：侧栏结构（index.html）与移动端「更多视图」分组（router.js 的 NAV_GROUPS）必须同源，
- * 防止再出现「交付说明挂在规划下、组头洞察与入口洞察重名、手机菜单标签过期」这类漂移。 */
+ * 侧栏展开的子菜单还必须与页内二级导航（router.js 的 SUBNAV）同项同序，
+ * 防止再出现「交付说明挂在规划下、组头洞察与入口洞察重名、手机菜单标签过期、测试菜单漏工作台/报告」这类漂移。 */
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -105,4 +106,33 @@ assert.ok(workitemsIdx > deliveryIdx, "交付说明应排在「工作项」分�
 /* 4) 组头与入口不重名 */
 assert.ok(groupTitles.indexOf("洞察") < 0, "组头不应再叫「洞察」，避免与入口「洞察」重复");
 
-console.log("nav-config: 分组/入口/标签/归位/命名 5 项断言通过");
+/* 5) 侧栏展开的子菜单必须与页内二级导航（router.js 的 SUBNAV）同项同序：
+ *    测试曾漏掉「工作台 / 报告」，只剩三项，侧栏与页头不一致。 */
+const snStart = router.indexOf("var SUBNAV = {");
+const snEnd = router.indexOf("\n};", snStart);
+assert.ok(snStart >= 0 && snEnd > snStart, "SUBNAV 源码缺失");
+const SUBNAV = vm.runInNewContext("(" + router.slice(snStart + "var SUBNAV = ".length, snEnd) + "})");
+
+function sidebarSubEntries(groupKey){
+  const start = navHtml.indexOf('data-nav-group="' + groupKey + '"');
+  assert.ok(start >= 0, "侧栏缺少分组 " + groupKey);
+  const subStart = navHtml.indexOf('<div class="nav-sub">', start);
+  assert.ok(subStart > start, "分组 " + groupKey + " 缺少 nav-sub");
+  const subEnd = navHtml.indexOf("</div>", subStart);
+  const block = navHtml.slice(subStart, subEnd);
+  const out = [];
+  const re = /<button class="nav-sub-item"[^>]*data-view="([^"]+)"([^>]*)>([^<]+)<\/button>/g;
+  let m;
+  while ((m = re.exec(block))) {
+    const tab = /data-sub-tab="([^"]+)"/.exec(m[2]);
+    out.push({ view: m[1], tab: tab ? tab[1] : "", label: m[3].trim() });
+  }
+  return out;
+}
+const flat = list => list.map(it => it.view + "|" + (it.tab || "") + "|" + it.label);
+["workitems", "testcases"].forEach(function(key){
+  assert.equal(JSON.stringify(flat(sidebarSubEntries(key))), JSON.stringify(flat(SUBNAV[key])),
+    "侧栏「" + key + "」子菜单须与页内二级导航同项同序");
+});
+
+console.log("nav-config: 分组/入口/标签/归位/命名/子菜单 6 项断言通过");

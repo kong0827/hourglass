@@ -43,6 +43,18 @@ function pick(args, mapping) {
   return query;
 }
 
+/** 写请求体只带明确给出的字段，避免把 undefined 变成 "undefined" 或覆盖默认值 */
+function compact(source) {
+  const body = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (value === undefined || value === null || value === "") {
+      continue;
+    }
+    body[key] = value;
+  }
+  return body;
+}
+
 const BOARD_FILTERS = {
   q: "q",
   owners: "owners",
@@ -382,6 +394,158 @@ export const TOOL_SPECS = [
       path: "/api/search",
       query: { workspace: need(args, "workspaceId"), ...pick(args, { q: "q", type: "type" }), limit: page(args).limit }
     })
+  },
+  {
+    name: "create_task",
+    method: "POST",
+    description:
+      "新建工作项（story / task / bug / epic），固定落在「待处理」列，之后用 move_task 流转。需要读写令牌；只读令牌会 403。itemType=bug 时必须给 severity。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workspaceId: workspace,
+        title: { type: "string", description: "标题，60 字以内" },
+        description: { type: "string", description: "描述正文" },
+        projectId: { type: "string", description: "所属项目 ID（后端参数 reqId）" },
+        itemType: { type: "string", enum: ["story", "task", "bug", "epic"], description: "默认 task" },
+        priority: { type: "string", enum: ["P0", "P1", "P2", "P3"], description: "默认 P2" },
+        severity: {
+          type: "string",
+          enum: ["blocker", "critical", "major", "minor"],
+          description: "缺陷严重度；itemType=bug 时必填"
+        },
+        owner: { type: "string", description: "负责人显示名（须是空间成员）" },
+        categoryId: { type: "string", description: "分类 / 模块 ID" },
+        startDate: { type: "string", description: "开始日期 yyyy-MM-dd" },
+        dueDate: { type: "string", description: "截止日期 yyyy-MM-dd" },
+        estimateMinutes: { type: "integer", minimum: 0, maximum: 10080, description: "预估分钟数" },
+        tags: { type: "array", items: { type: "string" }, maxItems: 8, description: "标签，最多 8 个" }
+      },
+      required: ["workspaceId", "title"],
+      additionalProperties: false
+    },
+    build: (args) => ({
+      path: "/api/tasks",
+      query: { workspace: need(args, "workspaceId") },
+      body: compact({
+        title: need(args, "title", "标题"),
+        description: args.description,
+        reqId: args.projectId,
+        itemType: args.itemType,
+        priority: args.priority,
+        severity: args.severity,
+        owner: args.owner,
+        categoryId: args.categoryId,
+        startDate: args.startDate,
+        dueDate: args.dueDate,
+        estimateMinutes: args.estimateMinutes,
+        tags: args.tags,
+        boardColumn: "backlog",
+        progress: 0
+      })
+    })
+  },
+  {
+    name: "move_task",
+    method: "POST",
+    description:
+      "把工作项移动到目标列（看板列 ID）。流转矩阵与权限由后端校验，禁止的流转会被拒绝；不强制、不越权。需要读写令牌。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workspaceId: workspace,
+        taskId: { type: "string", description: "工作项 ID" },
+        column: { type: "string", description: "目标列 ID（内置 backlog/doing/test/testing/done 或自定义列）" },
+        reason: { type: "string", description: "移动说明，部分流转必填" }
+      },
+      required: ["workspaceId", "taskId", "column"],
+      additionalProperties: false
+    },
+    build: (args) => ({
+      path: `/api/tasks/${encodeURIComponent(need(args, "taskId", "工作项 ID"))}/move`,
+      query: { workspace: need(args, "workspaceId") },
+      body: compact({
+        column: need(args, "column", "目标列"),
+        reason: args.reason,
+        force: false,
+        autoTimer: true,
+        autoResume: true
+      })
+    })
+  },
+  {
+    name: "create_demand",
+    method: "POST",
+    description:
+      "提交需求到需求池（状态从「待评审」开始）。需要读写令牌；项目必须可见且可写。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workspaceId: workspace,
+        title: { type: "string", description: "需求标题，80 字以内" },
+        projectId: { type: "string", description: "所属项目 ID（后端参数 reqId），必填" },
+        description: { type: "string", description: "需求描述" },
+        itemKind: { type: "string", enum: ["新功能", "体验优化", "缺陷", "其他"], description: "需求类型" },
+        priority: { type: "string", enum: ["P0", "P1", "P2", "P3"], description: "优先级" },
+        source: { type: "string", description: "来源，如「财务 · 刘」" },
+        expectDate: { type: "string", description: "期望交付日期 yyyy-MM-dd" },
+        acceptText: { type: "string", description: "验收标准" }
+      },
+      required: ["workspaceId", "title", "projectId"],
+      additionalProperties: false
+    },
+    build: (args) => ({
+      path: "/api/demands",
+      query: { workspace: need(args, "workspaceId") },
+      body: compact({
+        reqId: need(args, "projectId", "项目 ID"),
+        title: need(args, "title", "需求标题"),
+        description: args.description,
+        itemKind: args.itemKind,
+        priority: args.priority,
+        source: args.source,
+        expectDate: args.expectDate,
+        acceptText: args.acceptText
+      })
+    })
+  },
+  {
+    name: "update_demand",
+    method: "POST",
+    description:
+      "需求流转：pass 评审通过 / rej 驳回 / plan 排期 / replan 调整排期 / unpass 撤销通过 / unplan 撤销排期 / cancel 取消 / restore 恢复 / reopen 重新打开。需要读写令牌；rej / replan / unplan / cancel / restore 必须给 note。排期类动作会自动读取最新 revision 再做 CAS。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workspaceId: workspace,
+        demandId: { type: "string", description: "需求 ID" },
+        action: {
+          type: "string",
+          enum: ["pass", "rej", "plan", "replan", "unpass", "unplan", "cancel", "restore", "reopen"],
+          description: "流转动作"
+        },
+        note: { type: "string", description: "原因 / 说明；rej、replan、unplan、cancel、restore 必填" }
+      },
+      required: ["workspaceId", "demandId", "action"],
+      additionalProperties: false
+    },
+    build: (args) => ({
+      path: `/api/demands/${encodeURIComponent(need(args, "demandId", "需求 ID"))}/${encodeURIComponent(need(args, "action", "流转动作"))}`,
+      query: { workspace: need(args, "workspaceId") },
+      body: compact({ note: args.note })
+    }),
+    /* 排期类动作要求 revision；先读一次详情，避免调用方必须先 get_demand */
+    prepare: async (args, client, request) => {
+      if (["plan", "replan", "unplan", "cancel", "restore"].indexOf(args.action) >= 0) {
+        const demand = await client.get(`/api/demands/${encodeURIComponent(args.demandId)}`, {
+          workspace: args.workspaceId
+        });
+        if (demand && demand.revision !== undefined && demand.revision !== null) {
+          request.body.revision = demand.revision;
+        }
+      }
+      return request;
+    }
   }
 ];
 
@@ -393,7 +557,12 @@ export function findTool(name) {
 
 /** 执行一个工具，返回给 MCP 客户端的文本（后端 data 字段的 JSON） */
 export async function runTool(spec, args, client) {
-  const { path, query } = spec.build(args || {});
-  const data = await client.get(path, query);
+  let request = spec.build(args || {});
+  if (spec.prepare) {
+    request = await spec.prepare(args || {}, client, request);
+  }
+  const data = spec.method === "POST"
+    ? await client.post(request.path, request.query, request.body || {})
+    : await client.get(request.path, request.query);
   return JSON.stringify(data, null, 2);
 }

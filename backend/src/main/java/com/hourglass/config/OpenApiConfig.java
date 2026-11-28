@@ -19,7 +19,8 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * 对外只读 OpenAPI：路径白名单在 application.yml，这里补 Bearer 方案并裁掉非 GET 操作。
+ * 对外 OpenAPI：路径白名单在 application.yml，这里补 Bearer 方案并裁掉非白名单操作。
+ * GET 全部保留；写操作只保留 {@link ApiTokenWritePolicy} 允许的 POST。
  */
 @Configuration
 public class OpenApiConfig {
@@ -57,39 +58,54 @@ public class OpenApiConfig {
     public OpenAPI hourglassOpenApi() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("沙漏只读 API（P0）")
+                        .title("沙漏 API（P0）")
                         .version("0.1")
-                        .description("以个人访问令牌（Authorization: Bearer hg_...）只读访问空间、项目、"
-                                + "工作项、需求、文档与用例数据。P0 不开放写操作，也不是稳定契约；"
+                        .description("以个人访问令牌（Authorization: Bearer hg_...）访问空间、项目、"
+                                + "工作项、需求、文档与用例数据。只读令牌只能查询；读写令牌额外开放建工作项、"
+                                + "工作项列流转、提需求与需求流转四类写操作。P0 不是稳定契约；"
                                 + "字段口径见项目内《接口契约》。"))
                 .components(new Components().addSecuritySchemes("bearerAuth",
                         new SecurityScheme()
                                 .type(SecurityScheme.Type.HTTP)
                                 .scheme("bearer")
                                 .bearerFormat("hg_...")
-                                .description("个人访问令牌，通过 POST /api/auth/tokens 创建（P0 暂无前端入口）")))
+                                .description("个人访问令牌，在个人设置 → 访问令牌创建（只读 / 读写）")))
                 .addSecurityItem(new SecurityRequirement().addList("bearerAuth"));
     }
 
     @Bean
-    public OpenApiCustomiser readOnlyCustomiser() {
+    public OpenApiCustomiser apiCustomiser() {
         return openApi -> {
             if (openApi.getPaths() == null) {
                 return;
             }
             openApi.getPaths().entrySet().removeIf(entry -> {
+                String path = entry.getKey();
                 PathItem item = entry.getValue();
-                item.setPut(null);
-                item.setPost(null);
-                item.setDelete(null);
-                item.setPatch(null);
+                item.setPut(writeOrNull(path, "PUT", item.getPut()));
+                item.setPost(writeOrNull(path, "POST", item.getPost()));
+                item.setDelete(writeOrNull(path, "DELETE", item.getDelete()));
+                item.setPatch(writeOrNull(path, "PATCH", item.getPatch()));
                 item.setHead(null);
                 item.setOptions(null);
                 item.setTrace(null);
                 item.readOperations().forEach(OpenApiConfig::fixResolvedParameters);
+                /* POST 的 @CurrentWorkspace 不会被 springdoc 摊成参数，单独补 workspace */
+                ensureWorkspace(item.getPost());
+                ensureWorkspace(item.getPut());
+                ensureWorkspace(item.getPatch());
+                ensureWorkspace(item.getDelete());
                 return item.readOperations().isEmpty();
             });
         };
+    }
+
+    /** GET 由 paths-to-match 决定；非安全方法只留写白名单内的操作 */
+    private static Operation writeOrNull(String path, String method, Operation operation) {
+        if (operation == null) {
+            return null;
+        }
+        return ApiTokenWritePolicy.allows(method, path) ? operation : null;
     }
 
     /**
@@ -137,5 +153,22 @@ public class OpenApiConfig {
             }
         }
         return false;
+    }
+
+    /** 写接口必须能显式带 workspace，否则文档上只能落到「上次使用的空间」 */
+    private static void ensureWorkspace(Operation operation) {
+        if (operation == null) {
+            return;
+        }
+        List<Parameter> params = operation.getParameters();
+        if (params == null) {
+            params = new ArrayList<Parameter>();
+            operation.setParameters(params);
+        }
+        if (!containsName(params, "workspace")) {
+            params.add(new QueryParameter().name("workspace").required(false)
+                    .description("空间 ID；不传沿用上次使用的空间，再退回个人空间")
+                    .schema(new StringSchema()));
+        }
     }
 }

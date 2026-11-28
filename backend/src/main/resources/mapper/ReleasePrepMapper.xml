@@ -87,6 +87,11 @@
     WHERE push_id = #{pushId} AND user_id = #{userId}
   </update>
 
+  <update id="markRecipientWecom">
+    UPDATE version_release_plan_push_recipient SET wecom_at = CURRENT_TIMESTAMP
+    WHERE push_id = #{pushId} AND user_id = #{userId}
+  </update>
+
   <!-- 回执只认最近一次推送：同一计划历史上多次提醒，不把旧批次当成已回执 -->
   <update id="ackPushRecipient">
     UPDATE version_release_plan_push_recipient r
@@ -102,8 +107,8 @@
   </update>
 
   <select id="selectMyReceipt" resultType="map">
-    SELECT r.push_id AS pushId, r.in_app_at AS inAppAt, r.email_at AS emailAt, r.acked_at AS ackedAt,
-           p.created_at AS pushAt, p.scope AS scope, p.note AS note
+    SELECT r.push_id AS pushId, r.in_app_at AS inAppAt, r.email_at AS emailAt, r.wecom_at AS wecomAt,
+           r.acked_at AS ackedAt, p.created_at AS pushAt, p.scope AS scope, p.note AS note
     FROM version_release_plan_push_recipient r
     INNER JOIN version_release_plan_push p ON p.id = r.push_id
     WHERE p.workspace_id = #{workspaceId} AND p.plan_id = #{planId} AND r.user_id = #{userId}
@@ -120,6 +125,8 @@
              WHERE r.push_id = p.id AND r.in_app_at IS NOT NULL) AS inAppCount,
            (SELECT COUNT(*) FROM version_release_plan_push_recipient r
              WHERE r.push_id = p.id AND r.email_at IS NOT NULL) AS emailCount,
+           (SELECT COUNT(*) FROM version_release_plan_push_recipient r
+             WHERE r.push_id = p.id AND r.wecom_at IS NOT NULL) AS wecomCount,
            (SELECT COUNT(*) FROM version_release_plan_push_recipient r
              WHERE r.push_id = p.id AND r.acked_at IS NOT NULL) AS ackedCount
     FROM version_release_plan_push p
@@ -147,7 +154,7 @@
 
   <select id="selectPushRecipientRows" resultType="map">
     SELECT r.user_id AS userId, COALESCE(u.display_name, r.user_id) AS name,
-           r.in_app_at AS inAppAt, r.email_at AS emailAt, r.acked_at AS ackedAt
+           r.in_app_at AS inAppAt, r.email_at AS emailAt, r.wecom_at AS wecomAt, r.acked_at AS ackedAt
     FROM version_release_plan_push_recipient r
     LEFT JOIN app_user u ON u.id = r.user_id
     WHERE r.push_id = #{pushId}

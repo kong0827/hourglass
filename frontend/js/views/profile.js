@@ -14,7 +14,7 @@ import { loadRunningTimer } from "../core/task-actions.js";
 import { loadView } from "../core/view-loader.js";
 import { refreshOwnerSelect } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
-import { avatarColor, avatarColorIndex, initial, pad2 } from "../lib/format.js";
+import { avatarColor, avatarColorIndex, fmtTs, initial, pad2 } from "../lib/format.js";
 import { loadMemberLabelOptions } from "../lib/member-labels.js";
 import { renderProfile as renderWeComProfile } from "../lib/wecom.js";
 import { loadBoard } from "./board.js";
@@ -61,6 +61,8 @@ function enterProfileView(){
   /* AI 配置每次进页面都重新拉：可能在别的设备上改过 */
   loadAiConfig();
   loadNotificationPreferences();
+  hideMeTokenReveal();
+  loadMeTokens();
   renderWeComProfile();
   syncAssistantPref();
 }
@@ -273,6 +275,115 @@ if($("meNotificationSave")) $("meNotificationSave").addEventListener("click", fu
     btn.disabled = false;
     toast(ex.message || "保存失败", "bad");
   });
+});
+/* ==================== 访问令牌 ==================== */
+var meTokens = [];
+function tokenDay(s){ return s ? String(s).substring(0, 10) : "—"; }
+function tokenState(t){
+  if(t.revokedAt) return ["已撤销", true];
+  if(t.expiresAt && new Date(t.expiresAt).getTime() < Date.now()) return ["已过期", true];
+  return ["有效", false];
+}
+function tokenScope(t){ return t.scope === "write" ? "读写" : "只读"; }
+function loadMeTokens(){
+  var box = $("meTokenList");
+  if(!box) return;
+  box.innerHTML = '<div class="token-empty">加载中…</div>';
+  API.get("/api/auth/tokens").then(function(d){
+    renderMeTokens((d && d.tokens) || []);
+  }).catch(function(ex){
+    box.innerHTML = '<div class="token-empty">令牌列表加载失败：' + esc(ex.message || "未知错误") + '</div>';
+  });
+}
+function renderMeTokens(list){
+  meTokens = list || [];
+  var box = $("meTokenList");
+  if(!box) return;
+  if(!meTokens.length){
+    box.innerHTML = '<div class="token-empty">还没有访问令牌。创建后可用于 Qoder 或脚本接入。</div>';
+    return;
+  }
+  var html = '<div class="token-head"><span>名称 / 前缀</span><span>权限</span><span>状态</span><span>到期</span><span>最近使用</span><span></span></div>';
+  html += meTokens.map(function(t){
+    var st = tokenState(t), muted = st[1] ? " is-muted" : "";
+    return '<div class="token-row">' +
+      '<div class="t-name"><b>' + esc(t.name) + '</b><small>' + esc(t.prefix || "") + '…</small></div>' +
+      '<span class="t-scope">' + tokenScope(t) + '</span>' +
+      '<span class="t-state' + (st[1] ? " is-off" : "") + '">' + st[0] + '</span>' +
+      '<span class="t-time t-exp' + muted + '">' + esc(tokenDay(t.expiresAt)) + '</span>' +
+      '<span class="t-time t-last' + muted + '">' + (t.lastUsedAt ? esc(fmtTs(t.lastUsedAt)) : "未使用") + '</span>' +
+      '<div class="t-act">' + (t.revokedAt ? "" :
+        '<button class="btn ghost" type="button" data-token-revoke="' + esc(t.id) + '" aria-label="撤销令牌 ' + esc(t.name) + '">撤销</button>') +
+      '</div></div>';
+  }).join("");
+  box.innerHTML = html;
+}
+function hideMeTokenReveal(){
+  var box = $("meTokenReveal"), val = $("meTokenValue");
+  if(val) val.textContent = "";
+  if(box) box.hidden = true;
+}
+function showMeTokenReveal(token){
+  var box = $("meTokenReveal"), val = $("meTokenValue");
+  if(!box || !val) return;
+  val.textContent = token || "";
+  box.hidden = false;
+  if(box.scrollIntoView) box.scrollIntoView({ block: "nearest" });
+}
+function createMeToken(){
+  var nameEl = $("meTokenName"), daysEl = $("meTokenDays"), pwdEl = $("meTokenPwd");
+  var scopeEl = $("meTokenScope");
+  var btn = $("meTokenCreate");
+  if(!nameEl || !daysEl || !pwdEl || !btn) return;
+  var name = nameEl.value.trim(), pwd = pwdEl.value || "";
+  var scope = scopeEl && scopeEl.value === "write" ? "write" : "read";
+  $("fMeTokenName").classList.toggle("invalid", !name);
+  $("fMeTokenPwd").classList.toggle("invalid", !pwd);
+  if(!name || !pwd) return;
+  btn.disabled = true;
+  API.post("/api/auth/tokens", { name: name, scope: scope, expiresInDays: Number(daysEl.value), password: pwd })
+    .then(function(created){
+      btn.disabled = false;
+      nameEl.value = "";
+      pwdEl.value = "";
+      if(scopeEl) scopeEl.value = "read";
+      showMeTokenReveal(created && created.token);
+      loadMeTokens();
+      toast("令牌已创建，请立即保存", "fs");
+    }, function(ex){
+      btn.disabled = false;
+      toast(ex.message || "创建令牌失败", "bad");
+    });
+}
+function revokeMeToken(id){
+  var target = null;
+  meTokens.forEach(function(t){ if(t.id === id) target = t; });
+  UI.showConfirm({
+    title: "撤销访问令牌",
+    msg: "撤销后使用「" + esc(target ? target.name : id) + "」的 Qoder / 脚本会立即失效，且不能恢复。",
+    okText: "撤销令牌"
+  }).then(function(ok){
+    if(!ok) return;
+    API.del("/api/auth/tokens/" + encodeURIComponent(id)).then(function(){
+      toast("令牌已撤销", "fs");
+      loadMeTokens();
+    }).catch(function(ex){
+      toast(ex.message || "撤销失败", "bad");
+    });
+  });
+}
+if($("meTokenCreate")) $("meTokenCreate").addEventListener("click", createMeToken);
+["meTokenName", "meTokenPwd"].forEach(function(id){
+  var el = $(id);
+  if(el) el.addEventListener("keydown", function(e){ if(e.key === "Enter") createMeToken(); });
+});
+if($("meTokenCopy")) $("meTokenCopy").addEventListener("click", function(){
+  var val = $("meTokenValue");
+  UI.copyText(val ? val.textContent : "", "令牌已复制", "复制失败，请手动选择");
+});
+if($("meTokenList")) $("meTokenList").addEventListener("click", function(e){
+  var btn = e.target.closest("[data-token-revoke]");
+  if(btn) revokeMeToken(btn.dataset.tokenRevoke);
 });
 function fillMeSelects(){
   var s = $("meStart"), e = $("meEnd"), m = $("meMax");

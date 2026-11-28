@@ -8,6 +8,7 @@ import com.hourglass.entity.WeComCorpSpace;
 import com.hourglass.entity.Workspace;
 import com.hourglass.mapper.WeComCorpMapper;
 import com.hourglass.mapper.WeComCorpSpaceMapper;
+import com.hourglass.mapper.WeComGroupRobotMapper;
 import com.hourglass.mapper.WeComUserBindMapper;
 import com.hourglass.mapper.WorkspaceMapper;
 import org.springframework.stereotype.Service;
@@ -36,16 +37,19 @@ public class WeComCorpService {
     private final WeComCorpMapper corpMapper;
     private final WeComCorpSpaceMapper corpSpaceMapper;
     private final WeComUserBindMapper bindMapper;
+    private final WeComGroupRobotMapper groupRobotMapper;
     private final WorkspaceMapper workspaceMapper;
     private final AiCrypto crypto;
     private final WeComProperties props;
 
     public WeComCorpService(WeComCorpMapper corpMapper, WeComCorpSpaceMapper corpSpaceMapper,
-                            WeComUserBindMapper bindMapper, WorkspaceMapper workspaceMapper,
+                            WeComUserBindMapper bindMapper, WeComGroupRobotMapper groupRobotMapper,
+                            WorkspaceMapper workspaceMapper,
                             AiCrypto crypto, WeComProperties props) {
         this.corpMapper = corpMapper;
         this.corpSpaceMapper = corpSpaceMapper;
         this.bindMapper = bindMapper;
+        this.groupRobotMapper = groupRobotMapper;
         this.workspaceMapper = workspaceMapper;
         this.crypto = crypto;
         this.props = props;
@@ -150,6 +154,9 @@ public class WeComCorpService {
         if (bindMapper.countByCorp(corp.getCorpId()) > 0) {
             throw AppException.conflict("该企业已有成员绑定，请先停用而不是删除");
         }
+        if (groupRobotMapper.countByCorpId(corp.getCorpId()) > 0) {
+            throw AppException.conflict("该企业已有群机器人配置，请先在相关空间删除后再删除企业");
+        }
         corpSpaceMapper.deleteByCorp(corp.getCorpId());
         corpMapper.deleteById(id);
     }
@@ -215,6 +222,9 @@ public class WeComCorpService {
         List<String> current = corpSpaceMapper.selectCorpIdsByWorkspace(workspaceId);
         for (String corpId : current) {
             if (!wanted.contains(corpId)) {
+                if (groupRobotMapper.countByCorp(workspaceId, corpId) > 0) {
+                    throw AppException.conflict("该企业在本空间还有群机器人，请先删除后再停用企业");
+                }
                 corpSpaceMapper.delete(workspaceId, corpId);
             }
         }

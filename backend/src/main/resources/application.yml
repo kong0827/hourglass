@@ -84,7 +84,7 @@ app:
   auth:
     username: ${AUTH_USER:admin}
     password: ${AUTH_PASSWORD:}
-  # 对外只读 API：个人访问令牌（P0 只签发 read）
+  # 对外 API：个人访问令牌（read 全读；write 只开写白名单）
   api:
     # 令牌默认有效期（天）；创建时可填 1–3650
     token-days: ${API_TOKEN_DAYS:90}
@@ -153,15 +153,13 @@ springdoc:
   swagger-ui:
     enabled: false
   paths-to-match:
+    # 只列白名单路径；写操作再由 OpenApiConfig 按 ApiTokenWritePolicy 二次裁剪
     - /api/workspaces
     - /api/projects
     - /api/projects/*
-    - /api/tasks/list
     - /api/task/*
-    - /api/tasks/*/logs
-    - /api/demands
-    - /api/demands/*
-    - /api/demands/*/tasks
+    - /api/tasks/**
+    - /api/demands/**
     - /api/req-docs
     - /api/req-docs/*
     - /api/test-cases

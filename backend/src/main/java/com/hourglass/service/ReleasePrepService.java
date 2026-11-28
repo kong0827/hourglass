@@ -17,6 +17,8 @@ import com.hourglass.mapper.ReleaseMapper;
 import com.hourglass.mapper.ReleasePrepMapper;
 import com.hourglass.mapper.UserMapper;
 import com.hourglass.mapper.WorkspaceMemberMapper;
+import com.hourglass.wecom.WeComGroupRobotService;
+import com.hourglass.wecom.WeComNotifyService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -52,7 +54,7 @@ public class ReleasePrepService {
 
     private static final Logger log = LoggerFactory.getLogger(ReleasePrepService.class);
     private static final DateTimeFormatter MINUTE = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-    private static final List<String> CHANNELS = Arrays.asList("in_app", "email", "group");
+    private static final List<String> CHANNELS = Arrays.asList("in_app", "email", "wecom", "group");
     private static final List<String> DEFAULT_CHANNELS = Arrays.asList("in_app", "email");
     private static final long DUPLICATE_PUSH_WINDOW_SECONDS = 30L;
     private static final int MAX_NOTE = 200;
@@ -74,13 +76,16 @@ public class ReleasePrepService {
     private final MailDeliveryService mail;
     private final NotificationEventService notifications;
     private final NotificationService groupPush;
+    private final WeComNotifyService wecomNotify;
+    private final WeComGroupRobotService groupRobots;
 
     public ReleasePrepService(ReleasePrepMapper prepMapper, ReleaseMapper releaseMapper,
                               ProjectAccessService access, ReleasePermissionService permissions,
                               WorkspaceMemberMapper memberMapper, UserMapper userMapper,
                               UserNotificationPreferenceService preferences, AppNotificationService inApp,
                               MailDeliveryService mail, NotificationEventService notifications,
-                              NotificationService groupPush) {
+                              NotificationService groupPush, WeComNotifyService wecomNotify,
+                              WeComGroupRobotService groupRobots) {
         this.prepMapper = prepMapper;
         this.releaseMapper = releaseMapper;
         this.access = access;
@@ -92,6 +97,8 @@ public class ReleasePrepService {
         this.mail = mail;
         this.notifications = notifications;
         this.groupPush = groupPush;
+        this.wecomNotify = wecomNotify;
+        this.groupRobots = groupRobots;
     }
 
     /* ==================== 读：计划页汇总 ==================== */
@@ -193,6 +200,8 @@ public class ReleasePrepService {
             item.put("inAppEnabled", preferences.inAppEnabled(m.getUserId(),
                     UserNotificationPreferenceService.RELEASE_PREP));
             item.put("emailEnabled", emailEnabled(m.getUserId()));
+            item.put("wecomEnabled", preferences.wecomEnabled(m.getUserId(),
+                    UserNotificationPreferenceService.RELEASE_PREP));
             items.add(item);
         }
         items.sort(Comparator
@@ -271,6 +280,7 @@ public class ReleasePrepService {
 
         int inAppCount = 0;
         int emailCount = 0;
+        int wecomCount = 0;
         for (String target : targetIds) {
             prepMapper.insertPushRecipient(push.getId(), workspaceId, target);
             if (channels.contains("in_app")
@@ -292,6 +302,18 @@ public class ReleasePrepService {
                     emailCount++;
                 }
             }
+            if (channels.contains("wecom") && preferences.wecomEnabled(
+                    target, UserNotificationPreferenceService.RELEASE_PREP)) {
+                /* 按绑定企业逐条入队；没绑到本空间启用企业的成员不算「已发企微」 */
+                int queued = wecomNotify.enqueueForUser(workspaceId, target,
+                        UserNotificationPreferenceService.RELEASE_PREP, title,
+                        personalBody(facts, counts.get(target), note, false),
+                        "/#/release?plan=" + planId + "&tab=plan");
+                if (queued > 0) {
+                    prepMapper.markRecipientWecom(push.getId(), target);
+                    wecomCount++;
+                }
+            }
         }
         Boolean groupSent = null;
         String groupSkipped = null;
@@ -300,9 +322,22 @@ public class ReleasePrepService {
                 String groupText = title + "\n" + facts + "；请确认你负责的工作项。点开逐项确认。"
                         + (note == null ? "" : "\n补充说明：" + note)
                         + deepLinkSuffix(refReqId, planId, ctx.versions, false);
-                groupSent = groupPush.sendGroupEvent(workspaceId, groupText);
-                if (!groupSent) {
-                    groupSkipped = "该空间未启用外部推送，或群机器人发送失败";
+                if (!groupPush.externalEnabled(workspaceId)) {
+                    groupSent = Boolean.FALSE;
+                    groupSkipped = "本空间外部推送已关闭";
+                } else {
+                    /* 先按收件人绑定企业发到各自企业的群；没配按企业群时回退空间级群机器人 */
+                    WeComGroupRobotService.GroupSendResult byCorp =
+                            groupRobots.sendForRecipients(workspaceId, targetIds, groupText);
+                    if (byCorp.isConfigured()) {
+                        groupSent = byCorp.isSent();
+                        groupSkipped = byCorp.getReason();
+                    } else {
+                        groupSent = groupPush.sendGroupEvent(workspaceId, groupText);
+                        if (!groupSent) {
+                            groupSkipped = "该空间未启用外部推送，或群机器人发送失败";
+                        }
+                    }
                 }
             } catch (Exception e) {
                 groupSent = Boolean.FALSE;
@@ -322,6 +357,7 @@ public class ReleasePrepService {
         Map<String, Object> res = pushView(saved == null ? push : saved);
         res.put("inAppCount", inAppCount);
         res.put("emailCount", emailCount);
+        res.put("wecomCount", wecomCount);
         res.put("duplicate", Boolean.FALSE);
         if (groupSent != null) {
             res.put("groupSent", groupSent);
@@ -1036,6 +1072,7 @@ public class ReleasePrepService {
         res.put("groupError", push.getGroupError());
         res.put("inAppCount", push.getInAppCount());
         res.put("emailCount", push.getEmailCount());
+        res.put("wecomCount", push.getWecomCount());
         res.put("ackedCount", push.getAckedCount());
         res.put("createdAt", push.getCreatedAt());
         return res;

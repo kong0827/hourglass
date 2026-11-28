@@ -806,6 +806,12 @@ public class NotificationService {
         return sendContent(ws, content, hook, false);
     }
 
+    /** 发布准备按企业群发送前复用同一个「外部推送」开关口径（空间级覆盖全局默认）。 */
+    public boolean externalEnabled(String workspaceId) {
+        Workspace ws = Texts.trimToNull(workspaceId) == null ? null : workspaceMapper.selectById(workspaceId);
+        return ws != null && effectiveEnabled(ws);
+    }
+
     /** 按渠道组装报文并发送，返回是否成功；同时回写"上次推送"状态（O-1 可视化依据） */
     private boolean sendContent(Workspace ws, String content, String hookRaw) {
         return sendContent(ws, content, hookRaw, true);

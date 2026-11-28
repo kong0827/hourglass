@@ -65,6 +65,21 @@ class UserNotificationPreferenceServiceTest {
     }
 
     @Test
+    void wecomEnabledReadsRowAndDefaultsOn() {
+        com.hourglass.entity.UserNotificationPreference row = new com.hourglass.entity.UserNotificationPreference();
+        row.setEventType(UserNotificationPreferenceService.RELEASE_PREP);
+        row.setWecomEnabled(Boolean.FALSE);
+        when(mapper.selectOne("U1", UserNotificationPreferenceService.RELEASE_PREP)).thenReturn(row);
+
+        assertEquals(false, service.wecomEnabled("U1", UserNotificationPreferenceService.RELEASE_PREP));
+
+        row.setWecomEnabled(null);
+        /* 列值为空表示升级前存量，按开启处理 */
+        assertEquals(true, service.wecomEnabled("U1", UserNotificationPreferenceService.RELEASE_PREP));
+        assertEquals(false, service.wecomEnabled("U1", UserNotificationPreferenceService.TASK_COMMENT));
+    }
+
+    @Test
     void updateRejectsUnknownEventBeforeWriting() {
         NotificationPreferenceUpdateRequest req = new NotificationPreferenceUpdateRequest();
         req.setPreferences(Collections.singletonList(new NotificationPreferenceItem("unknown", true, true)));

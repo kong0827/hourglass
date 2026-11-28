@@ -69,11 +69,13 @@ public class WeComNotifyService {
     }
 
     /** 按接收人绑定的企业分别入队；只发当前空间启用的企业 */
-    public void enqueueForUser(String workspaceId, String userId, String eventType,
-                               String title, String body, String path) {
+    /** @return 实际入队的消息条数；调用方据此判断该人是否真的收到 */
+    public int enqueueForUser(String workspaceId, String userId, String eventType,
+                              String title, String body, String path) {
         if (!props.isEnabled() || workspaceId == null || userId == null) {
-            return;
+            return 0;
         }
+        int queued = 0;
         try {
             List<WeComUserBind> binds = bindingService.listForUser(userId);
             for (WeComUserBind bind : binds) {
@@ -88,11 +90,13 @@ public class WeComNotifyService {
                     continue;
                 }
                 enqueue(corp, workspaceId, bind.getWecomUserid(), eventType, title, body, path);
+                queued++;
             }
         } catch (Exception e) {
             /* 通知失败不能影响主业务 */
             log.warn("企微消息入队失败（user={} event={}）：{}", userId, eventType, e.getMessage());
         }
+        return queued;
     }
 
     public WeComMsgLog enqueue(WeComCorp corp, String workspaceId, String wecomUserId,

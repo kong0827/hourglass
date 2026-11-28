@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.WeComGroupRobotMapper">
+
+  <sql id="cols">
+    r.id, r.workspace_id, r.corp_id, c.corp_name, r.name, r.webhook_cipher, r.status,
+    r.last_sent_at, r.last_result, r.created_by, r.created_at, r.updated_at
+  </sql>
+
+  <select id="selectByWorkspace" resultType="WeComGroupRobot">
+    SELECT <include refid="cols"/>
+    FROM wecom_group_robot r
+    LEFT JOIN wecom_corp c ON c.corp_id = r.corp_id
+    WHERE r.workspace_id = #{workspaceId}
+    ORDER BY c.corp_name, r.created_at, r.name
+  </select>
+
+  <select id="selectActiveByWorkspace" resultType="WeComGroupRobot">
+    SELECT <include refid="cols"/>
+    FROM wecom_group_robot r
+    LEFT JOIN wecom_corp c ON c.corp_id = r.corp_id
+    WHERE r.workspace_id = #{workspaceId} AND r.status = 'active'
+    ORDER BY c.corp_name, r.created_at, r.name
+  </select>
+
+  <select id="selectById" resultType="WeComGroupRobot">
+    SELECT <include refid="cols"/>
+    FROM wecom_group_robot r
+    LEFT JOIN wecom_corp c ON c.corp_id = r.corp_id
+    WHERE r.workspace_id = #{workspaceId} AND r.id = #{id}
+  </select>
+
+  <select id="countByCorp" resultType="int">
+    SELECT COUNT(*) FROM wecom_group_robot
+    WHERE workspace_id = #{workspaceId} AND corp_id = #{corpId}
+  </select>
+
+  <select id="countByCorpId" resultType="int">
+    SELECT COUNT(*) FROM wecom_group_robot WHERE corp_id = #{corpId}
+  </select>
+
+  <select id="countByName" resultType="int">
+    SELECT COUNT(*) FROM wecom_group_robot
+    WHERE workspace_id = #{workspaceId} AND corp_id = #{corpId} AND name = #{name}
+    <if test="excludeId != null">AND id != #{excludeId}</if>
+  </select>
+
+  <insert id="insert">
+    INSERT INTO wecom_group_robot
+      (id, workspace_id, corp_id, name, webhook_cipher, status,
+       last_sent_at, last_result, created_by, created_at, updated_at)
+    VALUES
+      (#{id}, #{workspaceId}, #{corpId}, #{name}, #{webhookCipher}, #{status},
+       #{lastSentAt}, #{lastResult}, #{createdBy}, #{createdAt}, #{updatedAt})
+  </insert>
+
+  <update id="update">
+    UPDATE wecom_group_robot
+    <set>
+      corp_id = #{corpId},
+      name = #{name},
+      updated_at = NOW(),
+      <if test="webhookCipher != null">webhook_cipher = #{webhookCipher},</if>
+    </set>
+    WHERE workspace_id = #{workspaceId} AND id = #{id}
+  </update>
+
+  <update id="updateStatus">
+    UPDATE wecom_group_robot SET status = #{status}, updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND id = #{id}
+  </update>
+
+  <update id="updateResult">
+    UPDATE wecom_group_robot
+    SET last_sent_at = #{lastSentAt}, last_result = #{lastResult}, updated_at = NOW()
+    WHERE id = #{id}
+  </update>
+
+  <delete id="deleteById">
+    DELETE FROM wecom_group_robot WHERE workspace_id = #{workspaceId} AND id = #{id}
+  </delete>
+
+  <delete id="deleteByWorkspaceCorp">
+    DELETE FROM wecom_group_robot WHERE workspace_id = #{workspaceId} AND corp_id = #{corpId}
+  </delete>
+</mapper>

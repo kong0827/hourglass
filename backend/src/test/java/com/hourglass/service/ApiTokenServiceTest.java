@@ -77,12 +77,24 @@ class ApiTokenServiceTest {
     }
 
     @Test
-    void createRejectsWriteScope() {
+    void createAcceptsWriteScope() {
+        when(passwordEncoder.matches("secret", "hash")).thenReturn(true);
+        ArgumentCaptor<ApiToken> captor = ArgumentCaptor.forClass(ApiToken.class);
+
+        ApiTokenCreated created = service.create("U1", request("write"), "10.0.0.1");
+
+        verify(tokenMapper).insert(captor.capture());
+        assertEquals("write", captor.getValue().getScope());
+        assertEquals("write", created.getScope());
+    }
+
+    @Test
+    void createRejectsUnknownScope() {
         when(passwordEncoder.matches("secret", "hash")).thenReturn(true);
         AppException e = assertThrows(AppException.class, () ->
-                service.create("U1", request("write"), "10.0.0.1"));
+                service.create("U1", request("admin"), "10.0.0.1"));
         assertEquals(400, e.getCode());
-        assertTrue(e.getMessage().contains("写权限暂未开放"));
+        assertTrue(e.getMessage().contains("令牌类型不合法"));
     }
 
     @Test

@@ -6,6 +6,7 @@ import com.hourglass.entity.WeComCorp;
 import com.hourglass.entity.WeComCorpSpace;
 import com.hourglass.mapper.WeComCorpMapper;
 import com.hourglass.mapper.WeComCorpSpaceMapper;
+import com.hourglass.mapper.WeComGroupRobotMapper;
 import com.hourglass.mapper.WeComUserBindMapper;
 import com.hourglass.mapper.WorkspaceMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +33,7 @@ class WeComCorpServiceTest {
     private final WeComCorpMapper corpMapper = mock(WeComCorpMapper.class);
     private final WeComCorpSpaceMapper spaceMapper = mock(WeComCorpSpaceMapper.class);
     private final WeComUserBindMapper bindMapper = mock(WeComUserBindMapper.class);
+    private final WeComGroupRobotMapper groupRobotMapper = mock(WeComGroupRobotMapper.class);
     private final WorkspaceMapper workspaceMapper = mock(WorkspaceMapper.class);
     private final WeComProperties props = mock(WeComProperties.class);
     private WeComCorpService service;
@@ -40,8 +42,8 @@ class WeComCorpServiceTest {
     void setUp() {
         when(props.isEnabled()).thenReturn(true);
         when(props.hostAllowed(anyString())).thenReturn(true);
-        service = new WeComCorpService(corpMapper, spaceMapper, bindMapper, workspaceMapper,
-                new AiCrypto("unit-test-key"), props);
+        service = new WeComCorpService(corpMapper, spaceMapper, bindMapper, groupRobotMapper,
+                workspaceMapper, new AiCrypto("unit-test-key"), props);
     }
 
     @Test
@@ -169,6 +171,38 @@ class WeComCorpServiceTest {
         AppException e = assertThrows(AppException.class, () -> service.delete("C1"));
         assertEquals(409, e.getCode());
         verify(corpMapper, never()).deleteById(anyString());
+    }
+
+    @Test
+    void deleteRejectsCorpWithGroupRobots() {
+        WeComCorp corp = new WeComCorp();
+        corp.setId("C1");
+        corp.setCorpId("ww123456");
+        when(corpMapper.selectById("C1")).thenReturn(corp);
+        when(groupRobotMapper.countByCorpId("ww123456")).thenReturn(1);
+
+        AppException e = assertThrows(AppException.class, () -> service.delete("C1"));
+        assertEquals(409, e.getCode());
+        assertTrue(e.getMessage().contains("群机器人"));
+        verify(corpMapper, never()).deleteById(anyString());
+    }
+
+    @Test
+    void workspaceCannotDisableCorpWithGroupRobots() {
+        WeComCorp corp = new WeComCorp();
+        corp.setId("C1");
+        corp.setCorpId("ww123456");
+        corp.setCorpName("甲方");
+        corp.setStatus("active");
+        when(corpMapper.selectById("C1")).thenReturn(corp);
+        when(spaceMapper.selectCorpIdsByWorkspace("W1"))
+                .thenReturn(Collections.singletonList("ww123456"));
+        when(groupRobotMapper.countByCorp("W1", "ww123456")).thenReturn(2);
+
+        AppException e = assertThrows(AppException.class,
+                () -> service.setWorkspaceCorps("W1", "A1", Collections.<String>emptyList()));
+        assertEquals(409, e.getCode());
+        verify(spaceMapper, never()).delete(anyString(), anyString());
     }
 
     private static WeComCorpRequest request() {

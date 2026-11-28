@@ -18,8 +18,9 @@ function createMcpServer(client) {
     {
       capabilities: { tools: {} },
       instructions:
-        "沙漏只读工具。除 list_workspaces / my_tasks 外都要显式传 workspaceId（先 list_workspaces 取）。" +
-        "只读令牌不能写数据；所有工具返回后端 data 字段的 JSON。"
+        "沙漏工具。除 list_workspaces / my_tasks 外都要显式传 workspaceId（先 list_workspaces 取）。" +
+        "create_task / move_task / create_demand / update_demand 是写工具，需要读写令牌；" +
+        "只读令牌调用写工具会返回 403。所有工具返回后端 data 字段的 JSON。"
     }
   );
 
@@ -159,7 +160,7 @@ export async function main(env = process.env) {
     const auth = config.key ? "需要 HG_MCP_KEY" : "仅限本机回环";
     console.error(
       `[hourglass-mcp] ${VERSION} 监听 http://${config.host}:${config.port}${config.mcpPath}` +
-        ` → ${config.apiBase}（${TOOL_SPECS.length} 个只读工具；${auth}）`
+        ` → ${config.apiBase}（${TOOL_SPECS.length} 个工具；${auth}）`
     );
   });
   return httpServer;

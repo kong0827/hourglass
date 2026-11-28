@@ -1,4 +1,4 @@
-/* 企业微信：个人绑定、空间启用、平台企业登记（多企业：甲方 + 多家供应商） */
+/* 企业微信：个人绑定、空间启用、平台企业登记（多企业：甲方与多家供应商） */
 import { API } from "../core/api.js";
 import { $ } from "../core/dom.js";
 import { rt } from "../core/state.js";
@@ -125,6 +125,12 @@ function renderSpacePanel() {
         ? '<p class="set-hint" style="margin-top:0">本空间已启用：' + enabled.map(function (c) { return esc(c.corpName); }).join("、") + "。</p>"
         : '<p class="set-hint" style="margin-top:0">本空间还没有启用企业微信企业。</p>';
     }
+    var robots = (data && data.groupRobots) || [];
+    if (data && data.canManage) {
+      html += groupRobotSection(robots, enabled);
+    } else if (robots.length) {
+      html += '<p class="set-hint" style="margin-top:12px">本空间已配置 ' + robots.length + " 个企业微信群机器人。</p>";
+    }
     var messages = (data && data.messages) || [];
     if (data && data.canManage) {
       html += '<div class="panel-head" style="margin-top:18px"><h3>最近发送</h3><span class="meta-right">按企业分别发送 · 失败可重发</span></div>';
@@ -159,6 +165,7 @@ function renderSpacePanel() {
         }).catch(function (ex) {
           save.disabled = false;
           toast(ex.message || "保存失败", "warn");
+          renderSpacePanel();
         });
       });
     }
@@ -170,14 +177,162 @@ function renderSpacePanel() {
           .catch(function (ex) { btn.disabled = false; toast(ex.message || "重发失败", "warn"); });
       });
     });
+    wireGroupRobots(robots, enabled);
     renderAdminBox();
   }).catch(function (ex) {
     box.innerHTML = '<p class="set-hint">' + esc(ex.message || "加载失败") + "</p>";
   });
 }
 
+/* ---------------- 空间设置：按企业配置的群机器人 ---------------- */
+var wgrEditingId = null;
+
+function robotResultLabel(robot) {
+  var label = "";
+  if (!robot.lastResult) return "—";
+  if (robot.lastResult === "success") label = "最近发送成功";
+  else if (robot.lastResult.indexOf("failed:") === 0) label = "发送失败：" + robot.lastResult.slice(7);
+  else label = robot.lastResult;
+  return label.length > 100 ? label.slice(0, 100) + "…" : label;
+}
+
+function robotResultTone(robot) {
+  if (!robot.lastResult) return "";
+  if (robot.lastResult === "success") return "full";
+  return robot.lastResult.indexOf("failed:") === 0 ? "over" : "today";
+}
+
+function groupRobotSection(robots, enabled) {
+  var activeCorps = (enabled || []).filter(function (c) { return c.status === "active"; });
+  var html = '<div class="panel-head" style="margin-top:18px"><h3>企业微信群机器人</h3>'
+    + '<span class="meta-right">按企业 · 只发相关群</span></div>'
+    + '<p class="set-hint">发布准备推送按收件人绑定的企业发送，甲方群不会收到供应商的信息。Webhook 只以密文保存，页面只显示掩码。</p>';
+  if (!activeCorps.length) {
+    return html + '<p class="set-hint">请先在上方启用至少一家企业，再配置群机器人。</p>';
+  }
+  html += robots.length
+    ? '<div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>企业</th><th>群名称</th><th>Webhook</th><th>状态</th><th>最近结果</th><th></th></tr></thead><tbody>'
+      + robots.map(function (r) {
+        var tone = robotResultTone(r);
+        var result = robotResultLabel(r);
+        return "<tr><td>" + esc(r.corpName || r.corpId) + "</td><td>" + esc(r.name) + "</td>"
+          + '<td><code style="word-break:break-all">' + esc(r.webhookMasked || "已配置") + "</code></td>"
+          + "<td>" + (r.status === "active" ? "启用" : "停用") + "</td>"
+          + "<td>" + (tone ? '<span class="meta ' + tone + '">' + esc(result) + "</span>" : esc(result))
+          + (r.lastSentAt ? '<br><span class="tiny">' + esc(String(r.lastSentAt).replace("T", " ").slice(0, 16)) + "</span>" : "")
+          + "</td>"
+          + '<td class="row-actions">'
+          + '<button class="btn link" type="button" data-wgr-test="' + esc(r.id) + '">测试</button>'
+          + '<button class="btn link" type="button" data-wgr-edit="' + esc(r.id) + '">编辑</button>'
+          + '<button class="btn link" type="button" data-wgr-status="' + esc(r.id) + '" data-wgr-next="' + (r.status === "active" ? "disabled" : "active") + '">' + (r.status === "active" ? "停用" : "启用") + "</button>"
+          + '<button class="btn link danger" type="button" data-wgr-del="' + esc(r.id) + '">删除</button>'
+          + "</td></tr>";
+      }).join("") + "</tbody></table></div>"
+    : '<p class="set-hint">本空间还没有配置群机器人。发布准备推送会退回到空间级群机器人（若已配置）。</p>';
+  html += '<div class="set-frows" id="wecomRobotForm" style="margin-top:12px">'
+    + '<div class="frow"><div class="lb">所属企业</div><div class="field"><select id="wgrCorp">'
+    + activeCorps.map(function (c) {
+      return '<option value="' + esc(c.corpId) + '">' + esc(c.corpName) + "</option>";
+    }).join("") + "</select></div></div>"
+    + '<div class="frow"><div class="lb">群名称</div><div class="field"><input id="wgrName" maxlength="64" autocomplete="off" placeholder="如：甲方发布群" /><span class="hint">同一企业下名称不能重复，便于区分多个群。</span></div></div>'
+    + '<div class="frow"><div class="lb">Webhook</div><div class="field"><input id="wgrWebhook" maxlength="1024" autocomplete="off" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=…" /><span class="hint">在企业微信群 → 群机器人 → 添加得到；只接受官方域名与 send 路径。</span></div></div>'
+    + "</div>"
+    + '<div class="set-actions"><button class="btn primary" type="button" id="btnWeComRobotSave">新增群机器人</button>'
+    + '<button class="btn" type="button" id="btnWeComRobotCancel" hidden>取消编辑</button>'
+    + '<span class="foot-note" id="wecomRobotEditHint"></span></div>';
+  return html;
+}
+
+function wireGroupRobots(robots, enabled) {
+  var box = $("setWeCom");
+  var activeCorps = (enabled || []).filter(function (c) { return c.status === "active"; });
+  if (!box || !activeCorps.length) return;
+  wgrEditingId = null;
+
+  function resetRobotForm() {
+    wgrEditingId = null;
+    if ($("wgrName")) $("wgrName").value = "";
+    if ($("wgrWebhook")) $("wgrWebhook").value = "";
+    if ($("wgrCorp")) $("wgrCorp").selectedIndex = 0;
+    if ($("btnWeComRobotSave")) $("btnWeComRobotSave").textContent = "新增群机器人";
+    if ($("btnWeComRobotCancel")) $("btnWeComRobotCancel").hidden = true;
+    if ($("wecomRobotEditHint")) $("wecomRobotEditHint").textContent = "";
+  }
+
+  box.querySelectorAll("[data-wgr-test]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      btn.disabled = true;
+      API.post("/api/wecom/workspace/group-robots/" + encodeURIComponent(btn.getAttribute("data-wgr-test")) + "/test", {})
+        .then(function (d) {
+          toast(d && d.sent ? "测试消息已发送" : ((d && d.message) || "发送失败"), d && d.sent ? "fs" : "warn");
+          renderSpacePanel();
+        })
+        .catch(function (ex) { btn.disabled = false; toast(ex.message || "测试失败", "warn"); });
+    });
+  });
+  box.querySelectorAll("[data-wgr-status]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var next = btn.getAttribute("data-wgr-next");
+      btn.disabled = true;
+      API.post("/api/wecom/workspace/group-robots/" + encodeURIComponent(btn.getAttribute("data-wgr-status")) + "/status", { status: next })
+        .then(function () { toast(next === "active" ? "已启用" : "已停用", "fs"); renderSpacePanel(); })
+        .catch(function (ex) { btn.disabled = false; toast(ex.message || "操作失败", "warn"); });
+    });
+  });
+  box.querySelectorAll("[data-wgr-del]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      if (!window.confirm("删除后发布准备不再发送到该群，不能恢复；确认删除？")) return;
+      btn.disabled = true;
+      API.del("/api/wecom/workspace/group-robots/" + encodeURIComponent(btn.getAttribute("data-wgr-del")))
+        .then(function () { toast("已删除群机器人", "fs"); renderSpacePanel(); })
+        .catch(function (ex) { btn.disabled = false; toast(ex.message || "删除失败", "warn"); });
+    });
+  });
+  box.querySelectorAll("[data-wgr-edit]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var id = btn.getAttribute("data-wgr-edit");
+      var robot = null;
+      for (var i = 0; i < robots.length; i++) if (robots[i].id === id) robot = robots[i];
+      if (!robot) return;
+      wgrEditingId = id;
+      if ($("wgrCorp")) $("wgrCorp").value = robot.corpId;
+      if ($("wgrName")) $("wgrName").value = robot.name || "";
+      if ($("wgrWebhook")) $("wgrWebhook").value = "";
+      if ($("btnWeComRobotSave")) $("btnWeComRobotSave").textContent = "保存修改";
+      if ($("btnWeComRobotCancel")) $("btnWeComRobotCancel").hidden = false;
+      if ($("wecomRobotEditHint")) $("wecomRobotEditHint").textContent = "编辑中：" + (robot.name || "");
+      if ($("wecomRobotForm")) $("wecomRobotForm").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+  });
+  if ($("btnWeComRobotCancel")) {
+    $("btnWeComRobotCancel").addEventListener("click", function () { resetRobotForm(); });
+  }
+  var save = $("btnWeComRobotSave");
+  if (save) save.addEventListener("click", function () {
+    var corpId = $("wgrCorp") ? $("wgrCorp").value : "";
+    var name = $("wgrName") ? $("wgrName").value.trim() : "";
+    var webhook = $("wgrWebhook") ? $("wgrWebhook").value.trim() : "";
+    if (!corpId) { toast("请选择企业", "warn"); return; }
+    if (!name) { toast("请填写群名称", "warn"); return; }
+    if (!wgrEditingId && !webhook) { toast("请填写群机器人 Webhook", "warn"); return; }
+    save.disabled = true;
+    var body = { corpId: corpId, name: name, webhook: webhook };
+    var req = wgrEditingId
+      ? API.put("/api/wecom/workspace/group-robots/" + encodeURIComponent(wgrEditingId), body)
+      : API.post("/api/wecom/workspace/group-robots", body);
+    req.then(function () {
+      toast(wgrEditingId ? "已保存群机器人" : "已新增群机器人，可点「测试」验证连通性", "fs");
+      renderSpacePanel();
+    }).catch(function (ex) {
+      save.disabled = false;
+      toast(ex.message || "保存失败", "warn");
+    });
+  });
+}
+
 /* ---------------- 平台管理员：企业登记（只在集成页、管理员可见） ---------------- */
 var editingCorpId = null;
+var adminCorps = [];
 function renderAdminBox() {
   var box = $("wecomAdminBox");
   if (!box) return;
@@ -217,14 +372,15 @@ function resetAdminForm() {
 function loadAdminCorps() {
   var box = $("wecomCorpTable");
   if (!box) return;
-  API.get("/api/admin/wecom/corps").then(function (data) {
-    var corps = (data && data.corps) || [];
+  return API.get("/api/admin/wecom/corps").then(function (data) {
+    adminCorps = (data && data.corps) || [];
+    var corps = adminCorps;
     if (!corps.length) {
       box.innerHTML = '<p class="set-hint">还没有登记企业。填写下方表单新增一家。</p>';
       return;
     }
     box.innerHTML = '<div class="tbl-wrap"><table class="manager-tbl"><thead><tr>'
-      + "<th>企业</th><th>CorpID</th><th>AgentId</th><th>回调地址</th><th>入口链接</th><th>绑定</th><th>状态</th><th></th></tr></thead><tbody>"
+      + "<th>企业</th><th>CorpID</th><th>AgentId</th><th>回调地址</th><th>入口链接</th><th>成员数</th><th>状态</th><th></th></tr></thead><tbody>"
       + corps.map(function (c) {
         return "<tr><td>" + esc(c.corpName) + "</td><td><code>" + esc(c.corpId) + "</code></td>"
           + "<td>" + esc(c.agentId) + "</td>"
@@ -237,10 +393,10 @@ function loadAdminCorps() {
           + '<button class="btn link" type="button" data-wc-test="' + esc(c.id) + '">测试</button>'
           + '<button class="btn link" type="button" data-wc-key="' + esc(c.id) + '">重置入口</button>'
           + '<button class="btn link" type="button" data-wc-status="' + esc(c.id) + '" data-wc-next="' + (c.status === "active" ? "disabled" : "active") + '">' + (c.status === "active" ? "停用" : "启用") + "</button>"
-          + '<button class="btn link" type="button" data-wc-bind="' + esc(c.id) + '">代绑定</button>'
+          + '<button class="btn link" type="button" data-wc-members="' + esc(c.id) + '">成员</button>'
           + '<button class="btn link danger" type="button" data-wc-del="' + esc(c.id) + '">删除</button>'
           + "</td></tr>";
-      }).join("") + "</tbody></table></div>";
+      }).join("") + "</tbody></table></div>" + '<div id="wecomBindPanel"></div>';
     box.querySelectorAll("[data-wc-edit]").forEach(function (btn) {
       btn.addEventListener("click", function () { editAdminCorp(corps, btn.getAttribute("data-wc-edit")); });
     });
@@ -289,22 +445,88 @@ function loadAdminCorps() {
           .catch(function (ex) { btn.disabled = false; toast(ex.message || "删除失败", "warn"); });
       });
     });
-    box.querySelectorAll("[data-wc-bind]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var id = btn.getAttribute("data-wc-bind");
-        var userId = window.prompt("要绑定的沙漏账号 ID（可在成员列表里查看）");
-        if (!userId) return;
-        var wecomUserid = window.prompt("该企业里的企微成员 UserID");
-        if (!wecomUserid) return;
-        API.post("/api/admin/wecom/corps/" + encodeURIComponent(id) + "/bindings",
-          { userId: userId.trim(), wecomUserid: wecomUserid.trim() })
-          .then(function () { toast("已代绑定", "fs"); loadAdminCorps(); })
-          .catch(function (ex) { toast(ex.message || "绑定失败", "warn"); });
-      });
+    box.querySelectorAll("[data-wc-members]").forEach(function (btn) {
+      btn.addEventListener("click", function () { openCorpMembers(btn.getAttribute("data-wc-members")); });
     });
   }).catch(function (ex) {
     box.innerHTML = '<p class="set-hint">' + esc(ex.message || "加载失败") + "</p>";
   });
+}
+
+/* 按企业查看 / 添加 / 解绑成员：每家企业各自维护对照，互不影响 */
+function openCorpMembers(id) {
+  var panel = $("wecomBindPanel");
+  if (!panel) return;
+  var corp = null;
+  for (var i = 0; i < adminCorps.length; i++) if (adminCorps[i].id === id) corp = adminCorps[i];
+  if (!corp) return;
+  panel.innerHTML = '<p class="tiny">加载成员…</p>';
+  Promise.all([
+    API.get("/api/admin/wecom/corps/" + encodeURIComponent(id) + "/bindings"),
+    API.getAllPages("/api/admin/users").catch(function () { return []; })
+  ]).then(function (rs) {
+    renderCorpMembers(corp, (rs[0] && rs[0].bindings) || [], rs[1] || []);
+  }).catch(function (ex) {
+    panel.innerHTML = '<p class="set-hint">' + esc(ex.message || "加载成员失败") + "</p>";
+  });
+}
+
+function renderCorpMembers(corp, binds, users) {
+  var panel = $("wecomBindPanel");
+  if (!panel) return;
+  var account = users.length
+    ? '<select id="wcBindAccount">' + users.map(function (u) {
+        return '<option value="' + esc(u.id) + '">' + esc((u.displayName || u.username) + " @" + u.username) + "</option>";
+      }).join("") + "</select>"
+    : '<input id="wcBindAccount" maxlength="32" autocomplete="off" placeholder="沙漏账号 ID" />';
+  var rows = binds.map(function (b) {
+    return "<tr><td>" + esc(b.displayName || b.username || b.userId)
+      + (b.username ? '<br><span class="tiny">@' + esc(b.username) + "</span>" : "") + "</td>"
+      + "<td><code>" + esc(b.wecomUserid) + "</code></td>"
+      + "<td>" + (b.status === "active" ? "已绑定" : "已停用") + "</td>"
+      + "<td>" + (b.lastLoginAt ? esc(String(b.lastLoginAt).replace("T", " ").slice(0, 16)) : "—") + "</td>"
+      + '<td class="row-actions"><button class="btn link danger" type="button" data-wc-unbind="' + esc(b.id) + '">解绑</button></td></tr>';
+  }).join("");
+  panel.innerHTML = '<div class="panel-head" style="margin-top:18px"><h3>' + esc(corp.corpName) + ' · 成员</h3>'
+    + '<span class="meta-right">按企业分别绑定</span></div>'
+    + '<p class="set-hint">成员绑定到这家企业后，才会从这家企业的自建应用收到指派、测试计划指派与发布准备提醒；解绑只影响这家企业。</p>'
+    + (binds.length
+      ? '<div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>沙漏账号</th><th>企微 UserID</th><th>状态</th><th>最近免登</th><th></th></tr></thead><tbody>' + rows + "</tbody></table></div>"
+      : '<p class="set-hint">这家企业还没有绑定成员。</p>')
+    + '<div class="set-frows" style="margin-top:12px">'
+    + '<div class="frow"><div class="lb">沙漏账号</div><div class="field">' + account + "</div></div>"
+    + '<div class="frow"><div class="lb">企微 UserID</div><div class="field"><input id="wcBindUserid" maxlength="64" autocomplete="off" placeholder="该企业通讯录里的成员 UserID" /><span class="hint">需先加入这家企业通讯录，并在应用可见范围内。</span></div></div>'
+    + "</div>"
+    + '<div class="set-actions"><button class="btn primary" type="button" id="btnWeComBindAdd">绑定成员</button>'
+    + '<span class="foot-note">同一人可分别绑定多家企业；消息只发到成员对应的企业应用。</span></div>';
+  panel.querySelectorAll("[data-wc-unbind]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      if (!window.confirm("解绑后该成员不再从这家企业接收消息，也不能免密登录；确认解绑？")) return;
+      btn.disabled = true;
+      API.del("/api/admin/wecom/bindings/" + encodeURIComponent(btn.getAttribute("data-wc-unbind")))
+        .then(function () { toast("已解绑", "fs"); refreshCorpMembers(corp.id); })
+        .catch(function (ex) { btn.disabled = false; toast(ex.message || "解绑失败", "warn"); });
+    });
+  });
+  var add = $("btnWeComBindAdd");
+  if (add) add.addEventListener("click", function () {
+    var accountEl = $("wcBindAccount"), useridEl = $("wcBindUserid");
+    var userId = accountEl ? accountEl.value.trim() : "";
+    var wecomUserid = useridEl ? useridEl.value.trim() : "";
+    if (!userId) { toast("请选择沙漏账号", "warn"); return; }
+    if (!wecomUserid) { toast("请填写企微 UserID", "warn"); return; }
+    add.disabled = true;
+    API.post("/api/admin/wecom/corps/" + encodeURIComponent(corp.id) + "/bindings",
+      { userId: userId, wecomUserid: wecomUserid })
+      .then(function () { toast("已绑定", "fs"); refreshCorpMembers(corp.id); })
+      .catch(function (ex) { add.disabled = false; toast(ex.message || "绑定失败", "warn"); });
+  });
+}
+
+function refreshCorpMembers(id) {
+  var p = loadAdminCorps();
+  if (p && p.then) p.then(function () { openCorpMembers(id); });
+  else openCorpMembers(id);
 }
 
 function editAdminCorp(corps, id) {

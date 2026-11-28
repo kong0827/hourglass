@@ -3,6 +3,7 @@ package com.hourglass.wecom;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hourglass.entity.WeComCorp;
 import com.hourglass.entity.WeComMsgLog;
+import com.hourglass.entity.WeComUserBind;
 import com.hourglass.mapper.WeComCorpMapper;
 import com.hourglass.mapper.WeComMsgLogMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -10,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -95,6 +97,33 @@ class WeComNotifyServiceTest {
         assertEquals("partial", captor.getValue().getStatus());
         assertEquals(Integer.valueOf(1), captor.getValue().getAttempts());
         assertNull(captor.getValue().getNextRetryAt());
+    }
+
+    @Test
+void enqueueForUserCountsOnlyEnabledCorps() {
+        WeComUserBind mine = bind("ww123456", "zhangsan", "active");
+        WeComUserBind disabled = bind("ww123456", "lisi", "disabled");
+        WeComUserBind otherSpace = bind("ww999999", "zhangsan", "active");
+        when(bindingService.listForUser("U1")).thenReturn(Arrays.asList(mine, disabled, otherSpace));
+        when(corpService.enabledForWorkspace("W1", "ww123456")).thenReturn(true);
+        when(corpService.enabledForWorkspace("W1", "ww999999")).thenReturn(false);
+        when(corpMapper.selectByCorpId("ww123456")).thenReturn(corp());
+
+        int queued = service.enqueueForUser("W1", "U1", "release_prep", "发布准备", "请确认",
+                "/#/release?plan=R1&tab=plan");
+
+        /* 停用绑定与未启用企业都不入队，调用方用返回值判断是否标记「已发企微」 */
+        assertEquals(1, queued);
+        verify(msgMapper).insert(any(WeComMsgLog.class));
+    }
+
+    private static WeComUserBind bind(String corpId, String wecomUserid, String status) {
+        WeComUserBind bind = new WeComUserBind();
+        bind.setUserId("U1");
+        bind.setCorpId(corpId);
+        bind.setWecomUserid(wecomUserid);
+        bind.setStatus(status);
+        return bind;
     }
 
     private static WeComCorp corp() {

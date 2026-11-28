@@ -31,7 +31,7 @@ test("MCP 握手 → tools/list → tools/call 全链路", async (t) => {
   t.after(() => client.close());
 
   const tools = await client.listTools();
-  assert.equal(tools.tools.length, 14);
+  assert.equal(tools.tools.length, 18);
   assert.ok(tools.tools.some((tool) => tool.name === "query_tasks"));
 
   const result = await client.callTool({ name: "query_tasks", arguments: { workspaceId: "W1", limit: 1 } });
@@ -77,6 +77,6 @@ test("错误密钥 401，健康检查可用且不泄露令牌", async (t) => {
   assert.equal(health.status, 200);
   const body = await health.json();
   assert.equal(body.ok, true);
-  assert.equal(body.tools, 14);
+  assert.equal(body.tools, 18);
   assert.equal(JSON.stringify(body).includes("secret"), false);
 });

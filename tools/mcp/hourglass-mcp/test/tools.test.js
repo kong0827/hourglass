@@ -4,8 +4,8 @@ import test from "node:test";
 import { TOOL_SPECS, findTool, runTool } from "../src/tools.js";
 import { ToolError } from "../src/hourglass.js";
 
-test("工具清单：14 个、名称唯一、schema 为 object", () => {
-  assert.equal(TOOL_SPECS.length, 14);
+test("工具清单：18 个、名称唯一、schema 为 object", () => {
+  assert.equal(TOOL_SPECS.length, 18);
   const names = TOOL_SPECS.map((spec) => spec.name);
   assert.equal(new Set(names).size, names.length);
   for (const spec of TOOL_SPECS) {
@@ -63,4 +63,58 @@ test("runTool 用后端 data 的 JSON 文本返回", async () => {
   assert.equal(parsed.query.workspace, "W1");
   assert.equal(parsed.query.limit, 1);
   assert.deepEqual(parsed.items, [{ id: "T1", title: "登录" }]);
+});
+
+test("写工具标 POST，请求体只带显式给出的字段", () => {
+  const create = findTool("create_task");
+  assert.equal(create.method, "POST");
+  const request = create.build({ workspaceId: "W1", title: "登录页改版", priority: "P1", unknown: "ignored" });
+  assert.equal(request.path, "/api/tasks");
+  assert.deepEqual(request.query, { workspace: "W1" });
+  assert.equal(request.body.title, "登录页改版");
+  assert.equal(request.body.priority, "P1");
+  assert.equal(request.body.boardColumn, "backlog");
+  assert.equal(request.body.description, undefined);
+  assert.equal(request.body.unknown, undefined);
+  assert.throws(() => create.build({ workspaceId: "W1" }), /缺少必填参数 title/);
+
+  const move = findTool("move_task").build({ workspaceId: "W1", taskId: "T/1", column: "doing", reason: "开始" });
+  assert.equal(move.path, "/api/tasks/T%2F1/move");
+  assert.deepEqual(move.body, { column: "doing", reason: "开始", force: false, autoTimer: true, autoResume: true });
+
+  const demand = findTool("create_demand").build({ workspaceId: "W1", title: "对账", projectId: "P1" });
+  assert.equal(demand.path, "/api/demands");
+  assert.deepEqual(demand.body, { reqId: "P1", title: "对账" });
+});
+
+test("runTool 对写工具走 post；排期动作先读 revision", async () => {
+  const calls = [];
+  const client = {
+    get: async (path, query) => {
+      calls.push(["GET", path, query]);
+      return { id: "D1", revision: 7 };
+    },
+    post: async (path, query, body) => {
+      calls.push(["POST", path, query, body]);
+      return { id: "D1", status: "plan" };
+    }
+  };
+
+  const planned = JSON.parse(await runTool(findTool("update_demand"),
+    { workspaceId: "W1", demandId: "D1", action: "plan" }, client));
+  assert.equal(planned.status, "plan");
+  assert.deepEqual(calls[0], ["GET", "/api/demands/D1", { workspace: "W1" }]);
+  assert.deepEqual(calls[1], ["POST", "/api/demands/D1/plan", { workspace: "W1" }, { revision: 7 }]);
+
+  calls.length = 0;
+  await runTool(findTool("update_demand"),
+    { workspaceId: "W1", demandId: "D1", action: "pass", note: "通过" }, client);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0], ["POST", "/api/demands/D1/pass", { workspace: "W1" }, { note: "通过" }]);
+
+  calls.length = 0;
+  await runTool(findTool("create_task"), { workspaceId: "W1", title: "登录页改版" }, client);
+  assert.equal(calls[0][0], "POST");
+  assert.equal(calls[0][1], "/api/tasks");
+  assert.equal(calls[0][3].title, "登录页改版");
 });

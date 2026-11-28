@@ -29,7 +29,7 @@ import java.util.List;
  * 对外 API 个人访问令牌：签发、列表、撤销与请求期鉴权。
  *
  * <p>令牌只存 SHA-256 哈希；权限上限就是令牌所属账号本人的权限，
- * 不额外扩权。P0 只签发只读令牌，写权限在写接口落地后再放开。
+ * 不额外扩权。写令牌也只能调用 {@link com.hourglass.config.ApiTokenWritePolicy} 白名单内的写接口。
  */
 @Service
 public class ApiTokenService {
@@ -79,10 +79,7 @@ public class ApiTokenService {
         if (scope == null) {
             scope = SCOPE_READ;
         }
-        if (SCOPE_WRITE.equals(scope)) {
-            throw AppException.badRequest("写权限暂未开放，当前只能创建只读令牌");
-        }
-        if (!SCOPE_READ.equals(scope)) {
+        if (!SCOPE_READ.equals(scope) && !SCOPE_WRITE.equals(scope)) {
             throw AppException.badRequest("令牌类型不合法");
         }
 

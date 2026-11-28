@@ -239,8 +239,10 @@
         </button>
         <button class="nav-exp" type="button" data-nav-exp="testcases" aria-label="展开测试" aria-expanded="false"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5 6 8l3-3.5"/></svg></button>
         <div class="nav-sub">
+          <button class="nav-sub-item" type="button" data-view="testcases" data-sub-tab="bench">工作台</button>
           <button class="nav-sub-item" type="button" data-view="testcases" data-sub-tab="cases">用例</button>
           <button class="nav-sub-item" type="button" data-view="testcases" data-sub-tab="plans">测试计划</button>
+          <button class="nav-sub-item" type="button" data-view="testcases" data-sub-tab="report">报告</button>
           <button class="nav-sub-item" type="button" data-view="testcases" data-sub-tab="defects">缺陷</button>
         </div>
       </div>
@@ -3188,7 +3190,7 @@
                   <div class="channel-cards" id="channelCards">
                     <button class="channel-card" type="button" data-channel="webhook">
                       <span class="cc-t">企业微信 / 钉钉 webhook</span>
-                      <span class="cc-d">群机器人地址，报文 msgtype:text</span>
+                      <span class="cc-d">群机器人地址，报文 msgtype:text；企业微信集成里未按企业配置时作兜底</span>
                       <span class="cc-badge">未选中</span>
                     </button>
                     <button class="channel-card" type="button" data-channel="serverchan">
@@ -3228,7 +3230,7 @@
                 <h3>企业微信</h3>
                 <span class="meta-right">免登与消息 · 按企业隔离</span>
               </div>
-              <p class="set-hint">同一个空间可能同时有甲方与多家供应商，各自属于不同的企业微信企业。这里选择本空间启用哪些企业：启用后，成员可在个人设置里绑定对应企业的身份，并在该企业微信里收到指派、评审与发布准备提醒。企业登记由平台管理员完成。</p>
+              <p class="set-hint">一个空间里可能同时有甲方和多家供应商，各方有各自的企业微信企业与自建应用。这里选择本空间启用哪些企业：启用后，成员可在个人设置里绑定对应企业的身份，并在该企业微信里收到指派、测试计划指派与发布准备提醒。企业登记由平台管理员完成。</p>
               <div id="setWeCom"></div>
             </div>
 
@@ -3819,6 +3821,7 @@
             <a href="#me-timer">计时设置</a>
             <a href="#me-notify">消息通知</a>
             <a href="#me-wecom">企业微信</a>
+            <a href="#me-token">访问令牌</a>
             <a href="#me-appearance">外观</a>
             <a href="#me-ai">AI 设置</a>
             <a href="#me-pwd">修改密码</a>
@@ -3924,9 +3927,60 @@
                 <h3>企业微信</h3>
                 <span class="meta-right">免登与消息 · 按企业隔离</span>
               </div>
-              <p class="set-hint">一个空间可能同时有甲方与多家供应商，各自属于不同的企业微信企业。绑定后可在企业微信内免密进入沙漏，并接收指派、测试计划指派与发布准备提醒；同一人可在多家企业各绑一次，消息只发到你对应的企业应用。</p>
+              <p class="set-hint">一个空间里可能同时有甲方和多家供应商，各方有各自的企业微信。绑定后可在企业微信内免密进入沙漏，并接收指派、测试计划指派与发布准备提醒；同一人可在多家企业各绑一次，消息只发到对应的企业应用。</p>
               <div id="meWeComBinds"></div>
               <div class="set-actions" id="meWeComActions" hidden></div>
+            </div>
+
+            <div class="panel" id="me-token">
+              <div class="panel-head">
+                <h3>访问令牌</h3>
+                <span class="meta-right">等同你的账号凭据</span>
+              </div>
+              <p class="set-hint">供 Qoder（MCP 侧车）、脚本等外部工具以你的身份访问：只读令牌只能查询；读写令牌额外可建工作项、移动工作列、提需求与做需求流转。不能代替登录界面操作。完整令牌只在创建时显示一次；修改密码、重置密码或角色变更后，所有旧令牌立即失效。</p>
+              <div class="token-list" id="meTokenList" role="table" aria-label="访问令牌列表"></div>
+              <div class="token-new">
+                <div class="set-grid four">
+                  <div class="field" id="fMeTokenName">
+                    <label for="meTokenName">名称</label>
+                    <input id="meTokenName" type="text" maxlength="64" autocomplete="off" placeholder="例如 Qoder 本机" />
+                    <span class="err">请填写名称</span>
+                  </div>
+                  <div class="field">
+                    <label for="meTokenScope">权限</label>
+                    <select id="meTokenScope">
+                      <option value="read" selected>只读</option>
+                      <option value="write">读写</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="meTokenDays">有效期</label>
+                    <select id="meTokenDays">
+                      <option value="30">30 天</option>
+                      <option value="90" selected>90 天</option>
+                      <option value="180">180 天</option>
+                      <option value="365">1 年</option>
+                    </select>
+                  </div>
+                  <div class="field" id="fMeTokenPwd">
+                    <label for="meTokenPwd">当前密码</label>
+                    <input id="meTokenPwd" type="password" maxlength="64" autocomplete="current-password" placeholder="校验后才会创建" />
+                    <span class="err">请填写当前密码</span>
+                  </div>
+                </div>
+                <div class="set-actions">
+                  <button class="btn primary" type="button" id="meTokenCreate">创建令牌</button>
+                  <span class="foot-note">读写令牌只开放建工作项、列流转、提需求与需求流转；只读每分钟 120 次、读写 30 次请求。</span>
+                </div>
+              </div>
+              <div class="token-reveal" id="meTokenReveal" hidden>
+                <div class="token-reveal-head">令牌已创建，只显示这一次</div>
+                <div class="token-reveal-row">
+                  <code id="meTokenValue"></code>
+                  <button class="btn ghost" type="button" id="meTokenCopy">复制</button>
+                </div>
+                <p class="foot-note">离开本页后无法再查看；请立即保存到 Qoder 的 MCP 配置或密码管理器。</p>
+              </div>
             </div>
 
             <div class="panel" id="me-appearance">

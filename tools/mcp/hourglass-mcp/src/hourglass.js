@@ -17,6 +17,14 @@ export class HourglassClient {
   }
 
   async get(path, query = {}) {
+    return this.send("GET", path, query);
+  }
+
+  async post(path, query = {}, body = {}) {
+    return this.send("POST", path, query, body);
+  }
+
+  async send(method, path, query = {}, body = undefined) {
     const url = new URL(this.baseUrl + path);
     for (const [key, value] of Object.entries(query)) {
       if (value === undefined || value === null || value === "") {
@@ -24,11 +32,16 @@ export class HourglassClient {
       }
       url.searchParams.set(key, String(value));
     }
+    const headers = { Authorization: `Bearer ${this.token}`, Accept: "application/json" };
+    if (body !== undefined) {
+      headers["Content-Type"] = "application/json";
+    }
     let response;
     try {
       response = await this.fetchImpl(url, {
-        method: "GET",
-        headers: { Authorization: `Bearer ${this.token}`, Accept: "application/json" },
+        method,
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
         signal: AbortSignal.timeout(this.timeoutMs)
       });
     } catch (e) {
@@ -36,9 +49,9 @@ export class HourglassClient {
     }
 
     const text = await response.text();
-    let body = null;
+    let payload = null;
     try {
-      body = text ? JSON.parse(text) : null;
+      payload = text ? JSON.parse(text) : null;
     } catch {
       /* 非 JSON 响应（网关错误页等）按原文报错 */
     }
@@ -49,18 +62,18 @@ export class HourglassClient {
       throw new ToolError(`令牌无效或已失效（HTTP 401），请重新创建个人访问令牌${suffix}`);
     }
     if (response.status === 403) {
-      throw new ToolError(`无权执行该操作（HTTP 403）：${body?.message || ""}${suffix}`);
+      throw new ToolError(`无权执行该操作（HTTP 403）：${payload?.message || ""}${suffix}`);
     }
     if (response.status === 429) {
       throw new ToolError(`调用过于频繁（HTTP 429），请稍后重试${suffix}`);
     }
     if (!response.ok) {
-      throw new ToolError(`请求失败 HTTP ${response.status}：${body?.message || text.slice(0, 200)}${suffix}`);
+      throw new ToolError(`请求失败 HTTP ${response.status}：${payload?.message || text.slice(0, 200)}${suffix}`);
     }
-    if (body && typeof body.code === "number" && body.code !== 0) {
-      throw new ToolError(`业务错误 ${body.code}：${body.message || "未知错误"}${suffix}`);
+    if (payload && typeof payload.code === "number" && payload.code !== 0) {
+      throw new ToolError(`业务错误 ${payload.code}：${payload.message || "未知错误"}${suffix}`);
     }
-    return body === null ? null : body.data;
+    return payload === null ? null : payload.data;
   }
 }
 

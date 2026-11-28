@@ -40,6 +40,33 @@ test("get 拼接上下文路径、带 Bearer 并解包 data", async () => {
   assert.equal(seenInit.headers.Authorization, "Bearer hg_test");
 });
 
+test("post 带 JSON 体与 Bearer，403 提示原样透出", async () => {
+  let seen;
+  const client = new HourglassClient({
+    baseUrl: "http://127.0.0.1:8080/hourglass",
+    token: "hg_write",
+    fetchImpl: async (url, init) => {
+      seen = { url, init };
+      return jsonResponse({ code: 0, message: "ok", data: { id: "T1" } });
+    }
+  });
+
+  const data = await client.post("/api/tasks", { workspace: "W1" }, { title: "登录页改版" });
+
+  assert.deepEqual(data, { id: "T1" });
+  assert.equal(seen.url.toString(), "http://127.0.0.1:8080/hourglass/api/tasks?workspace=W1");
+  assert.equal(seen.init.method, "POST");
+  assert.equal(seen.init.headers["Content-Type"], "application/json");
+  assert.equal(seen.init.body, JSON.stringify({ title: "登录页改版" }));
+
+  const forbidden = new HourglassClient({
+    baseUrl: "http://127.0.0.1:8080/hourglass",
+    token: "hg_read",
+    fetchImpl: async () => jsonResponse({ message: "只读令牌不能执行写操作" }, 403)
+  });
+  await assert.rejects(forbidden.post("/api/tasks", {}, { title: "x" }), /只读令牌不能执行写操作/);
+});
+
 test("401 / 403 / 429 / 业务错误都转成可读提示，并带 trace", async () => {
   const cases = [
     [401, { message: "x" }, /令牌无效或已失效/],

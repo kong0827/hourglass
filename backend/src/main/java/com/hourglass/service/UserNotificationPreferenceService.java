@@ -130,6 +130,15 @@ public class UserNotificationPreferenceService {
         }
     }
 
+    /** 与站内同口径：读失败按开启处理，只对三类企微事件有意义 */
+    public boolean wecomEnabled(String userId, String eventType) {
+        try {
+            return Boolean.TRUE.equals(get(userId, eventType).getWecom());
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
     public static void requireSupported(String eventType) {
         if (eventType == null || !EVENT_SET.contains(eventType)) {
             throw AppException.badRequest("不支持的通知事件：" + eventType);

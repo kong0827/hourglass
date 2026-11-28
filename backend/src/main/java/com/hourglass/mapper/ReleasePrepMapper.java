@@ -44,6 +44,8 @@ public interface ReleasePrepMapper {
 
     int markRecipientEmail(@Param("pushId") String pushId, @Param("userId") String userId);
 
+    int markRecipientWecom(@Param("pushId") String pushId, @Param("userId") String userId);
+
     int ackPushRecipient(@Param("workspaceId") String workspaceId, @Param("planId") String planId,
                          @Param("userId") String userId);
 

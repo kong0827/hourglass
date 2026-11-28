@@ -15,7 +15,7 @@ public class ApiTokenCreateRequest {
     @Size(max = 64, message = "名称最多 64 位")
     private String name;
 
-    /** P0 只接受 read；write 预留 */
+    /** read 或 write；不填默认 read。write 也只能调用写白名单内的接口 */
     private String scope;
 
     @Min(value = 1, message = "有效期至少 1 天")

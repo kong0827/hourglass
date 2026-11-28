@@ -9,7 +9,10 @@ import com.hourglass.mapper.WeComMsgLogMapper;
 import com.hourglass.service.AuditService;
 import com.hourglass.service.WorkspaceService;
 import com.hourglass.wecom.WeComCorpService;
+import com.hourglass.wecom.WeComGroupRobotRequest;
+import com.hourglass.wecom.WeComGroupRobotService;
 import com.hourglass.wecom.WeComNotifyService;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -36,15 +39,17 @@ public class WeComWorkspaceController {
     private final WorkspaceService workspaceService;
     private final WeComCorpService corpService;
     private final WeComNotifyService notifyService;
+    private final WeComGroupRobotService groupRobotService;
     private final WeComMsgLogMapper msgMapper;
     private final AuditService audit;
 
     public WeComWorkspaceController(WorkspaceService workspaceService, WeComCorpService corpService,
-                                    WeComNotifyService notifyService, WeComMsgLogMapper msgMapper,
-                                    AuditService audit) {
+                                    WeComNotifyService notifyService, WeComGroupRobotService groupRobotService,
+                                    WeComMsgLogMapper msgMapper, AuditService audit) {
         this.workspaceService = workspaceService;
         this.corpService = corpService;
         this.notifyService = notifyService;
+        this.groupRobotService = groupRobotService;
         this.msgMapper = msgMapper;
         this.audit = audit;
     }
@@ -61,6 +66,7 @@ public class WeComWorkspaceController {
             Map<String, Object> item = new LinkedHashMap<String, Object>();
             item.put("id", corp.getId());
             item.put("corpName", corp.getCorpName());
+            item.put("corpId", corp.getCorpId());
             item.put("status", corp.getStatus());
             enabled.add(item);
         }
@@ -79,6 +85,7 @@ public class WeComWorkspaceController {
             }
             data.put("allCorps", all);
             data.put("messages", msgMapper.selectRecent(ws.getId(), null, 50));
+            data.put("groupRobots", groupRobotService.list(ws.getId()));
         }
         return ApiResult.ok(data);
     }
@@ -136,5 +143,78 @@ public class WeComWorkspaceController {
         Map<String, Object> data = new LinkedHashMap<String, Object>();
         data.put("corpIds", new ArrayList<String>(ids));
         return ApiResult.ok(data);
+    }
+
+    /** 空间主/管理员：按企业添加群机器人；Webhook 只接受企微官方地址，密文保存。 */
+    @PostMapping("/api/wecom/workspace/group-robots")
+    public ApiResult<Map<String, Object>> createGroupRobot(@RequestParam(required = false) String workspace,
+                                                           @RequestBody WeComGroupRobotRequest body,
+                                                           HttpServletRequest request) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        workspaceService.requireManager(userId, ws.getId());
+        Map<String, Object> item = groupRobotService.create(ws.getId(), userId, body);
+        audit.recordCurrent(ws.getId(), "wecom.group_robot.create", "wecom_group_robot",
+                String.valueOf(item.get("id")), String.valueOf(item.get("name")),
+                true, "新增企业微信群机器人（" + item.get("corpId") + "）", request);
+        return ApiResult.ok(item);
+    }
+
+    @PutMapping("/api/wecom/workspace/group-robots/{id}")
+    public ApiResult<Map<String, Object>> updateGroupRobot(@PathVariable String id,
+                                                           @RequestParam(required = false) String workspace,
+                                                           @RequestBody WeComGroupRobotRequest body,
+                                                           HttpServletRequest request) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        workspaceService.requireManager(userId, ws.getId());
+        Map<String, Object> item = groupRobotService.update(ws.getId(), id, body);
+        audit.recordCurrent(ws.getId(), "wecom.group_robot.update", "wecom_group_robot", id,
+                String.valueOf(item.get("name")), true, "修改企业微信群机器人", request);
+        return ApiResult.ok(item);
+    }
+
+    @PostMapping("/api/wecom/workspace/group-robots/{id}/status")
+    public ApiResult<Map<String, Object>> setGroupRobotStatus(@PathVariable String id,
+                                                              @RequestParam(required = false) String workspace,
+                                                              @RequestBody Map<String, Object> body,
+                                                              HttpServletRequest request) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        workspaceService.requireManager(userId, ws.getId());
+        String status = body.get("status") == null ? "" : String.valueOf(body.get("status"));
+        groupRobotService.setStatus(ws.getId(), id, status);
+        audit.recordCurrent(ws.getId(), "wecom.group_robot.status", "wecom_group_robot", id,
+                null, true, "企业微信群机器人状态=" + status, request);
+        Map<String, Object> data = new LinkedHashMap<String, Object>();
+        data.put("status", status);
+        return ApiResult.ok(data);
+    }
+
+    @PostMapping("/api/wecom/workspace/group-robots/{id}/test")
+    public ApiResult<Map<String, Object>> testGroupRobot(@PathVariable String id,
+                                                         @RequestParam(required = false) String workspace,
+                                                         HttpServletRequest request) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        workspaceService.requireManager(userId, ws.getId());
+        Map<String, Object> result = groupRobotService.test(ws.getId(), id);
+        boolean sent = Boolean.TRUE.equals(result.get("sent"));
+        audit.recordCurrent(ws.getId(), "wecom.group_robot.test", "wecom_group_robot", id,
+                null, sent, "企业微信群机器人测试：" + result.get("message"), request);
+        return ApiResult.ok(result);
+    }
+
+    @DeleteMapping("/api/wecom/workspace/group-robots/{id}")
+    public ApiResult<Void> deleteGroupRobot(@PathVariable String id,
+                                            @RequestParam(required = false) String workspace,
+                                            HttpServletRequest request) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        workspaceService.requireManager(userId, ws.getId());
+        groupRobotService.delete(ws.getId(), id);
+        audit.recordCurrent(ws.getId(), "wecom.group_robot.delete", "wecom_group_robot", id,
+                null, true, "删除企业微信群机器人", request);
+        return ApiResult.ok();
     }
 }

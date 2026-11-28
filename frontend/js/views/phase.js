@@ -4590,7 +4590,7 @@ export function mountReleaseWorkspace(pageHost, opts){
     try{ var a = JSON.parse(v); return Array.isArray(a) ? a : []; }catch(e){ return String(v).indexOf("group") >= 0 ? ["group"] : []; }
   }
   function prepChannelNames(v){
-    var map = {in_app:"站内", email:"邮件", group:"企业微信群"};
+    var map = {in_app:"站内", email:"邮件", wecom:"企业微信（按人）", group:"企业微信群"};
     return prepChannels(v).map(function(c){ return map[c] || c; });
   }
   function prepScopeLabel(scope){
@@ -4598,7 +4598,7 @@ export function mountReleaseWorkspace(pageHost, opts){
   }
   function prepGroupText(p){
     if(prepChannels(p && p.channels).indexOf("group") < 0) return "";
-    if(p.groupSent === true) return "群已发送";
+    if(p.groupSent === true) return p.groupError ? "群部分发送（" + p.groupError + "）" : "群已发送";
     if(p.groupSent === false) return "群未发送" + (p.groupError ? "（" + p.groupError + "）" : "");
     return "群结果未记录";
   }
@@ -4608,6 +4608,7 @@ export function mountReleaseWorkspace(pageHost, opts){
     var chs = prepChannels(p.channels);
     if(chs.indexOf("in_app") >= 0) parts.push("站内 " + (Number(p.inAppCount) || 0) + " 人");
     if(chs.indexOf("email") >= 0) parts.push("邮件入队 " + (Number(p.emailCount) || 0) + " 人");
+    if(chs.indexOf("wecom") >= 0) parts.push("企微入队 " + (Number(p.wecomCount) || 0) + " 人");
     parts.push("回执 " + (Number(p.ackedCount) || 0) + " 人");
     var g = prepGroupText(p);
     if(g) parts.push(g);
@@ -4756,7 +4757,7 @@ export function mountReleaseWorkspace(pageHost, opts){
     if(!plan || !plan.id) return;
     if(!mayManage){ toast("仅空间主、管理员或项目负责人可发送发布准备提醒", "warn"); return; }
     var pid = plan.id;
-    var st = { scope:"all", only:!!opts.only, channels:{in_app:true,email:true,group:false}, q:"", note:"", all:[], owners:[], sel:{}, loading:true, error:"", sending:false, sent:null, emailAvailable:true };
+    var st = { scope:"all", only:!!opts.only, channels:{in_app:true,email:true,wecom:false,group:false}, q:"", note:"", all:[], owners:[], sel:{}, loading:true, error:"", sending:false, sent:null, emailAvailable:true };
     if(opts.ownerId){ st.scope = "custom"; st.sel[opts.ownerId] = true; }
     if(opts.userIds && opts.userIds.length){
       st.scope = "custom";
@@ -4799,8 +4800,9 @@ export function mountReleaseWorkspace(pageHost, opts){
       var text = "涉及 " + (Number(sent.recipientCount) || 0) + " 人";
       if(chs.indexOf("in_app") >= 0) text += "；站内 " + (Number(sent.inAppCount) || 0) + " 人";
       if(chs.indexOf("email") >= 0) text += "；邮件入队 " + (Number(sent.emailCount) || 0) + " 人";
+      if(chs.indexOf("wecom") >= 0) text += "；企业微信入队 " + (Number(sent.wecomCount) || 0) + " 人";
       if(chs.indexOf("group") >= 0){
-        if(sent.groupSent === true) text += "；企业微信群已发送";
+        if(sent.groupSent === true) text += sent.groupError ? "；企业微信群部分发送（" + sent.groupError + "）" : "；企业微信群已发送";
         else if(sent.groupSent === false) text += "；企业微信群未发送" + (sent.groupError ? "（" + sent.groupError + "）" : "");
         else text += "；企业微信群结果未记录";
       }
@@ -4873,9 +4875,10 @@ export function mountReleaseWorkspace(pageHost, opts){
         body += '<div class="field-label">推送方式</div>'
           + '<label class="prep-check-line"><input type="checkbox" data-prep-ch="in_app"' + (st.channels.in_app ? " checked" : "") + '> 站内通知 <span class="sub-note">默认</span></label>'
           + '<label class="prep-check-line"><input type="checkbox" data-prep-ch="email"' + (st.channels.email ? " checked" : "") + (st.emailAvailable === false ? " disabled" : "") + '> 邮件 <span class="sub-note">' + (st.emailAvailable === false ? "空间未启用 SMTP，暂不可用" : "按个人偏好，仅已开启邮件的人收到") + '</span></label>'
-          + '<label class="prep-check-line"><input type="checkbox" data-prep-ch="group"' + (st.channels.group ? " checked" : "") + '> 企业微信群 <span class="sub-note">只发到空间配置的群，不能按人送达</span></label>'
+          + '<label class="prep-check-line"><input type="checkbox" data-prep-ch="wecom"' + (st.channels.wecom ? " checked" : "") + '> 企业微信（按人） <span class="sub-note">按个人偏好与绑定企业发送；未绑定本空间启用企业的成员收不到</span></label>'
+          + '<label class="prep-check-line"><input type="checkbox" data-prep-ch="group"' + (st.channels.group ? " checked" : "") + '> 企业微信群 <span class="sub-note">按收件人绑定的企业发到对应群，不跨企业</span></label>'
           + '<div class="field-label">发送内容</div>'
-          + '<div class="prep-note-field"><input class="input" type="text" data-prep-push-note maxlength="200" value="' + esc(st.note) + '" placeholder="补充说明（选填，200 字以内；站内、邮件、群消息都会带上）" aria-label="补充说明"><span class="prep-note-count" data-prep-push-note-count>' + st.note.length + '/200</span></div>'
+          + '<div class="prep-note-field"><input class="input" type="text" data-prep-push-note maxlength="200" value="' + esc(st.note) + '" placeholder="补充说明（选填，200 字以内；站内、邮件、企微与群消息都会带上）" aria-label="补充说明"><span class="prep-note-count" data-prep-push-note-count>' + st.note.length + '/200</span></div>'
           + '<div class="prep-push-preview"><span class="pp-icon">备</span><div>'
           + '<div class="pp-title">' + esc(pushTitleLabel(plan)) + esc(pushCountdownSuffix(plan.plannedAt)) + '</div>'
           + '<div class="pp-body">' + esc(fmtMinute(plan.plannedAt) || "未定时间") + ' ' + esc(releaseEnvironmentName(plan.environment)) + '发布<br>'
@@ -4980,6 +4983,7 @@ export function mountReleaseWorkspace(pageHost, opts){
         var sent = [];
         if(chs.indexOf("in_app") >= 0) sent.push(it.inAppAt ? "站内已送" : "站内未送");
         if(chs.indexOf("email") >= 0) sent.push(it.emailAt ? "邮件已入队" : "邮件未入队");
+        if(chs.indexOf("wecom") >= 0) sent.push(it.wecomAt ? "企微已入队" : "企微未入队");
         return '<div class="prep-hist-person' + (it.ackedAt ? ' is-acked' : '') + '">'
           + '<span class="nm">' + esc(it.name || it.userId || "—") + '</span>'
           + '<span class="meta">' + (it.ackedAt ? '已回执 ' + esc(fmtReleaseTime(it.ackedAt)) : '未回执')

@@ -1,12 +1,12 @@
-# 沙漏只读 MCP 侧车（P0-2）
+# 沙漏 MCP 侧车（P0-2）
 
-一个独立的 Node 进程，把沙漏的只读 HTTP 接口包成 MCP 工具，供 Qoder 等支持
+一个独立的 Node 进程，把沙漏的 HTTP 接口包成 MCP 工具，供 Qoder 等支持
 Streamable HTTP 的客户端直接调用。侧车不直连数据库，只带一个个人访问令牌调用
 后端 `/hourglass/api/**`；权限仍由后端按令牌所属账号复核。
 
 - 传输：Streamable HTTP（无状态），默认 `http://127.0.0.1:8788/mcp`
-- 工具：14 个只读工具，见下表
-- 令牌：`HG_API_TOKEN`（`hg_...`，通过 `POST /api/auth/tokens` 创建）
+- 工具：14 个只读工具 + 4 个写工具，见下表
+- 令牌：`HG_API_TOKEN`（`hg_...`，在个人设置 → 访问令牌创建；写工具需要「读写」令牌）
 - 防护：未设置 `HG_MCP_KEY` 时只接受本机回环请求；设置后所有调用方都必须带
   `Authorization: Bearer <HG_MCP_KEY>`。经 nginx 反代时源地址也是回环，**对外暴露必须设置 `HG_MCP_KEY`**。
 
@@ -69,9 +69,16 @@ npm start
 | `list_versions` | `GET /api/versions` | projectId（必填） |
 | `my_tasks` | `GET /api/my-tasks` | view、scope、q、分页 |
 | `search` | `GET /api/search` | q、type、limit |
+| `create_task` | `POST /api/tasks` | title、projectId、itemType、priority、severity、owner、日期；固定建到待处理列 |
+| `move_task` | `POST /api/tasks/{id}/move` | taskId、column、reason |
+| `create_demand` | `POST /api/demands` | title、projectId、itemKind、priority、expectDate、acceptText |
+| `update_demand` | `POST /api/demands/{id}/{action}` | demandId、action、note；排期类自动取 revision |
 
 `limit` 在工具层封顶 100；工具返回后端 `data` 字段的 JSON，错误信息直接可读
 （401 令牌失效、403 越权、404 不存在或无权、429 限流）。
+
+写工具只覆盖建工作项、工作项列流转、提需求与需求流转，与产品内 AI 助手同权；
+其余写接口（删除、空间设置、成员管理、自动化等）不在白名单内，令牌调用会 403。
 
 ## 部署
 
@@ -93,13 +100,14 @@ WantedBy=multi-user.target
 ```
 
 nginx 反代 `location = /mcp` 到 `127.0.0.1:8788`，关掉缓冲（响应可能是 SSE 流），
-再按 IP 限流；侧车自身只读且有令牌级限流兜底。示例见 `deploy/nginx-hourglass.conf`。
+再按 IP 限流；侧车自身不存业务权限，令牌级限流与写白名单由后端兜底。示例见 `deploy/nginx-hourglass.conf`。
 
 ## 测试
 
 ```bash
-npm test        # 15 例：参数映射、错误口径、鉴权、MCP 握手与调用
-npm run e2e     # 真实链路：登录 → 建令牌 → 侧车 → 列空间/查任务/读文档 → 撤销后 401
+npm test        # 18 例：参数映射、写工具请求体、错误口径、鉴权、MCP 握手与调用
+npm run e2e     # 真实链路：登录 → 建只读/读写令牌 → 侧车 → 列空间/查任务/读文档 →
+                #            只读写 403、读写写工具到业务校验 → 撤销后 401
 ```
 
 E2E 需要本地后端已启动，默认 `admin/admin123`，可用 `HG_E2E_USER` / `HG_E2E_PASS` /
