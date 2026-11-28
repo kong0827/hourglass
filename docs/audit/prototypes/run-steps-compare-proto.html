@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>执行历史步骤对比 · 原型</title>
+<style>
+  :root{
+    --bg:#F2F4F7; --card:#fff; --line:#E4E7EC; --text:#101828; --text-2:#475467; --text-3:#98A2B3;
+    --ok:#12B76A; --over:#D92D20; --warn:#F79009; --blue:#2E90FA; --blue-bg:#EFF4FF;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;}
+  body{background:var(--bg);padding:40px;display:flex;justify-content:center;}
+  .dlg{background:var(--card);border:1px solid var(--line);border-radius:12px;width:760px;box-shadow:0 8px 30px rgba(16,24,40,.12);overflow:hidden;}
+  .dhead{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--line);}
+  .dhead b{font-size:15px;color:var(--text);}
+  .dhead .sub{font-size:12px;color:var(--text-3);}
+  .dhead .x{margin-left:auto;border:1px solid var(--line);background:#fff;border-radius:8px;width:28px;height:28px;cursor:pointer;color:var(--text-2);}
+  .dbody{padding:16px 20px 20px;max-height:70vh;overflow:auto;}
+  /* ---- 对比区块 ---- */
+  .cmp{border:1px solid var(--blue);border-radius:10px;background:linear-gradient(180deg,#F5F9FF,#fff);padding:12px 14px;margin-bottom:14px;}
+  .cmp-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;}
+  .cmp-head .t{font-size:13px;font-weight:600;color:var(--text);margin-right:4px;}
+  .cmp-head select{font-size:12px;color:var(--text-2);border:1px solid var(--line);border-radius:6px;padding:4px 6px;background:#fff;}
+  .cmp-head .vs{font-size:11px;color:var(--text-3);}
+  .cmp-chips{margin-left:auto;display:flex;gap:6px;font-size:11px;}
+  .chip{border-radius:99px;padding:2px 8px;line-height:18px;}
+  .chip.down{background:#FEF3F2;color:var(--over);}
+  .chip.up{background:#ECFDF3;color:var(--ok);}
+  .chip.same{background:#F2F4F7;color:var(--text-3);}
+  table.cmp-tbl{width:100%;border-collapse:collapse;font-size:12px;}
+  .cmp-tbl th{text-align:left;font-weight:500;color:var(--text-3);padding:6px 8px;border-bottom:1px solid var(--line);}
+  .cmp-tbl td{padding:7px 8px;border-bottom:1px solid #F2F4F7;color:var(--text-2);vertical-align:top;}
+  .cmp-tbl td.step{color:var(--text);}
+  .cmp-tbl td.step .exp{display:block;color:var(--text-3);font-size:11px;margin-top:2px;}
+  .cmp-tbl tr.diff-down td{background:#FFF6F5;}
+  .cmp-tbl tr.diff-down td.step{box-shadow:inset 3px 0 0 var(--over);}
+  .cmp-tbl tr.diff-up td{background:#F6FEF9;}
+  .cmp-tbl tr.diff-up td.step{box-shadow:inset 3px 0 0 var(--ok);}
+  .mark{display:inline-flex;align-items:center;gap:4px;font-size:11px;border-radius:5px;padding:1px 6px;}
+  .mark.p{background:#ECFDF3;color:var(--ok);}
+  .mark.f{background:#FEF3F2;color:var(--over);}
+  .mark.b{background:#FFFAEB;color:var(--warn);}
+  .mark.none{color:var(--text-3);}
+  /* ---- 历史行（沿用现有样式） ---- */
+  .run-item{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;}
+  .run-top{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-2);}
+  .badge{font-size:11px;border-radius:5px;padding:1px 7px;font-weight:500;}
+  .badge.f{background:#FEF3F2;color:var(--over);}
+  .badge.p{background:#ECFDF3;color:var(--ok);}
+  .run-at,.run-by{color:var(--text-3);}
+  .run-note{margin-top:8px;font-size:12px;color:var(--text-2);background:#F9FAFB;border-radius:6px;padding:6px 8px;}
+  .run-steps-sum{font-size:11px;color:var(--text-3);}
+  .run-steps ul{list-style:none;margin-top:6px;}
+  .run-steps li{display:flex;gap:6px;font-size:12px;color:var(--text-2);padding:3px 0;}
+  .rs-mark{color:var(--over);}
+  .note-tag{font-size:11px;color:var(--text-3);}
+</style>
+</head>
+<body>
+<div class="dlg">
+  <div class="dhead">
+    <b>执行历史 · 登录链路回归</b>
+    <span class="sub">TC-006 · 最近在前</span>
+    <button class="x">✕</button>
+  </div>
+  <div class="dbody">
+
+    <!-- 新增：步骤对比（默认最近两次；两轮都有逐步结果才出现） -->
+    <div class="cmp">
+      <div class="cmp-head">
+        <span class="t">步骤对比</span>
+        <select>
+          <option>第 4 轮 · 11-28 09:12 · 失败</option>
+          <option>第 3 轮 · 11-27 23:19 · 通过</option>
+        </select>
+        <span class="vs">对比</span>
+        <select>
+          <option>第 3 轮 · 11-27 23:19 · 通过</option>
+          <option>第 2 轮 · 11-27 18:40 · 失败</option>
+        </select>
+        <span class="cmp-chips">
+          <span class="chip down">退步 1</span>
+          <span class="chip up">好转 1</span>
+          <span class="chip same">一致 1</span>
+        </span>
+      </div>
+      <table class="cmp-tbl">
+        <thead><tr><th style="width:44%">步骤</th><th>第 4 轮（本轮）</th><th>第 3 轮</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="step">1. 打开登录页<span class="exp">预期：页面正常渲染</span></td>
+            <td><span class="mark p">✓ 通过</span></td>
+            <td><span class="mark p">✓ 通过</span></td>
+          </tr>
+          <tr class="diff-down">
+            <td class="step">2. 输入错误密码提交<span class="exp">预期：提示密码错误且不跳转</span></td>
+            <td><span class="mark f">✗ 失败</span> <span class="note-tag">提示文案更新了</span></td>
+            <td><span class="mark p">✓ 通过</span></td>
+          </tr>
+          <tr class="diff-up">
+            <td class="step">3. 输入正确密码提交<span class="exp">预期：跳转工作台</span></td>
+            <td><span class="mark p">✓ 通过</span></td>
+            <td><span class="mark b">⊘ 阻塞</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 现有历史行：保持不动 -->
+    <div class="run-item">
+      <div class="run-top"><span class="badge f">失败</span><span class="run-by">admin</span><span class="run-at">11-28 09:12</span><span class="note-tag">Chrome 131 / macOS 15</span></div>
+      <p class="run-note">第 2 步：提示文案更新了</p>
+      <div class="run-steps"><span class="run-steps-sum">逐步勾选 3 步 · 2 步通过</span>
+        <ul><li><span class="rs-mark">✗</span>第 2 步 输入错误密码提交 <em class="note-tag">提示文案更新了</em></li></ul>
+      </div>
+    </div>
+    <div class="run-item">
+      <div class="run-top"><span class="badge p">通过</span><span class="run-by">admin</span><span class="run-at">11-27 23:19</span></div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

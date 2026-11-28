@@ -1248,6 +1248,65 @@ body[data-view="testcases"] #btnPlanNew{display:none !important;}
 .rc-act{display:block;color:var(--text);word-break:break-all;}
 .rc-exp{display:block;margin-top:1px;color:var(--text-3);font-size:12px;word-break:break-all;}
 .rc-empty{margin:0;font-size:12px;color:var(--text-3);}
+
+/* 键盘导航高亮：左侧蓝条 + 浅蓝底，与勾选态 is-selected 区分；容器聚焦不画外框（高亮即焦点指示） */
+.tc-list:focus{outline:none;}
+.tc-row.is-kb{background:var(--primary-soft);box-shadow:inset 2.5px 0 0 var(--primary);}
+/* 执行弹框逐步勾选：行内右侧三段（通过/失败/阻塞），失败展开每步备注 */
+.rc-steps-run li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:start;padding:8px 6px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);}
+.rc-steps-run li.rs-failed{border-color:var(--danger);background:var(--danger-soft);}
+.rc-steps-run li.rs-blocked{border-color:var(--warning);background:var(--warning-soft);}
+.rc-steps-run .rs-body{min-width:0;grid-column:1;}
+.rc-steps-run .rs-seg{grid-column:2;grid-row:1;display:inline-flex;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;background:var(--surface);}
+.rc-steps-run .rs-seg .rs-rs{width:28px;height:24px;display:inline-flex;align-items:center;justify-content:center;border:none;border-right:1px solid var(--border);background:transparent;color:var(--text-3);cursor:pointer;}
+.rc-steps-run .rs-seg .rs-rs:last-child{border-right:none;}
+.rc-steps-run .rs-seg .rs-rs:hover{background:var(--surface-sunken);}
+.rc-steps-run .rs-seg .rs-rs.on-pass{background:var(--success-soft);color:var(--success-fg);}
+.rc-steps-run .rs-seg .rs-rs.on-failed{background:var(--danger-soft);color:var(--danger-fg);}
+.rc-steps-run .rs-seg .rs-rs.on-blocked{background:var(--warning-soft);color:var(--warning-fg);}
+.rc-steps-run .rs-note-wrap{grid-column:1/3;min-width:0;}
+.rc-steps-run .rs-note{width:100%;height:30px;padding:0 9px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:12px;color:var(--text);background:var(--surface);}
+.rc-steps-run .rs-note:focus{outline:2px solid var(--primary-soft);border-color:var(--primary);}
+.link-btn{border:none;background:none;padding:0;color:var(--primary-fg);font-size:11px;font-weight:600;cursor:pointer;}
+.rs-reset{float:right;font-weight:500;}
+/* 历史里的逐步结果：未通过步骤 + 每步备注 */
+.run-steps{margin-top:7px;padding:6px 9px;border-radius:var(--r-sm);background:var(--surface-sunken);}
+.run-steps-sum{font-size:11px;color:var(--text-3);}
+.run-steps ul{margin:5px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px;}
+.run-steps li{display:flex;gap:6px;align-items:flex-start;font-size:12px;color:var(--text-2);line-height:1.5;}
+.run-steps .rs-mark{flex:none;margin-top:1px;display:inline-flex;}
+.run-steps li.run-step-failed .rs-mark{color:var(--danger-fg);}
+.run-steps li.run-step-blocked .rs-mark{color:var(--warning-fg);}
+.run-steps .rs-txt b{font-weight:600;color:var(--text);}
+.run-steps .rs-txt em{display:block;font-style:normal;color:var(--text-3);font-size:11.5px;word-break:break-all;}
+/* 执行历史 · 步骤对比（仅 ≥2 轮有逐步结果时出现，只读） */
+.cmp{border:1px solid var(--info-border);border-radius:var(--r-md);background:var(--info-soft);padding:10px 12px;margin-bottom:12px;}
+.cmp-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
+.cmp-head .t{font-size:12.5px;font-weight:600;color:var(--text);}
+.cmp-head select{font-size:12px;color:var(--text-2);border:1px solid var(--border);border-radius:var(--r-xs);padding:3px 6px;background:var(--surface);max-width:200px;}
+.cmp-head .vs{font-size:11px;color:var(--text-3);}
+.cmp-chips{margin-left:auto;display:flex;gap:6px;font-size:11px;}
+.cmp-chips .chip{border-radius:var(--r-pill);padding:1px 8px;line-height:17px;font-weight:500;}
+.cmp-chips .chip.down{background:var(--danger-soft);color:var(--danger-fg);}
+.cmp-chips .chip.up{background:var(--success-soft);color:var(--success-fg);}
+.cmp-chips .chip.same{background:var(--surface-sunken);color:var(--text-3);}
+.cmp-tbl{width:100%;border-collapse:collapse;font-size:12px;}
+.cmp-tbl th{text-align:left;font-weight:500;color:var(--text-3);padding:5px 8px;border-bottom:1px solid var(--border);}
+.cmp-tbl td{padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text-2);vertical-align:top;}
+.cmp-tbl tr:last-child td{border-bottom:none;}
+.cmp-tbl td.step{color:var(--text);}
+.cmp-tbl td.step .exp{display:block;color:var(--text-3);font-size:11px;margin-top:2px;}
+.cmp-tbl tr.diff-down td{background:var(--danger-soft);}
+.cmp-tbl tr.diff-down td.step{box-shadow:inset 3px 0 0 var(--danger);}
+.cmp-tbl tr.diff-up td{background:var(--success-soft);}
+.cmp-tbl tr.diff-up td.step{box-shadow:inset 3px 0 0 var(--success);}
+.cmp-tbl .mark{display:inline-flex;align-items:center;gap:4px;font-size:11px;border-radius:var(--r-xs);padding:1px 6px;white-space:nowrap;}
+.cmp-tbl .mark.p{background:var(--success-soft);color:var(--success-fg);}
+.cmp-tbl .mark.f{background:var(--danger-soft);color:var(--danger-fg);}
+.cmp-tbl .mark.b{background:var(--warning-soft);color:var(--warning-fg);}
+.cmp-tbl .mark.s{background:var(--surface-sunken);color:var(--text-3);}
+.cmp-tbl .mark.none{color:var(--text-3);}
+.cmp-tbl .note-tag{font-size:11px;color:var(--text-3);word-break:break-all;}
 .run-form{min-width:0;display:flex;flex-direction:column;gap:var(--space-3);}
 .run-form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 .run-form-row .field{margin:0;}

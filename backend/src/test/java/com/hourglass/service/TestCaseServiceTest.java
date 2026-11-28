@@ -375,6 +375,116 @@ class TestCaseServiceTest {
         verify(runs, never()).insert(any(TestCaseRun.class));
     }
 
+    /* ---------- 逐步勾选 ---------- */
+
+    private static com.hourglass.dto.CaseRunStepResult stepResult(int idx, String status, String note) {
+        com.hourglass.dto.CaseRunStepResult s = new com.hourglass.dto.CaseRunStepResult();
+        s.setIdx(idx);
+        s.setStatus(status);
+        s.setNote(note);
+        return s;
+    }
+
+    private static TestCase caseWithSteps(String id, int n) {
+        TestCase c = existing(id, null);
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < n; i++) {
+            if (i > 0) {
+                sb.append(",");
+            }
+            sb.append("{\"action\":\"操作").append(i + 1).append("\",\"expected\":\"预期").append(i + 1).append("\"}");
+        }
+        c.setSteps(sb.append("]").toString());
+        return c;
+    }
+
+    @Test
+    void runWithStepResultsDerivesFailedAndStoresJson() {
+        when(cases.selectById("C1")).thenReturn(caseWithSteps("C1", 3));
+        CaseRunRequest req = new CaseRunRequest();
+        req.setStatus("passed"); // 与步骤推导冲突时以步骤为准
+        req.setStepResults(java.util.Arrays.asList(
+                stepResult(1, "passed", null),
+                stepResult(2, "failed", "密码框报错"),
+                stepResult(3, "passed", null)));
+
+        service.run(USER, WS, "C1", req);
+
+        ArgumentCaptor<TestCaseRun> captor = ArgumentCaptor.forClass(TestCaseRun.class);
+        verify(runs).insert(captor.capture());
+        TestCaseRun run = captor.getValue();
+        assertEquals("failed", run.getStatus());
+        assertTrue(run.getStepResults().contains("\"idx\":2"));
+        assertTrue(run.getStepResults().contains("密码框报错"));
+        verify(cases).updateLatest(WS, "C1", "failed", null, "我", USER);
+    }
+
+    @Test
+    void runWithStepResultsDerivesBlockedWhenNoFailed() {
+        when(cases.selectById("C1")).thenReturn(caseWithSteps("C1", 2));
+        CaseRunRequest req = new CaseRunRequest();
+        req.setStatus("passed");
+        req.setStepResults(java.util.Arrays.asList(
+                stepResult(1, "blocked", "依赖服务未部署"),
+                stepResult(2, "passed", null)));
+
+        service.run(USER, WS, "C1", req);
+
+        ArgumentCaptor<TestCaseRun> captor = ArgumentCaptor.forClass(TestCaseRun.class);
+        verify(runs).insert(captor.capture());
+        assertEquals("blocked", captor.getValue().getStatus());
+        verify(cases).updateLatest(WS, "C1", "blocked", null, "我", USER);
+    }
+
+    @Test
+    void runRejectsStepResultsWithoutCaseSteps() {
+        when(cases.selectById("C1")).thenReturn(existing("C1", null));
+        CaseRunRequest req = new CaseRunRequest();
+        req.setStatus("failed");
+        req.setStepResults(java.util.Collections.singletonList(stepResult(1, "failed", null)));
+        AppException error = assertThrows(AppException.class, () -> service.run(USER, WS, "C1", req));
+        assertEquals(400, error.getCode());
+        verify(runs, never()).insert(any(TestCaseRun.class));
+    }
+
+    @Test
+    void runRejectsStepResultsIdxOutOfRange() {
+        when(cases.selectById("C1")).thenReturn(caseWithSteps("C1", 2));
+        CaseRunRequest req = new CaseRunRequest();
+        req.setStatus("failed");
+        req.setStepResults(java.util.Collections.singletonList(stepResult(3, "failed", null)));
+        AppException error = assertThrows(AppException.class, () -> service.run(USER, WS, "C1", req));
+        assertEquals(400, error.getCode());
+        verify(runs, never()).insert(any(TestCaseRun.class));
+    }
+
+    @Test
+    void fileDefectDescriptionIncludesFailedStepsFromRun() {
+        TestCase c = existing("C1", "failed");
+        c.setSteps("[{\"action\":\"输入错误密码\",\"expected\":\"提示错误\"},{\"action\":\"连续五次\",\"expected\":\"锁定账号\"}]");
+        when(cases.selectById("C1")).thenReturn(c);
+        Task task = new Task();
+        task.setId("T1");
+        when(taskCommand.create(eq(USER), eq(WS), any())).thenReturn(task);
+        TestCaseRun latest = new TestCaseRun();
+        latest.setId("R1");
+        latest.setStatus("failed");
+        latest.setStepResults("[{\"idx\":2,\"status\":\"failed\",\"note\":\"未出现锁定提示\"}]");
+        when(runs.selectLatestByCase("C1")).thenReturn(latest);
+
+        CaseDefectRequest req = new CaseDefectRequest();
+        req.setSeverity("major");
+        service.fileDefect(USER, WS, "C1", req);
+
+        ArgumentCaptor<com.hourglass.dto.TaskSaveRequest> captor =
+                ArgumentCaptor.forClass(com.hourglass.dto.TaskSaveRequest.class);
+        verify(taskCommand).create(eq(USER), eq(WS), captor.capture());
+        String desc = captor.getValue().getDescription();
+        assertTrue(desc.contains("未通过步骤"));
+        assertTrue(desc.contains("第 2 步 连续五次"));
+        assertTrue(desc.contains("未出现锁定提示"));
+    }
+
     /* ---------- 失败转缺陷 ---------- */
 
     @Test

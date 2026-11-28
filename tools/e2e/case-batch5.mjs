@@ -211,7 +211,8 @@ try{
       csvOutHidden: !vis(document.getElementById("btnCaseCsvOut")),
       csvInHidden: !vis(document.getElementById("btnCaseCsvIn")),
       aiHidden: !vis(document.getElementById("btnCaseAi")),
-      modeSegVisible: vis(document.getElementById("subNav")) && !!document.querySelector('#subNav [data-sub-tab="report"].on'),
+      /* 报告是「测试计划」下的页签（syncTcSubnav 有意映射），高亮落在 plans 而非 report */
+      modeSegVisible: vis(document.getElementById("subNav")) && !!document.querySelector('#subNav [data-sub-tab="plans"].on'),
       reqSelVisible: vis(document.getElementById("tcReq")),
       reportCsvVisible: vis(document.querySelector("#tcReport [data-tc-report-csv]"))
     };

@@ -17,5 +17,7 @@ public class CaseRunView {
     private String bugTaskId;
     private String executedBy;
     private LocalDateTime createdAt;
+    /** 逐步执行结果（逐步勾选时返回，供历史回看每步通过/失败/阻塞） */
+    private List<CaseRunStepResult> stepResults;
     private List<Attachment> attachments;
 }

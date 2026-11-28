@@ -8,6 +8,7 @@ import com.hourglass.common.Texts;
 import com.hourglass.dto.CaseDefectRequest;
 import com.hourglass.dto.CaseQuery;
 import com.hourglass.dto.CaseRunRequest;
+import com.hourglass.dto.CaseRunStepResult;
 import com.hourglass.dto.CaseRunView;
 import com.hourglass.dto.CaseStatsView;
 import com.hourglass.dto.CaseRunStatsView;
@@ -802,6 +803,7 @@ public class TestCaseService {
             v.setId(r.getId());
             v.setStatus(r.getStatus());
             v.setNote(r.getNote());
+            v.setStepResults(parseStepResults(r.getStepResults()));
             v.setEnvironment(r.getEnvironment());
             v.setBugTaskId(r.getBugTaskId());
             v.setExecutedBy(r.getExecutedBy());
@@ -1414,18 +1416,47 @@ public class TestCaseService {
             executorName = m.getDisplayName() != null ? m.getDisplayName() : m.getUsername();
         }
         String note = Texts.trimToNull(req.getNote());
+        String stepResultsJson = null;
+        String status = req.getStatus();
+        if (req.getStepResults() != null && !req.getStepResults().isEmpty()) {
+            /* 逐步勾选：总结果以步骤为准推导，前端传来的 status 仅作展示同步，防止两端口径分叉 */
+            List<Map<String, String>> caseSteps = parseSteps(c.getSteps());
+            if (caseSteps == null || caseSteps.isEmpty()) {
+                throw AppException.badRequest("该用例没有执行步骤，不能提交逐步结果");
+            }
+            boolean hasFailed = false;
+            boolean hasBlocked = false;
+            for (CaseRunStepResult s : req.getStepResults()) {
+                if (s.getIdx() < 1 || s.getIdx() > caseSteps.size()) {
+                    throw AppException.badRequest("步骤下标超出用例步骤范围：" + s.getIdx());
+                }
+                if (CaseMeta.STATUS_FAILED.equals(s.getStatus())) {
+                    hasFailed = true;
+                } else if (CaseMeta.STATUS_BLOCKED.equals(s.getStatus())) {
+                    hasBlocked = true;
+                }
+            }
+            status = hasFailed ? CaseMeta.STATUS_FAILED
+                    : hasBlocked ? CaseMeta.STATUS_BLOCKED : CaseMeta.STATUS_PASSED;
+            try {
+                stepResultsJson = JSON.writeValueAsString(req.getStepResults());
+            } catch (Exception e) {
+                throw AppException.badRequest("逐步结果格式不合法");
+            }
+        }
         TestCaseRun run = new TestCaseRun();
         run.setId(Ids.gen("R"));
         run.setCaseId(id);
         run.setWorkspaceId(workspaceId);
-        run.setStatus(req.getStatus());
+        run.setStatus(status);
         run.setNote(note);
+        run.setStepResults(stepResultsJson);
         run.setEnvironment(Texts.trimToNull(req.getEnvironment()));
         run.setPlanId(Texts.trimToNull(planId));
         run.setExecutedBy(executorName);
         run.setExecutedByUserId(executorId);
         runMapper.insert(run);
-        caseMapper.updateLatest(workspaceId, id, req.getStatus(), note, executorName, executorId);
+        caseMapper.updateLatest(workspaceId, id, status, note, executorName, executorId);
         demandCompletion.refreshCompletion(workspaceId, c.getDemandId());
         return runMapper.selectById(run.getId());
     }
@@ -2117,6 +2148,20 @@ public class TestCaseService {
         return String.format("TC-%03d", caseNo);
     }
 
+    /** 逐步执行结果 JSON → DTO（解析失败按未勾选处理，不阻断历史查看） */
+    private List<CaseRunStepResult> parseStepResults(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        try {
+            return JSON.readValue(raw, new TypeReference<List<CaseRunStepResult>>() {
+            });
+        } catch (Exception e) {
+            log.warn("逐步执行结果 JSON 解析失败，已忽略");
+            return null;
+        }
+    }
+
     private String buildDefectDescription(TestCase c, TestCaseRun latest, String extraNote) {
         StringBuilder sb = new StringBuilder();
         sb.append("测试用例 ").append(caseNoLabel(c.getCaseNo())).append("「").append(c.getTitle()).append("」执行失败，自动转出。\n");
@@ -2158,6 +2203,27 @@ public class TestCaseService {
                     sb.append("（预期：").append(s.get("expected")).append("）");
                 }
                 sb.append("\n");
+            }
+        }
+        /* 逐步勾选时，失败/阻塞步骤连同每步备注是定位问题最直接的证据，写进描述 */
+        List<CaseRunStepResult> stepResults = latest != null ? parseStepResults(latest.getStepResults()) : null;
+        if (stepResults != null && !stepResults.isEmpty()) {
+            StringBuilder bad = new StringBuilder();
+            for (CaseRunStepResult sr : stepResults) {
+                if (!CaseMeta.STATUS_FAILED.equals(sr.getStatus()) && !CaseMeta.STATUS_BLOCKED.equals(sr.getStatus())) {
+                    continue;
+                }
+                int i = sr.getIdx() - 1;
+                String action = i >= 0 && i < steps.size() ? steps.get(i).get("action") : ("第 " + sr.getIdx() + " 步");
+                bad.append("第 ").append(sr.getIdx()).append(" 步 ").append(action)
+                        .append(CaseMeta.STATUS_FAILED.equals(sr.getStatus()) ? "：实际结果与预期不符" : "：执行受阻");
+                if (sr.getNote() != null && !sr.getNote().isEmpty()) {
+                    bad.append("（").append(sr.getNote()).append("）");
+                }
+                bad.append("\n");
+            }
+            if (bad.length() > 0) {
+                sb.append("\n未通过步骤：\n").append(bad);
             }
         }
         if (c.getLatestNote() != null) {

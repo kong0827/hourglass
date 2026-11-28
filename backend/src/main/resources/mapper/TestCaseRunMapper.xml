@@ -4,10 +4,10 @@
 
   <insert id="insert">
     INSERT INTO test_case_run
-      (id, case_id, workspace_id, status, note, environment, bug_task_id, plan_id,
+      (id, case_id, workspace_id, status, note, step_results, environment, bug_task_id, plan_id,
        executed_by, executed_by_user_id, created_at)
     VALUES
-      (#{id}, #{caseId}, #{workspaceId}, #{status}, #{note}, #{environment}, #{bugTaskId}, #{planId},
+      (#{id}, #{caseId}, #{workspaceId}, #{status}, #{note}, #{stepResults}, #{environment}, #{bugTaskId}, #{planId},
        #{executedBy}, #{executedByUserId}, COALESCE(#{createdAt}, CURRENT_TIMESTAMP))
   </insert>
 

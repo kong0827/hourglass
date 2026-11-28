@@ -155,12 +155,15 @@ try{
   const openFirstCase = async () => {
     await evaluate(`(() => {
       const rows = [...document.querySelectorAll('[data-tc-open]')];
+      /* 自建种子用例优先：步骤数与执行记录都确定，不赌演示数据 */
+      const seedRow = window.__e2eSeedId ? rows.find(r => r.dataset.tcOpen === window.__e2eSeedId) : null;
       const withRun = rows.find(r => {
         const m = r.querySelector('.tc-meta-2');
         return m && m.textContent.indexOf('执行') >= 0;
       });
-      (withRun || rows[0]).click();
-      window.__e2eCaseId = (withRun || rows[0]).dataset.tcOpen;
+      const row = seedRow || withRun || rows[0];
+      row.click();
+      window.__e2eCaseId = row.dataset.tcOpen;
       return true;
     })()`);
     await waitFor(`(() => {
@@ -188,6 +191,24 @@ try{
   await setViewport(1440, 900, false);
   await login("admin");
   await openCases();
+  /* A0 自建带 2 步 + 1 次执行的用例：步骤表格、计数与执行历史都要有确定内容 */
+  const seed = await evaluate(`(async () => {
+    const { API } = await import("./js/core/api.js");
+    const sel = document.getElementById('tcReq');
+    const opt = sel ? [...sel.options].find(o => !/^__/.test(o.value)) : null;
+    if (!opt) return { error: "没有可用项目" };
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const created = await API.post("/api/test-cases", {
+      reqId: opt.value, title: "E2E 抽屉 " + stamp, priority: "P2",
+      steps: [ { action: "第一步", expected: "结果一" }, { action: "第二步", expected: "结果二" } ]
+    });
+    await API.post("/api/test-cases/" + encodeURIComponent(created.id) + "/runs", { status: "passed", note: "E2E 种子执行", stepResults: null, environment: null, executedByUserId: null });
+    window.__e2eSeedId = created.id;
+    sel.value = opt.value; sel.dispatchEvent(new Event('change', { bubbles: true }));
+    return { caseId: created.id };
+  })()`);
+  assert(!seed.error && !!seed.caseId, "新建抽屉 E2E 用例成功" + (seed.error ? "：" + seed.error : ""));
+  await waitFor(`!!document.querySelector('[data-tc-open="${seed.caseId}"]')`, "新用例行渲染");
   await openReadCaseWithClose();
   const a = await evaluate(`(() => {
     const d = document.getElementById('dlgCase');
@@ -206,9 +227,9 @@ try{
       title: (view.querySelector('h2') || {}).textContent || '',
       meta: (view.querySelector('.case-detail-meta') || {}).textContent || '',
       tabs,
-      facts: view.querySelectorAll('.case-facts .case-fact').length,
-      factsText: (view.querySelector('.case-facts') || {}).textContent || '',
-      counts: ['steps','runs','defects'].map(k => view.querySelector('[data-count="' + k + '"]').textContent.trim()),
+      keys: view.querySelectorAll('.case-keyrow .case-kcard').length,
+      keysText: (view.querySelector('.case-keyrow') || {}).textContent || '',
+      counts: ['runs','defects'].map(k => { const el = view.querySelector('[data-count="' + k + '"]'); return el ? el.textContent.trim() : null; }),
       hasEdit: !!view.querySelector('[data-case-edit]'),
       hasRun: !!view.querySelector('[data-case-run]'),
       canTitle: !!view.querySelector('[data-case-title-edit]'),
@@ -218,28 +239,31 @@ try{
   assert(a.open && a.editHidden, "点行打开阅读态抽屉，编辑表单不出现");
   assert(a.right === a.vw, "抽屉贴右缘（右边界 " + a.right + " = 视口 " + a.vw + "）");
   assert(a.title.trim().length > 0 && a.meta.indexOf(" · ") > 0, "标题与元信息就位");
-  assert(a.tabs.length === 4 && a.tabs[0].on, "四个页签、默认打开概览");
+  assert(a.tabs.length === 3 && a.tabs[0].on, "三个页签（概览/执行历史/缺陷）、默认打开概览");
   const tabLabels = a.tabs.map(t => t.label.replace(/\s+/g, " "));
-  assert(tabLabels[0] === "概览" && /^步骤 \d+$/.test(tabLabels[1]) && /^执行历史 \d+$/.test(tabLabels[2]) && /^缺陷 \d+$/.test(tabLabels[3]),
+  assert(tabLabels[0] === "概览" && /^执行历史 \d+$/.test(tabLabels[1]) && /^缺陷 \d+$/.test(tabLabels[2]),
     "页签带计数（" + tabLabels.join(" / ") + "）");
-  assert(a.facts === 6 && /优先级/.test(a.factsText), "概览六项事实卡");
+  assert(a.keys === 3 && /优先级/.test(a.keysText), "概览三张关键卡（含优先级）");
   assert(a.hasEdit && a.hasRun && a.canTitle && a.backHidden, "有权限时给编辑 / 记录执行 / 标题就地修改；阅读态不显示「取消」");
   await shot("read-1440.png");
 
-  /* B 页签：步骤 / 执行历史 / 缺陷 */
-  await clickTab("steps");
+  /* B 页签：概览内嵌步骤只读表格 / 执行历史 / 缺陷 */
+  /* 抽屉会在执行记录到达后重渲染：等步骤表格落定再读，别读到重渲染前的空块 */
+  await waitFor(`(() => { const v = document.getElementById('caseDetailView');
+    const m = ((v.querySelector('.case-steps-block .cnt') || {}).textContent || '').match(/([0-9]+)/);
+    return m && Number(m[1]) > 0; })()`, "概览步骤表格就绪", 15000);
   const b1 = await evaluate(`(() => {
     const view = document.getElementById('caseDetailView');
+    const cnt = ((view.querySelector('.case-steps-block .cnt') || {}).textContent || '').match(/([0-9]+)/);
     return {
-      steps: view.querySelectorAll('.case-steps-read li').length,
-      count: Number(view.querySelector('[data-count="steps"]').textContent.trim()),
-      inputs: view.querySelectorAll('textarea').length,
-      acts: view.querySelectorAll('.tc-step-acts').length,
-      expected: view.querySelectorAll('.case-steps-read .exp').length
+      count: cnt ? Number(cnt[1]) : 0,
+      cells: view.querySelectorAll('.case-steps-grid .case-step-cell').length,
+      inputs: view.querySelectorAll('.case-step-input, textarea').length,
+      editable: view.querySelectorAll('.case-step-cell.editable').length
     };
   })()`);
-  assert(b1.steps === b1.count && b1.steps > 0, "步骤页签条数与计数一致（" + b1.steps + " 步）");
-  assert(b1.inputs === 0 && b1.acts === 0, "步骤页签是只读列表，没有输入框与行操作");
+  assert(b1.count > 0 && b1.cells === b1.count * 2, "概览步骤表格条数与计数一致（" + b1.count + " 步）");
+  assert(b1.inputs === 0 && b1.editable === b1.count * 2, "概览步骤未进入行内编辑：无输入框，单元格可点就改");
   await shot("steps-1440.png");
   await clickTab("runs");
   await waitFor(`(() => {
@@ -325,14 +349,14 @@ try{
 
   /* D0 编辑态「取消」回到阅读态：有改动先确认，放弃后标题不变 */
   await evaluate(`document.querySelector('#caseDetailView [data-case-edit]').click()`);
-  await waitFor("!document.getElementById('caseEditBody').hidden && document.getElementById('caseDetailView').hidden", "切到编辑态", 8000);
-  const d0back = await evaluate(`!document.getElementById('caseEditBack').hidden`);
+  await waitFor("document.querySelectorAll('#caseDetailView [data-case-draft-step]').length > 0", "切到编辑态", 8000);
+  const d0back = await evaluate(`!!document.querySelector('#caseDetailView [data-case-edit-cancel]')`);
   assert(d0back, "编辑态提供「取消」，不用关掉整个抽屉才能回到详情");
   await evaluate(`(() => {
-    const el = document.getElementById('cTitle');
+    const el = document.getElementById('caseEditTitle');
     el.value = el.value + ' 未保存';
     el.dispatchEvent(new Event('input', { bubbles: true }));
-    document.getElementById('caseEditBack').click();
+    document.querySelector('#caseDetailView [data-case-edit-cancel]').click();
     return true;
   })()`);
   await waitFor(`document.getElementById('dlgConfirm').classList.contains('open')`, "放弃修改确认框", 8000);
@@ -343,41 +367,17 @@ try{
 
   /* D 编辑 → 保存 → 回阅读态（不关抽屉） */
   await evaluate(`document.querySelector('#caseDetailView [data-case-edit]').click()`);
-  await waitFor("!document.getElementById('caseEditBody').hidden && document.getElementById('caseDetailView').hidden", "再次切到编辑态", 8000);
+  await waitFor("document.querySelectorAll('#caseDetailView [data-case-draft-step]').length > 0", "再次切到编辑态", 8000);
   const d1 = await evaluate(`(() => ({
-    formTitle: document.getElementById('caseFormTitle').textContent,
-    input: document.getElementById('cTitle').value,
-    steps: document.querySelectorAll('#tcSteps .tc-step-row').length
+    input: document.getElementById('caseEditTitle').value,
+    steps: document.querySelectorAll('#caseDetailView [data-case-draft-step][data-k="action"]').length
   }))()`);
-  assert(d1.input === original, "编辑表单回填当前标题（" + d1.input + "）");
-  assert(d1.steps === b1.steps, "编辑表单回填步骤（" + d1.steps + " 行）");
-  /* 字段多时表单高于抽屉：标题栏与保存行钉在上下缘，滚到哪都能取消或保存 */
-  const d1s = await evaluate(`(() => {
-    const body = document.getElementById('caseEditBody');
-    const head = document.querySelector('#caseEditBody .panel-head');
-    const btn = document.getElementById('btnSaveCase');
-    const r = el => el.getBoundingClientRect();
-    const visible = el => r(el).top >= 0 && r(el).bottom <= innerHeight;
-    const before = { scrollable: body.scrollHeight > body.clientHeight + 1, btnVisible: visible(btn) };
-    body.scrollTop = body.scrollHeight;
-    return Object.assign(before, {
-      headPinned: Math.abs(r(head).top) <= 1,
-      btnVisibleScrolled: visible(btn),
-      gapBelowBtn: Math.round(r(body).bottom - r(btn).bottom),
-      headTop: Math.round(r(head).top), btnBottom: Math.round(r(btn).bottom), bodyBottom: Math.round(r(body).bottom)
-    });
-  })()`);
-  assert(d1s.btnVisible, "编辑态保存按钮首屏可见，不被表单推出屏幕");
-  const d1pin = d1s.headPinned && d1s.btnVisibleScrolled && d1s.gapBelowBtn <= 13;
-  if(!d1pin) console.log("    布局度量 " + JSON.stringify(d1s));
-  assert(d1pin, "滚到表单底部时标题栏贴顶、保存行贴底，不被滚走");
-  await sleep(150);
-  await shot("edit-scrolled-1440.png");
-  await evaluate(`document.getElementById('caseEditBody').scrollTop = 0`);
+  assert(d1.input === original, "编辑态回填当前标题（" + d1.input + "）");
+  assert(d1.steps === b1.count, "编辑态回填步骤（" + d1.steps + " 行）");
   await sleep(150);
   await shot("edit-1440.png");
-  await evaluate(`document.getElementById('btnSaveCase').click()`);
-  await waitFor("document.getElementById('caseEditBody').hidden && !document.getElementById('caseDetailView').hidden && document.getElementById('dlgCase').classList.contains('open')", "保存后回阅读态", 20000);
+  await evaluate(`document.querySelector('#caseDetailView [data-case-edit-save]').click()`);
+  await waitFor("!document.getElementById('caseDetailView').hidden && document.getElementById('dlgCase').classList.contains('open') && document.querySelectorAll('#caseDetailView [data-case-draft-step]').length === 0", "保存后回阅读态", 20000);
   const d2 = await evaluate(`document.querySelector('#caseDetailView h2').textContent.trim()`);
   assert(d2 === original, "保存后抽屉留在阅读态并显示最新标题");
   pass("保存后未关抽屉，可继续看步骤 / 执行历史");
@@ -429,13 +429,16 @@ try{
     };
   })()`);
   assert(g.read && !g.edit && !g.run && !g.title, "查看者阅读态无编辑 / 记录执行 / 改标题");
-  await clickTab("steps");
   const g2 = await evaluate(`(() => {
     const view = document.getElementById('caseDetailView');
-    return { steps: view.querySelectorAll('.case-steps-read li').length, acts: view.querySelectorAll('.tc-step-acts').length };
+    return {
+      ro: !!view.querySelector('.case-steps-grid.is-ro'),
+      cells: view.querySelectorAll('.case-steps-grid .case-step-cell').length,
+      acts: view.querySelectorAll('.case-step-acts').length,
+      inputs: view.querySelectorAll('.case-step-input, textarea').length
+    };
   })()`);
-  assert(g2.steps > 0 && g2.acts === 0, "查看者步骤页签只读");
-  await clickTab("overview");
+  assert(g2.ro && g2.cells > 0 && g2.acts === 0 && g2.inputs === 0, "查看者概览步骤是只读表格");
   await shot("viewer-1440.png");
 
   const realErrors = cdp.errors.filter(e => !/favicon|net::|Failed to load resource/.test(e));

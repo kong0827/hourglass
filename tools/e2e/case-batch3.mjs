@@ -519,10 +519,11 @@ try{
   await login(VIEWER);
   await gotoCases();
   await evaluate(`(async () => { const m = await import("./js/views/testcases.js"); m.setTcMode("report"); m.setTcProject(${JSON.stringify(seed.reqId)}); return true; })()`);
-  await waitFor(`!!document.querySelector('#tcReport .rep-head')`, "查看者报告渲染", 25000);
+  /* v4 改版后报告头为 rep-banner/rep-kpis，rep-head 已不存在 */
+  await waitFor(`!!document.querySelector('#tcReport .rep-banner') && !!document.querySelector('#tcReport .rep-kpis')`, "查看者报告渲染", 25000);
   const d = await evaluate(`(() => {
     const sec = document.querySelector('#tcReport .rep-runstats');
-    return { hasReport: !!document.querySelector('#tcReport .rep-head'), hasStats: !!sec, cols: sec ? sec.querySelectorAll('.rs-col').length : 0 };
+    return { hasReport: !!document.querySelector('#tcReport .rep-banner'), hasStats: !!sec, cols: sec ? sec.querySelectorAll('.rs-col').length : 0 };
   })()`);
   assert(d.hasReport, "查看者可看测试报告");
   assert(d.hasStats && d.cols === 3, "查看者报告含执行统计三列");

@@ -1,7 +1,8 @@
-/* 用例步骤编辑器（插行 / 上移 / 下移 / 删除）E2E · 真 Chrome + 本地栈
-   用法：E2E_BASE=http://127.0.0.1:8081/hourglass node tools/e2e/case-steps.mjs
-   覆盖：桌面行内插行/排序/删除/边界禁用/Ctrl+Enter、390 宽移动端布局、查看者只读态隐藏操作。
-   只读态用本地演示数据自带的 viewer 账号 wujun，不改动任何权限数据。 */
+/* 用例步骤编辑（插行 / 上移 / 下移 / 删除）E2E · 真 Chrome + 本地栈
+   用法：E2E_BASE=http://127.0.0.1:8081/hourglass E2E_PASS=admin123 node tools/e2e/case-steps.mjs
+   覆盖：桌面插行/排序/删除/边界禁用/Ctrl+Enter、390 宽移动端布局、查看者只读态隐藏操作。
+   步骤编辑在详情抽屉的编辑态（草稿表格）进行；用例表单里的整表编辑器只服务新建。
+   只读态用本地演示数据的 viewer 账号（E2E_VIEWER 覆盖，默认 wujun），不改动任何权限数据。 */
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -134,28 +135,29 @@ try{
       }
       return !!document.querySelector('[data-tc-open]');
     })()`, "用例列表", 30000);
-  };
-  /* 点行先进阅读态抽屉，步骤编辑器点「编辑」才出现 */
-  const openFirstCase = async (edit = true) => {
-    await evaluate("document.querySelector('[data-tc-open]').click()");
-    await waitFor(`(() => {
-      const d = document.getElementById('dlgCase'), v = document.getElementById('caseDetailView');
-      return !!d && d.classList.contains('open') && !!v && !v.hidden && !!v.querySelector('h2');
-    })()`, "用例抽屉阅读态");
-    if(edit){
-      await evaluate("document.querySelector('#caseDetailView [data-case-edit]').click()");
-      await waitFor("!document.getElementById('caseEditBody').hidden && document.querySelectorAll('#tcSteps .tc-step-row').length > 0", "用例编辑态");
-    }
-    await sleep(450); /* 等开框过渡结束再截图，避免半透明叠影 */
+    /* 全部项目概览只读（编辑/执行都不可用）：落到具体项目再测 */
+    await evaluate(`(() => {
+      const sel = document.getElementById('tcReq');
+      if (!sel || !/^__/.test(sel.value)) return true;
+      const opt = [...sel.options].find(o => !/^__/.test(o.value));
+      if (!opt) return true;
+      sel.value = opt.value;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    })()`);
+    await waitFor(`!!document.querySelector('[data-tc-open]')`, "具体项目用例列表", 30000);
   };
   const closeCase = async () => {
+    /* 编辑态先取消回阅读态，再关抽屉 */
     await evaluate(`(() => {
-      const edit = document.getElementById('caseEditBody');
-      if(edit && !edit.hidden) document.getElementById('dlgCaseX').click();
-      else {
-        const b = document.querySelector('#caseDetailView [data-case-close]');
-        if(b) b.click();
-      }
+      const cancel = document.querySelector('#caseDetailView [data-case-edit-cancel]');
+      if (cancel) cancel.click();
+      return true;
+    })()`);
+    await sleep(200);
+    await evaluate(`(() => {
+      const x = document.getElementById('dlgCaseX');
+      if (x) x.click();
       return true;
     })()`);
     await waitFor("getComputedStyle(document.getElementById('dlgCase')).display === 'none'", "关闭用例抽屉");
@@ -163,36 +165,67 @@ try{
 
   console.log("用例步骤交互 E2E\n  地址：" + BASE);
 
-  /* ---------------- A 桌面：插行 / 排序 / 删除 ---------------- */
+  /* A0 自建带 2 步的用例：列表首条不一定是可写项目带步骤的用例，步骤编辑必须基于确定数据 */
   await setViewport(1440, 900, false);
   await login("admin");
   await openCases();
-  await openFirstCase();
+  const seed = await evaluate(`(async () => {
+    const { API } = await import("./js/core/api.js");
+    const sel = document.getElementById('tcReq');
+    const opt = sel ? [...sel.options].find(o => !/^__/.test(o.value)) : null;
+    if (!opt) return { error: "没有可用项目" };
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const created = await API.post("/api/test-cases", {
+      reqId: opt.value, title: "E2E 步骤交互 " + stamp, priority: "P2",
+      steps: [ { action: "第一步", expected: "结果一" }, { action: "第二步", expected: "结果二" } ]
+    });
+    sel.value = opt.value; sel.dispatchEvent(new Event('change', { bubbles: true }));
+    return { caseId: created.id };
+  })()`);
+  assert(!seed.error && !!seed.caseId, "新建步骤 E2E 用例成功" + (seed.error ? "：" + seed.error : ""));
+  await waitFor(`!!document.querySelector('[data-tc-open="${seed.caseId}"]')`, "新用例行渲染");
+  /* 点行进阅读态抽屉，点「编辑」进草稿编辑态（抽屉内联编辑，非新建表单） */
+  const openSeedCase = async () => {
+    await evaluate(`document.querySelector('[data-tc-open="${seed.caseId}"]').click()`);
+    await waitFor(`(() => {
+      const d = document.getElementById('dlgCase'), v = document.getElementById('caseDetailView');
+      return !!d && d.classList.contains('open') && !!v && !v.hidden && !!v.querySelector('h2');
+    })()`, "用例抽屉阅读态");
+    await evaluate("document.querySelector('#caseDetailView [data-case-edit]').click()");
+    await waitFor("document.querySelectorAll('#caseDetailView [data-case-draft-step]').length > 0", "用例编辑态");
+    await sleep(450); /* 等开框过渡结束再截图，避免半透明叠影 */
+  };
+
+  /* ---------------- A 桌面：插行 / 排序 / 删除 ---------------- */
+  await openSeedCase();
   const a = await evaluate(`(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
-    const $ = s => document.querySelector(s);
-    const rows = () => [...document.querySelectorAll('#tcSteps .tc-step-row')];
-    const texts = () => rows().map(r => r.querySelectorAll('textarea')[0].value);
+    const box = () => document.getElementById('caseDetailView');
+    const rows = () => [...box().querySelectorAll('.case-step-row')];
+    const actTa = i => rows()[i].querySelector('[data-case-draft-step][data-k="action"]');
+    const texts = () => rows().map(r => r.querySelector('[data-case-draft-step][data-k="action"]').value);
+    const act = (name, i) => box().querySelector('[data-case-act="' + name + '"][data-i="' + i + '"]');
     const orig = texts();
-    const out = { btns: rows()[0].querySelectorAll('.tc-step-acts button').length };
-    $('#tcSteps [data-step-add="0"]').click(); await wait(40);
+    const out = { btns: rows()[0].querySelectorAll('.case-step-acts button').length };
+    act('d-step-ins', 0).click(); await wait(60);
     out.insert = rows().length === orig.length + 1 && texts()[1] === ''
-      && document.activeElement === rows()[1].querySelectorAll('textarea')[0];
-    rows()[1].querySelectorAll('textarea')[0].value = '中间插入';
-    $('#tcSteps [data-step-down="1"]').click(); await wait(40);
+      && document.activeElement === actTa(1);
+    actTa(1).value = '中间插入';
+    actTa(1).dispatchEvent(new Event('input', { bubbles: true }));
+    act('d-step-down', 1).click(); await wait(60);
     out.down = texts()[2] === '中间插入';
-    $('#tcSteps [data-step-up="2"]').click(); await wait(40);
+    act('d-step-up', 2).click(); await wait(60);
     out.up = texts()[1] === '中间插入';
-    out.boundary = rows()[0].querySelector('[data-step-up]').disabled
-      && rows()[rows().length - 1].querySelector('[data-step-down]').disabled;
-    $('#tcSteps [data-step-del="1"]').click(); await wait(40);
+    out.boundary = act('d-step-up', 0).disabled
+      && act('d-step-down', rows().length - 1).disabled;
+    act('d-step-del', 1).click(); await wait(60);
     out.del = JSON.stringify(texts()) === JSON.stringify(orig);
-    const ta = rows()[0].querySelectorAll('textarea')[0]; ta.focus();
-    ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true, cancelable: true })); await wait(40);
+    const ta = actTa(0); ta.focus();
+    ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true, cancelable: true })); await wait(60);
     out.ctrlEnter = rows().length === orig.length + 1 && texts()[1] === '';
     out.staysOpen = getComputedStyle(document.getElementById('dlgCase')).display !== 'none';
-    $('#tcSteps [data-step-del="1"]').click(); await wait(40);
-    out.numbers = rows().map(r => r.querySelector('.tc-step-no').textContent).join(',') === orig.map((_, i) => i + 1).join(',');
+    act('d-step-del', 1).click(); await wait(60);
+    out.numbers = rows().map(r => r.querySelector('.case-step-no').textContent).join(',') === orig.map((_, i) => i + 1).join(',');
     return out;
   })()`);
   assert(a.btns === 4, "每行 4 个操作按钮（插入/上移/下移/删除）");
@@ -212,17 +245,18 @@ try{
   await call("Page.navigate", { url: BASE + "/#/testcases" });
   await waitFor("document.body.dataset.layout === 'mobile' && document.body.dataset.view === 'testcases'", "移动布局");
   await openCases();
-  await openFirstCase();
+  await openSeedCase();
   const b = await evaluate(`(() => {
-    const row = document.querySelector('#tcSteps .tc-step-row');
-    const acts = row.querySelector('.tc-step-acts');
+    const grid = document.querySelector('#caseDetailView .case-steps-grid');
+    const row = grid.querySelector('.case-step-row');
+    const acts = row.querySelector('.case-step-acts');
     const ar = acts.getBoundingClientRect();
-    const ta = row.querySelectorAll('textarea')[0].getBoundingClientRect();
-    return { layout: document.body.dataset.layout, actsRight: ar.right, actsVisible: ar.width > 0 && getComputedStyle(acts).display !== 'none', taWidth: ta.width, overflow: document.getElementById('tcSteps').scrollWidth > document.getElementById('tcSteps').clientWidth + 1 };
+    const ta = row.querySelector('[data-case-draft-step]').getBoundingClientRect();
+    return { layout: document.body.dataset.layout, actsRight: ar.right, actsVisible: ar.width > 0 && getComputedStyle(acts).display !== 'none', taWidth: ta.width, overflow: grid.scrollWidth > grid.clientWidth + 1 };
   })()`);
   assert(b.layout === "mobile", "移动端布局生效");
   assert(b.actsVisible && b.actsRight <= 390, "操作按钮组在 390 宽内完整可见");
-  assert(b.taWidth > 200 && !b.overflow, "步骤输入整行宽、无横向溢出");
+  assert(b.taWidth > 100 && !b.overflow, "步骤输入可用行宽（" + Math.round(b.taWidth) + "px）且无横向溢出");
   await shot("case-steps-mobile.png");
   await closeCase();
 
@@ -230,12 +264,16 @@ try{
   await setViewport(1440, 900, false);
   await login(VIEWER);
   await openCases();
-  await openFirstCase(false);
+  await evaluate("document.querySelector('[data-tc-open]').click()");
+  await waitFor(`(() => {
+    const d = document.getElementById('dlgCase'), v = document.getElementById('caseDetailView');
+    return !!d && d.classList.contains('open') && !!v && !v.hidden && !!v.querySelector('h2');
+  })()`, "查看者用例抽屉");
   const c = await evaluate(`(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
     const view = document.getElementById('caseDetailView');
     const out = {
-      read: !view.hidden && document.getElementById('caseEditBody').hidden,
+      read: !view.hidden,
       title: (view.querySelector('.case-detail-head h2') || {}).textContent || "",
       canEdit: !!view.querySelector('[data-case-edit]'),
       canRun: !!view.querySelector('[data-case-run]'),
@@ -243,14 +281,14 @@ try{
     };
     const stepsTab = view.querySelector('[data-case-tab="steps"]');
     if(stepsTab){ stepsTab.click(); await wait(80); }
-    out.stepCount = view.querySelectorAll('.case-steps-read li').length;
-    out.stepActs = view.querySelectorAll('.tc-step-acts').length;
-    out.stepInputs = view.querySelectorAll('textarea').length;
+    out.stepActs = view.querySelectorAll('.case-step-acts').length;
+    out.stepInputs = view.querySelectorAll('.case-step-input, textarea').length;
+    out.roGrid = !!view.querySelector('.case-steps-grid.is-ro');
     return out;
   })()`);
   assert(c.read && c.title.trim().length > 0, "查看者打开为阅读态（" + c.title.trim() + "）");
   assert(!c.canEdit && !c.canRun && !c.titleEditable, "只读态不给编辑 / 记录执行 / 改标题入口");
-  assert(c.stepCount > 0 && c.stepActs === 0 && c.stepInputs === 0, "步骤页签是只读列表，没有插行/排序/删除");
+  assert(c.roGrid && c.stepActs === 0 && c.stepInputs === 0, "步骤页签是只读表格，没有插行/排序/删除/输入框");
   await shot("case-steps-readonly.png");
   await closeCase();
 

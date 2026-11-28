@@ -154,7 +154,12 @@ try{
     const { API } = await import("./js/core/api.js");
     const { rt } = await import("./js/core/state.js");
     const sel = document.getElementById('tcReq');
-    const reqId = sel ? sel.value : "";
+    let reqId = sel ? sel.value : "";
+    /* 默认落在「全部项目」等范围伪值时，取第一个真实项目：新建用例必须挂到具体项目 */
+    if(sel && (!reqId || /^__/.test(reqId))){
+      const opt = [...sel.options].find(o => !/^__/.test(o.value));
+      reqId = opt ? opt.value : "";
+    }
     if(!reqId) return { error: "没有可用项目" };
     const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
     const created = await API.post("/api/test-cases", {
@@ -170,21 +175,22 @@ try{
   assert(!seed.error && !!seed.caseId, "新建 E2E 用例成功" + (seed.error ? "：" + seed.error : ""));
   await waitFor(`!!document.querySelector('[data-tc-open="${seed.caseId}"]')`, "新用例行渲染");
 
-  /* A1 行 meta 两行分别交代归属与执行；创建人不再占行（详情抽屉的变更记录可查）。
+  /* A1 行归属：模块为独立列（v4 单行化后不再进 meta 行）；创建人不占行（详情抽屉的变更记录可查）。
      首次执行按钮文案为「执行」 */
   const a1 = await evaluate(`(() => {
     const row = document.querySelector('[data-tc-open="${seed.caseId}"]');
+    const modCol = (row.querySelector('.tc-c-mod') || {}).textContent || "";
     const meta = (row.querySelector('.tc-meta') || {}).textContent || "";
-    const meta2 = (row.querySelector('.tc-meta-2') || {}).textContent || "";
     const runBtn = row.querySelector('[data-tc-run]');
     return {
-      metaHasModule: meta.indexOf('回归') >= 0,
-      metaHasSteps: meta2.indexOf('步骤') >= 0,
+      modHasModule: modCol.indexOf('回归') >= 0,
+      metaNoCreator: meta.indexOf('创建') === -1,
       runLabel: runBtn ? runBtn.textContent.trim() : "",
       hasDefect: !!row.querySelector('[data-tc-defect]')
     };
   })()`);
-  assert(a1.metaHasModule && a1.metaHasSteps, "用例行 meta 分两行显示归属与步骤");
+  assert(a1.modHasModule, "用例行模块列显示归属");
+  assert(a1.metaNoCreator, "用例行 meta 不含创建人行");
   assert(a1.runLabel === "执行", "首次执行按钮文案为「执行」");
   assert(!a1.hasDefect, "未执行时不出现「转缺陷」");
 

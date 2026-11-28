@@ -103,6 +103,7 @@ var runsCaseId = null;
 var runsCaseTitle = "";
 var runsSeq = 0;
 var runsList = [];
+var runCmpSel = ["", ""]; /* 步骤对比：本轮 / 对比轮 的 run id，空或失效时自动取最近两轮 */
 var moduleFilter = "all";   /* 目录节点 ID / __none（未归类）/ all */
 var caseModuleSub = false;  /* 目录筛选是否含子节点用例 */
 var priFilter = "all";
@@ -122,8 +123,10 @@ var caseTaskQuery = "";
 var runningCaseId = null;
 var defectCaseId = null;
 var runStatus = "passed";
+var caseKbId = null;        /* 键盘导航高亮的用例行：↑↓ 移动、Enter 开详情 */
 var runKit = null;          /* 执行弹框的待传证据收集器 */
 var runRoundNo = 0;         /* 本轮是第几次执行（历史总数 + 1） */
+var runStepState = null;    /* 逐步勾选：与用例 steps 对齐的 [{status, note}]，默认全通过；null=无步骤 */
 var defectEvidence = [];    /* 最近一轮失败证据：转缺陷弹框展示与携带 */
 var defectEvSeq = 0;
 var loadSeq = 0;
@@ -2352,6 +2355,24 @@ function loadCaseTimeline(id, seq){
 }
 
 
+/* 历史里的逐步结果：只展示未通过（失败/阻塞）的步骤 + 每步备注，通过的折叠成计数 */
+function runStepResultsHTML(r, steps){
+  var list = r.stepResults;
+  if(!list || !list.length) return "";
+  var bad = list.filter(function(s){ return s.status === "failed" || s.status === "blocked"; });
+  var passedN = list.length - bad.length;
+  var rows = bad.map(function(s){
+    var i = s.idx - 1;
+    var act = steps && steps[i] ? (steps[i].action || "") : "";
+    var mark = s.status === "failed" ? icon("close", 11) : icon("ban", 11);
+    return '<li class="run-step-' + s.status + '"><span class="rs-mark">' + mark + '</span>'
+      + '<span class="rs-txt"><b>第 ' + s.idx + ' 步</b>' + (act ? ' ' + esc(cut(act, 40)) : "")
+      + (s.note ? '<em>' + esc(s.note) + '</em>' : "") + '</span></li>';
+  }).join("");
+  var sum = '<span class="run-steps-sum">逐步勾选 ' + list.length + ' 步'
+    + (passedN ? ' · ' + passedN + ' 步通过' : "") + '</span>';
+  return '<div class="run-steps">' + sum + (rows ? '<ul>' + rows + '</ul>' : "") + '</div>';
+}
 function openRunsDialog(id, title){
   var c = caseById(id);
   runsCaseId = id;
@@ -2372,6 +2393,92 @@ function openRunsDialog(id, title){
     if(seq === runsSeq) $("runsList").innerHTML = UI.errorState(ex.message || "执行历史加载失败");
   });
 }
+/* 步骤对比：轮次选项 = 第N轮 · 时间 · 状态 */
+var CMP_RANK = { passed: 0, skipped: 1, blocked: 2, failed: 3 };
+function cmpRoundLabel(r){
+  var i = runsList.indexOf(r);
+  return "第 " + (runsList.length - i) + " 轮";
+}
+function cmpMarkHTML(s){
+  if(!s || !s.status) return '<span class="mark none">—</span>';
+  var meta = {
+    passed: { cls: "p", ic: "check", label: "通过" },
+    failed: { cls: "f", ic: "close", label: "失败" },
+    blocked: { cls: "b", ic: "ban", label: "阻塞" },
+    skipped: { cls: "s", ic: "minus", label: "跳过" }
+  }[s.status] || { cls: "none", ic: "", label: STATUS_LABEL[s.status] || s.status };
+  return '<span class="mark ' + meta.cls + '">' + (meta.ic ? icon(meta.ic, 11) + " " : "") + esc(meta.label) + '</span>'
+    + (s.note ? ' <span class="note-tag">' + esc(s.note) + '</span>' : "");
+}
+function runCompareHTML(){
+  var withIdx = runsList.map(function(r, i){ return (r.stepResults && r.stepResults.length) ? i : -1; })
+    .filter(function(i){ return i >= 0; });
+  if(withIdx.length < 2) return "";
+  var pick = [withIdx[0], withIdx[1]];
+  if(runCmpSel[0] && runCmpSel[1]){
+    var ids = runsList.map(function(r){ return String(r.id); });
+    var a = ids.indexOf(runCmpSel[0]);
+    var b = ids.indexOf(runCmpSel[1]);
+    if(a >= 0 && b >= 0 && a !== b
+      && runsList[a].stepResults && runsList[a].stepResults.length
+      && runsList[b].stepResults && runsList[b].stepResults.length) pick = [a, b];
+  }
+  runCmpSel = [String(runsList[pick[0]].id), String(runsList[pick[1]].id)];
+  var ra = runsList[pick[0]];
+  var rb = runsList[pick[1]];
+  var rc = caseById(runsCaseId);
+  var steps = rc && rc.steps ? rc.steps : [];
+  var maxIdx = steps.length;
+  [ra, rb].forEach(function(r){
+    r.stepResults.forEach(function(s){ if(s.idx > maxIdx) maxIdx = s.idx; });
+  });
+  function stepRes(r, idx){
+    for(var k = 0; k < r.stepResults.length; k++) if(r.stepResults[k].idx === idx) return r.stepResults[k];
+    return null;
+  }
+  var down = 0, up = 0, same = 0;
+  var rows = "";
+  for(var idx = 1; idx <= maxIdx; idx++){
+    var sa = stepRes(ra, idx);
+    var sb = stepRes(rb, idx);
+    var ra2 = sa ? (CMP_RANK[sa.status] != null ? CMP_RANK[sa.status] : 4) : 0;
+    var rb2 = sb ? (CMP_RANK[sb.status] != null ? CMP_RANK[sb.status] : 4) : 0;
+    var cls = ra2 > rb2 ? "diff-down" : ra2 < rb2 ? "diff-up" : "";
+    if(cls === "diff-down") down++;
+    else if(cls === "diff-up") up++;
+    else same++;
+    var st = steps[idx - 1] || {};
+    rows += '<tr class="' + cls + '"><td class="step">' + idx + ". " + esc(st.action || "")
+      + (st.expected ? '<span class="exp">预期：' + esc(st.expected) + '</span>' : "")
+      + '</td><td>' + cmpMarkHTML(sa) + '</td><td>' + cmpMarkHTML(sb) + '</td></tr>';
+  }
+  function optHTML(r, selId){
+    return '<option value="' + esc(String(r.id)) + '"' + (String(r.id) === selId ? " selected" : "") + '>'
+      + esc(cmpRoundLabel(r)) + " · " + esc(fmtTs(r.createdAt) || "—") + " · " + esc(STATUS_LABEL[r.status] || r.status)
+      + '</option>';
+  }
+  function cmpSelect(n){
+    var selId = runCmpSel[n];
+    /* 另一枚下拉已选的轮次不在本枚出现，保证两个对比对象始终不同 */
+    var otherId = runCmpSel[1 - n];
+    var others = runsList.filter(function(r){ return String(r.id) !== selId && String(r.id) !== otherId && r.stepResults && r.stepResults.length; });
+    var sel = runsList.filter(function(r){ return String(r.id) === selId; })[0];
+    if(!sel && others.length){ sel = others.shift(); runCmpSel[n] = String(sel.id); }
+    return '<select data-cmp-sel="' + n + '" aria-label="' + (n === 0 ? "本轮" : "对比轮") + '">'
+      + (sel ? optHTML(sel, selId) : "")
+      + others.map(function(r){ return optHTML(r, selId); }).join("") + '</select>';
+  }
+  return '<div class="cmp">'
+    + '<div class="cmp-head"><span class="t">步骤对比</span>'
+    + cmpSelect(0)
+    + '<span class="vs">对比</span>'
+    + cmpSelect(1)
+    + '<span class="cmp-chips"><span class="chip down">退步 ' + down + '</span>'
+      + '<span class="chip up">好转 ' + up + '</span>'
+      + '<span class="chip same">一致 ' + same + '</span></span></div>'
+    + '<table class="cmp-tbl"><thead><tr><th style="width:44%">步骤</th><th>' + esc(cmpRoundLabel(ra)) + '（本轮）</th><th>' + esc(cmpRoundLabel(rb)) + '</th></tr></thead>'
+    + '<tbody>' + rows + '</tbody></table></div>';
+}
 function renderRuns(){
   var box = $("runsList");
   if(!box) return;
@@ -2379,8 +2486,9 @@ function renderRuns(){
     box.innerHTML = '<p class="rep-empty">还没有执行记录；点用例上的「执行」记录第一次结果。</p>';
     return;
   }
-  var writable = caseWritable(caseById(runsCaseId));
-  box.innerHTML = runsList.map(function(r){
+  var rc = caseById(runsCaseId);
+  var writable = caseWritable(rc);
+  box.innerHTML = runCompareHTML() + runsList.map(function(r){
     var atts = r.attachments || [];
     var ev = atts.length
       ? '<div class="run-evs">' + atts.map(function(a){ return evidenceHTML(a, writable); }).join("") + '</div>'
@@ -2403,6 +2511,7 @@ function renderRuns(){
       +   '<span class="run-acts">' + bug + upload + '</span>'
       + '</div>'
       + (r.note ? '<p class="run-note">' + esc(r.note) + '</p>' : '')
+      + runStepResultsHTML(r, rc && rc.steps)
       + ev
       + '</div>';
   }).join("");
@@ -3690,7 +3799,7 @@ function caseRowHTML(c, segKey){
   var statusTip = c.latestStatus
     ? (STATUS_LABEL[c.latestStatus] || "") + (c.latestBy ? " · " + c.latestBy : "") + (c.latestAt ? " · " + fmtTs(c.latestAt) : "") + (c.latestNote ? "\n" + c.latestNote : "")
     : "还没有执行记录";
-  return '<div class="tc-row' + (sel ? " is-selected" : "") + (dragging ? " is-dragging" : "") + '"'
+  return '<div class="tc-row' + (sel ? " is-selected" : "") + (dragging ? " is-dragging" : "") + (c.id === caseKbId ? " is-kb" : "") + '"'
     + ' data-tc-open="' + esc(c.id) + '"'
     + (manualOrderScope() ? ' data-tc-order-row="' + esc(c.id) + '"' : "")
     + (w && !caseScopeAll ? ' draggable="true" data-tc-drag="' + esc(c.id) + '"' : "")
@@ -4732,7 +4841,8 @@ function caseDetailRunsHTML(c, writable){
       + '<span class="run-at">' + esc(fmtTs(r.createdAt) || "—") + '</span>'
       + (r.environment ? '<span class="run-env">' + esc(cut(r.environment, 26)) + '</span>' : '')
       + (bug ? '<span class="run-acts">' + bug + '</span>' : '')
-      + '</div>' + (r.note ? '<p class="run-note">' + esc(r.note) + '</p>' : '') + '</div>';
+      + '</div>' + (r.note ? '<p class="run-note">' + esc(r.note) + '</p>' : '')
+      + runStepResultsHTML(r, c.steps) + '</div>';
   }).join("");
 }
 function caseDetailDefectsHTML(){
@@ -4792,6 +4902,9 @@ function renderCaseDetail(){
     + '<div class="case-detail-acts">'
     + (testable ? '<button class="btn sm" type="button" data-case-run>记录执行</button>' : '')
     + (writable ? '<button class="btn sm primary" type="button" data-case-edit>编辑</button>' : '')
+    + '<button class="icon-btn sm drawer-full-btn" type="button" data-drawer-full="case" aria-pressed="false" aria-label="放大为全屏" title="放大为全屏">'
+    + '<svg class="ic-expand" width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>'
+    + '<svg class="ic-contract" width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.4H3.4V9"/><path d="M3.4 3.4 9 9"/><path d="M11 16.6h5.6V11"/><path d="M16.6 16.6 11 11"/></svg></button>'
     + '<button class="icon-btn sm" type="button" data-case-close aria-label="关闭">' + icon("close", 15) + '</button>'
     + '</div></div>'
     + '<div class="case-detail-tabs" role="tablist">' + tabs.map(function(t){
@@ -4800,6 +4913,7 @@ function renderCaseDetail(){
         + (t[2] === null ? '' : ' <span class="cnt" data-count="' + t[0] + '">' + t[2] + '</span>') + '</button>';
     }).join("") + '</div>'
     + '<div class="case-detail-body" role="tabpanel">' + pane + '</div>';
+  UI.syncDrawerFull(box);
   restoreScroll();
   if(caseDetailTab === "overview") bindCaseTimeline(c.id);
 }
@@ -5658,7 +5772,8 @@ function caseFormDirty(){
 }
 function runFormSnapshot(){
   var files = runKit ? runKit.files().map(function(f){ return f.name + ":" + f.size; }) : [];
-  return JSON.stringify([runStatus, $("runNote").value, $("runExecutor").value, $("runEnvironment").value, files]);
+  var steps = runStepState ? runStepState.map(function(s){ return s.status + "|" + s.note; }) : [];
+  return JSON.stringify([runStatus, $("runNote").value, $("runExecutor").value, $("runEnvironment").value, files, steps]);
 }
 function runFormDirty(){ return !!runFormBaseline && runFormSnapshot() !== runFormBaseline; }
 function defectFormSnapshot(){
@@ -6042,6 +6157,11 @@ function openRunDialog(id){
   runningCaseId = id;
   runStatus = "passed";
   runRoundNo = 0;
+  /* 逐步勾选从「全部通过」起步：快乐路径零点击，只点出问题的步骤 */
+  var runCase = caseById(id);
+  runStepState = (runCase && runCase.steps && runCase.steps.length)
+    ? runCase.steps.map(function(){ return { status: "passed", note: "" }; })
+    : null;
   $("runNote").value = "";
   $("runEnvironment").value = "";
   fillRunExecutor();
@@ -6090,10 +6210,45 @@ function fillRunExecutor(){
 }
 function runStepListHTML(steps){
   if(!steps || !steps.length) return '<p class="rc-empty">该用例没有填写执行步骤。</p>';
-  return '<ol class="rc-steps">' + steps.map(function(s){
-    return '<li><span class="rc-act">' + esc(s.action || "") + '</span>'
-      + (s.expected ? '<span class="rc-exp">预期：' + esc(s.expected) + '</span>' : "") + '</li>';
+  return '<ol class="rc-steps rc-steps-run">' + steps.map(function(s, i){
+    var st = runStepState && runStepState[i] ? runStepState[i].status : "passed";
+    var note = runStepState && runStepState[i] ? (runStepState[i].note || "") : "";
+    var seg = ["passed", "failed", "blocked"].map(function(k){
+      var ic = k === "passed" ? icon("check", 12) : k === "failed" ? icon("close", 12) : icon("ban", 12);
+      return '<button type="button" class="rs-rs' + (st === k ? " on-" + k : "") + '" data-run-step="' + i
+        + '" data-run-step-st="' + k + '" aria-label="第 ' + (i + 1) + ' 步标记为' + STATUS_LABEL[k] + '"'
+        + (st === k ? ' aria-pressed="true"' : "") + '>' + ic + '</button>';
+    }).join("");
+    var noteRow = st === "failed"
+      ? '<input class="rs-note" type="text" maxlength="200" data-run-step-note="' + i
+        + '" placeholder="这一步实际发生了什么？（留空按预期不符汇总）" value="' + esc(note) + '" />'
+      : "";
+    return '<li class="rs-' + st + '"><span class="rs-body"><span class="rc-act">' + esc(s.action || "") + '</span>'
+      + (s.expected ? '<span class="rc-exp">预期：' + esc(s.expected) + '</span>' : "") + '</span>'
+      + '<span class="rs-seg">' + seg + '</span>'
+      + (noteRow ? '<span class="rs-note-wrap">' + noteRow + '</span>' : "")
+      + '</li>';
   }).join("") + '</ol>';
+}
+/* 步骤状态 → 总结果：有失败→失败，无失败有阻塞→阻塞，全通过→通过。逐步勾选优先于手工 seg */
+function deriveRunStatusFromSteps(){
+  if(!runStepState) return null;
+  var hasFailed = false, hasBlocked = false;
+  runStepState.forEach(function(s){
+    if(s.status === "failed") hasFailed = true;
+    else if(s.status === "blocked") hasBlocked = true;
+  });
+  return hasFailed ? "failed" : hasBlocked ? "blocked" : "passed";
+}
+function syncRunStepsUI(){
+  var box = $("runContext");
+  if(!box || !runningCaseId) return;
+  var c = caseById(runningCaseId);
+  var block = box.querySelector(".rc-steps-block");
+  if(block) block.innerHTML = '<h4>执行步骤 <button type="button" class="link-btn rs-reset" data-run-step-reset>全部重置为通过</button></h4>'
+    + runStepListHTML(c ? c.steps : null);
+  var derived = deriveRunStatusFromSteps();
+  if(derived){ runStatus = derived; syncRunSeg(); }
 }
 function renderRunContext(c, last){
   var box = $("runContext");
@@ -6123,7 +6278,7 @@ function renderRunContext(c, last){
     + prev
     + (c.precondition ? '<div class="rc-block"><h4>前置条件</h4><p>' + esc(c.precondition) + '</p></div>' : "")
     + (c.testData ? '<div class="rc-block"><h4>测试数据</h4><p>' + esc(c.testData) + '</p></div>' : "")
-    + '<div class="rc-block rc-steps-block"><h4>执行步骤</h4>' + runStepListHTML(c.steps) + '</div>';
+    + '<div class="rc-block rc-steps-block"><h4>执行步骤 <button type="button" class="link-btn rs-reset" data-run-step-reset>全部重置为通过</button></h4>' + runStepListHTML(c.steps) + '</div>';
 }
 function syncRunSeg(){
   document.querySelectorAll("#segCaseRun [data-run-status]").forEach(function(b){
@@ -6136,6 +6291,26 @@ function doRun(){
   if(caseRunning || !runningCaseId) return;
   var caseId = runningCaseId;
   var files = runKit ? runKit.files() : [];
+  /* 逐步勾选：备注留空且有失败步骤时按「第 N 步」自动汇总，缺陷与历史都能直接定位。
+     只有真的标记了非通过步骤才提交逐步结果：全通过时以手工 seg 为准（整例崩溃等非步骤性失败可手选失败） */
+  var noteText = $("runNote").value.trim();
+  var stepResults = null;
+  if(runStepState && runStepState.some(function(s){ return s.status !== "passed"; })){
+    stepResults = runStepState.map(function(s, i){
+      return { idx: i + 1, status: s.status, note: s.note.trim() || null };
+    });
+    if(!noteText){
+      var failedLines = [];
+      runStepState.forEach(function(s, i){
+        if(s.status === "failed"){
+          failedLines.push("第 " + (i + 1) + " 步：" + (s.note.trim() || "实际结果与预期不符"));
+        }else if(s.status === "blocked"){
+          failedLines.push("第 " + (i + 1) + " 步阻塞：" + (s.note.trim() || "未说明原因"));
+        }
+      });
+      if(failedLines.length) noteText = failedLines.join("\n");
+    }
+  }
   caseRunning = true;
   setCaseBusy($("btnDoRun"), true, files.length ? "记录并上传…" : "记录中…");
   var me = rt.currentUser || {};
@@ -6143,7 +6318,8 @@ function doRun(){
   recordEnv($("runEnvironment").value);
   API.post("/api/test-cases/" + encodeURIComponent(caseId) + "/runs", {
     status: runStatus,
-    note: $("runNote").value.trim() || null,
+    note: noteText || null,
+    stepResults: stepResults,
     environment: $("runEnvironment").value.trim() || null,
     executedByUserId: executor && executor !== me.id ? executor : null
   }).then(function(run){
@@ -10254,7 +10430,34 @@ $("tcList").addEventListener("click", function(e){
     return;
   }
   var open = e.target.closest("[data-tc-open]");
-  if(open && !e.target.closest(".tc-acts")) openCaseDetail(open.dataset.tcOpen);
+  if(open && !e.target.closest(".tc-acts")){
+    caseKbId = open.dataset.tcOpen;
+    /* 行点击后焦点交回列表容器：↑↓/Enter 键盘导航直接可用 */
+    var listEl = $("tcList");
+    if(listEl) listEl.focus();
+    openCaseDetail(open.dataset.tcOpen);
+  }
+});
+/* 键盘导航：↑↓ 移动高亮行（自动滚入视野）、Enter 打开详情。
+   行内控件（勾选、按钮、输入框）的按键不拦截；高亮类 is-kb 在 caseRowHTML 里随渲染恢复 */
+$("tcList").addEventListener("keydown", function(e){
+  if(e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Enter") return;
+  if(e.target.closest("button,a,input,select,textarea,[contenteditable]")) return;
+  var rows = Array.prototype.slice.call($("tcList").querySelectorAll("[data-tc-open]"));
+  if(!rows.length) return;
+  if(e.key === "Enter"){
+    if(!caseKbId) return;
+    e.preventDefault();
+    openCaseDetail(caseKbId);
+    return;
+  }
+  e.preventDefault();
+  var idx = -1;
+  for(var i = 0; i < rows.length; i++) if(rows[i].dataset.tcOpen === caseKbId){ idx = i; break; }
+  idx = e.key === "ArrowDown" ? Math.min(idx + 1, rows.length - 1) : Math.max(idx - 1, 0);
+  caseKbId = rows[idx].dataset.tcOpen;
+  rows.forEach(function(r){ r.classList.toggle("is-kb", r.dataset.tcOpen === caseKbId); });
+  rows[idx].scrollIntoView({ block: "nearest" });
 });
 /* 行内 ⋯ 菜单：挂到 body 上定位，列表卡片的 overflow:hidden 不会再把它裁成一条边；
    翻转、滚动重定位、Esc 与点外关闭都由 UI.openPop 负责 */
@@ -11010,7 +11213,30 @@ $("segCaseRun").addEventListener("click", function(e){
 $("btnDoRun").addEventListener("click", doRun);
 $("runContext").addEventListener("click", function(e){
   var bug = e.target.closest("[data-run-bug]");
-  if(bug){ openTaskById(bug.dataset.runBug); }
+  if(bug){ openTaskById(bug.dataset.runBug); return; }
+  var reset = e.target.closest("[data-run-step-reset]");
+  if(reset){
+    if(runStepState) runStepState.forEach(function(s){ s.status = "passed"; s.note = ""; });
+    syncRunStepsUI();
+    return;
+  }
+  var stepBtn = e.target.closest("[data-run-step]");
+  if(stepBtn && runStepState){
+    var i = +stepBtn.dataset.runStep;
+    if(runStepState[i]){
+      runStepState[i].status = stepBtn.dataset.runStepSt;
+      if(runStepState[i].status !== "failed") runStepState[i].note = "";
+      syncRunStepsUI();
+    }
+  }
+});
+/* 步骤备注输入即时收进状态：重渲染不丢已填内容 */
+$("runContext").addEventListener("input", function(e){
+  var noteEl = e.target.closest("[data-run-step-note]");
+  if(noteEl && runStepState){
+    var i = +noteEl.dataset.runStepNote;
+    if(runStepState[i]) runStepState[i].note = noteEl.value;
+  }
 });
 $("dlgCaseRunX").addEventListener("click", function(){ tryCloseRunDialog(); });
 UI.setModalCloseGuard($("dlgCaseRun"), function(){ tryCloseRunDialog(); });
@@ -11074,6 +11300,12 @@ $("runsList").addEventListener("click", function(e){
   if(bug){ openTaskById(bug.dataset.runBug); }
 });
 $("runsList").addEventListener("change", function(e){
+  var cmpSel = e.target.closest("[data-cmp-sel]");
+  if(cmpSel){
+    runCmpSel[+cmpSel.dataset.cmpSel] = cmpSel.value;
+    renderRuns();
+    return;
+  }
   var inp = e.target.closest("[data-run-file]");
   if(!inp || !inp.files || !inp.files.length) return;
   var files = Array.prototype.slice.call(inp.files);

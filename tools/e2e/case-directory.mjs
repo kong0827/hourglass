@@ -80,7 +80,7 @@ class Cdp {
 
 let failed = 0, passed = 0;
 const pass = m => { passed++; console.log("  PASS " + m); };
-const assert = (cond, msg) => { if(!cond){ failed++; console.log("  FAIL " + msg); } else pass(msg); };
+const assert = (cond, msg, extra) => { if(!cond){ failed++; console.log("  FAIL " + msg + (extra ? "｜实际：" + extra : "")); } else pass(msg); };
 const section = async (name, fn) => {
   console.log("\n" + name);
   try{ await fn(); }
@@ -337,7 +337,7 @@ try{
       open: !document.getElementById("tcDirMenu").hidden,
       label: document.getElementById("tcDirBtnLabel").textContent }))()`);
     assert(!picked.open && picked.label.indexOf(PREFIX + "-甲") !== -1, "选中目录后弹层收起，入口显示目录名（" + picked.label + "）");
-    const label = await evaluate(`(document.querySelector("#tcList .tc-row .tc-mod")||{}).textContent || ""`);
+    const label = await evaluate(`(document.querySelector("#tcList .tc-row .tc-c-mod")||{}).textContent || ""`);
     assert(label.indexOf(PREFIX + "-容器 / " + PREFIX + "-甲") >= 0, "用例行显示完整目录路径：" + label);
     await shot("a-dir-filter.png");
   });
@@ -608,8 +608,11 @@ try{
   await section("[F] 只读成员：无维护入口 + 服务端拒绝", async () => {
     await clearToasts();
     await login(VIEWER);
-    await setSelect("tcReq", reqId);
-    await sleep(900);
+    /* 查看者默认可能落在「全部项目」只读概览（侧栏渲染 .tc-all-* 树而非 data-tc-set），
+       本段验证的是项目只读成员视角：先显式落到具体项目 */
+    await evaluate(`(async () => { const m = await import("./js/views/testcases.js"); m.setTcProject(${JSON.stringify(reqId)}); return true; })()`);
+    await waitFor(`!document.getElementById("tcSidePanel").hidden || document.body.dataset.view === "testcases"`, "查看者进项目视图", 10000);
+    await sleep(1200);
     await openDirSide();
     const roDir = await evaluate(`(() => ({
       nodes:document.querySelectorAll("#tcDirList [data-tc-dir]").length,
@@ -618,11 +621,30 @@ try{
       add:document.querySelectorAll("#tcDirMenu [data-tc-dir-new]").length }))()`);
     assert(roDir.nodes > 0 && roDir.drags === 0 && roDir.acts === 0, "只读成员能看到目录但不能拖拽 / 维护");
     await openSetSide();
+    try{
+      await waitFor(`document.querySelectorAll("#tcSideBody [data-tc-set]").length > 0`, "只读成员分组列表渲染", 15000);
+    }catch(e){
+      const diag = await evaluate(`(async () => {
+        const { API } = await import("./js/core/api.js");
+        let apiSets = -1, apiErr = "";
+        try{ const r = await API.get("/api/case-sets", { reqId:${JSON.stringify(reqId)}, probe:Date.now() }); apiSets = ((r && (r.items || r)) || []).length; }
+        catch(ex){ apiErr = ex.message; }
+        return { apiSets, apiErr,
+          sideHidden: document.getElementById("tcSidePanel").hidden,
+          err: (document.querySelector("#tcSideBody .tc-side-empty")||{}).textContent || "",
+          skeleton: !!document.querySelector("#tcSideBody .skel-row"),
+          bodyCls: document.getElementById("tcSideBody").className,
+          labels: [...document.querySelectorAll("#tcSideBody .tc-set-label")].map(e => e.textContent),
+          items: [...document.querySelectorAll("#tcSideBody .tc-set-item")].map(e => e.className + ":" + (e.textContent||"").trim().slice(0,20)),
+          rowCount: document.querySelectorAll("#tcSideBody [data-tc-set]").length };
+      })()`);
+      throw new Error(e.message + "；现场 " + JSON.stringify(diag));
+    }
     const roSet = await evaluate(`(() => ({
       items:document.querySelectorAll("#tcSideBody [data-tc-set]").length,
       news:document.querySelectorAll("[data-tc-set-new]").length,
       drags:document.querySelectorAll("#tcSideBody [draggable='true']").length }))()`);
-    assert(roSet.items > 0 && roSet.news === 0 && roSet.drags === 0, "只读成员能看到分组但没有新建 / 拖拽入口");
+    assert(roSet.items > 0 && roSet.news === 0 && roSet.drags === 0, "只读成员能看到分组但没有新建 / 拖拽入口", JSON.stringify(roSet));
     await shot("f-readonly.png");
 
     const denied = [

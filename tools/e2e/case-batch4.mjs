@@ -417,9 +417,11 @@ try{
   assert(!!viewReq, "查看者有可访问项目");
   if(viewReq){
     await enterReport(viewReq.reqId);
+    /* v4 改版后报告头为 rep-banner/rep-kpis，rep-head 已不存在；等异步渲染落盘再断言 */
+    await waitFor(`!!document.querySelector('#tcReport .rep-banner') && !!document.querySelector('#tcReport .rep-kpis')`, "查看者报告渲染", 15000);
     const v = await evaluate(`(() => {
       const sec = document.querySelector('#tcReport .rep-runstats');
-      return { hasReport: !!document.querySelector('#tcReport .rep-head'), hasStats: !!sec, drills: sec ? sec.querySelectorAll('.rs-row.is-drill').length : 0 };
+      return { hasReport: !!document.querySelector('#tcReport .rep-banner'), hasStats: !!sec, drills: sec ? sec.querySelectorAll('.rs-row.is-drill').length : 0 };
     })()`);
     assert(v.hasReport && v.hasStats, "查看者可看报告与执行统计");
     if(v.drills > 0){

@@ -14,6 +14,8 @@ public class TestCaseRun {
     /** passed / failed / blocked */
     private String status;
     private String note;
+    /** 逐步执行结果 JSON：[{"idx":1,"status":"passed|failed|blocked","note":""}]，空=未逐步勾选 */
+    private String stepResults;
     /** 执行环境（浏览器/版本/设备），转缺陷时预填 */
     private String environment;
     /** 由本次失败转出的缺陷任务 ID */

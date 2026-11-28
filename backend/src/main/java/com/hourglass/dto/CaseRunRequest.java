@@ -22,4 +22,11 @@ public class CaseRunRequest {
 
     /** 代录执行人（app_user.id）；空 = 当前登录人 */
     private String executedByUserId;
+
+    /**
+     * 逐步执行结果（执行弹框逐步勾选）；非空时服务端按步骤重新推导总结果：
+     * 有 failed → failed，否则有 blocked → blocked，否则 passed。
+     */
+    @javax.validation.Valid
+    private java.util.List<CaseRunStepResult> stepResults;
 }

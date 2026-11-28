@@ -69,7 +69,7 @@ class Cdp {
 
 let failed = 0, passed = 0;
 const pass = m => { passed++; console.log("  PASS " + m); };
-const assert = (cond, msg) => { if(!cond){ failed++; console.log("  FAIL " + msg); } else pass(msg); };
+const assert = (cond, msg, extra) => { if(!cond){ failed++; console.log("  FAIL " + msg + (extra ? "｜实际：" + extra : "")); } else pass(msg); };
 const group = name => console.log("\n[" + name + "]");
 
 fs.mkdirSync(SHOT_DIR, { recursive: true });
@@ -487,10 +487,15 @@ try{
     note: (document.querySelector("#tcSideFoot .tc-side-note")||{}).textContent || "",
     noneRow: [...document.querySelectorAll("#tcSideBody .tc-set-item.special .tc-set-name")].map(e => e.textContent)
   }))()`);
-  assert(setPanel.labels.length === 3 && setPanel.labels[0].indexOf("团队共享") === 0 && setPanel.labels[1].indexOf("指定成员可见") === 0 && setPanel.labels[2].indexOf("仅自己可见") === 0, "分组按团队 / 指定成员 / 个人三档分段");
-  assert(setPanel.labels[0].indexOf("进交付说明与发布证据") !== -1 && setPanel.labels[1].indexOf("不进证据") !== -1 && setPanel.labels[2].indexOf("不进证据") !== -1, "分段标题交代可见范围与是否进证据");
-  assert(setPanel.note.indexOf("多归属") !== -1 && setPanel.note.indexOf("删除分组不删用例") !== -1, "脚注交代多归属与删除语义");
-  assert(setPanel.note.indexOf("只有团队共享分组进交付说明与发布证据") !== -1 && setPanel.note.indexOf("需创建人操作") !== -1, "脚注交代只有团队共享进证据、转团队需创建人");
+  /* P2-13 改版：常驻脚注收进「分组计数规则」popover，分段标题只留「档名（N）」 */
+  assert(setPanel.labels.length === 3 && setPanel.labels[0].indexOf("团队共享") === 0 && setPanel.labels[1].indexOf("指定成员可见") === 0 && setPanel.labels[2].indexOf("仅自己可见") === 0, "分组按团队 / 指定成员 / 个人三档分段", JSON.stringify(setPanel.labels));
+  await click("#tcSetRuleBtn");
+  await sleep(500);
+  const setRule = await evaluate(`(() => { const p = document.querySelector(".tc-set-rule-pop"); return p ? p.textContent : ""; })()`);
+  assert(setRule.indexOf("多归属") !== -1 && setRule.indexOf("删除分组不删用例") !== -1, "分组规则交代多归属与删除语义", setRule);
+  assert(setRule.indexOf("只有团队共享分组进交付报告与发布证据") !== -1 && setRule.indexOf("转团队需创建人操作") !== -1, "分组规则交代只有团队共享进证据、转团队需创建人", setRule);
+  await evaluate(`(async () => { const m = await import("./js/core/ui.js"); m.UI.closeAllPops(); return true; })()`);
+  await sleep(300);
   assert(setPanel.noneRow[0] === "全部用例" && setPanel.noneRow[1] === "未加入任何分组", "分组面板首行「全部用例」、次行「未加入任何分组」");
 
   const makeSet = async (name, visibility, withInit) => {
@@ -582,7 +587,8 @@ try{
     selSeg = (await segInfo()).find(s => !s.empty);
   }
   assert(!!selSeg, "存在非空段可做组内全选");
-  const segTotal = Number((selSeg.count.match(/(\d+)/) || [])[1] || 0);
+  /* 段头计数是「已加载 / 总数」双数格式，组全选范围取总数（最后一个数） */
+  const segTotal = Number((selSeg.count.match(/[0-9]+/g) || []).pop() || 0);
   await evaluate(`(() => { document.querySelector('[data-tc-seg-sel="' + ${JSON.stringify(selSeg.key)} + '"]').click(); return true; })()`);
   await sleep(900);
   const bulk = await evaluate(`(() => ({
@@ -591,7 +597,7 @@ try{
     hint: document.getElementById("tcBulkHint").textContent,
     label: document.getElementById("tcBulkAllLabel").textContent
   }))()`);
-  assert(!bulk.hidden && bulk.count.indexOf(String(segTotal)) !== -1, "全选本组后批量条显示该组条数（" + segTotal + "）");
+  assert(!bulk.hidden && bulk.count.indexOf(String(segTotal)) !== -1, "全选本组后批量条显示该组条数（" + segTotal + "）", JSON.stringify(bulk) + "｜segTotal=" + segTotal);
   assert(bulk.hint.indexOf("组内全部") !== -1, "批量条说明范围是该组全部（含未加载的行）");
   assert(bulk.label.indexOf("按条件生效") !== -1, "全选态下「全选已加载」标注按条件生效");
   await shot("segment-selected-1440.png");
@@ -878,15 +884,18 @@ try{
     "执行结果分段并入统计条：6 个可点计数按钮（" + strip0.chips.join("/") + "）");
   assert(/点计数即按/.test(strip0.hint) && strip0.beforeBar && strip0.oneLine, "统计条位于筛选条之前、单行，并带口径提示（" + strip0.hint + "）");
   const counts0 = await evaluate(`[...document.querySelectorAll("#tcStats [data-tc-status]")].map(x => x.textContent.trim()).join("|")`);
-  await click('#tcStats [data-tc-status="failed"]');
+  /* 0 值计数是禁用按钮（点不动是产品设计）：挑第一个非零且非「全部」的计数来点 */
+  const pickKey = await evaluate(`(() => { const b = [...document.querySelectorAll("#tcStats [data-tc-status]")].find(x => !x.disabled && x.dataset.tcStatus !== "all"); return b ? b.dataset.tcStatus : null; })()`);
+  assert(!!pickKey, "存在可点的非零计数（当前项目不是全零执行分布）");
+  await click('#tcStats [data-tc-status="' + pickKey + '"]');
   await sleep(1200);
   const strip1 = await evaluate(`(() => ({
     on: [...document.querySelectorAll("#tcStats .tc-stat.on")].map(x => x.dataset.tcStatus),
     counts: [...document.querySelectorAll("#tcStats [data-tc-status]")].map(x => x.textContent.trim()).join("|"),
     meta: (document.getElementById("tcMeta")||{}).textContent || ""
   }))()`);
-  assert(JSON.stringify(strip1.on) === JSON.stringify(["failed"]), "点计数即筛选并呈选中态");
-  assert(strip1.counts === counts0 && /显示 \d+ \/ 共 \d+/.test(strip1.meta), "计数不受当前筛选影响，meta 交代筛选口径");
+  assert(JSON.stringify(strip1.on) === JSON.stringify([pickKey]), "点计数即筛选并呈选中态", JSON.stringify(strip1));
+  assert(strip1.counts === counts0 && /显示 \d+ \/ 共 \d+/.test(strip1.meta), "计数不受当前筛选影响，meta 交代筛选口径", JSON.stringify(strip1) + "｜counts0=" + counts0);
   await shot("stats-chips-filtered-1440.png");
   await click("#tcClearFilter");
   await sleep(1000);
@@ -934,8 +943,12 @@ try{
       foot: (d.querySelector(".tc-setd-foot")||{}).textContent || "" };
   })()`);
   assert(!dynDetail.hidden && dynDetail.rules.length >= 1 && /创建人/.test(dynDetail.foot), "口径条展示收录规则与按创建人可见范围");
+  /* 动态分组筛选后列表可能为空（当前项目回归规则命中 0 条时无法拖行），
+     先回「全部用例」恢复行渲染，再验证动态分组不落 drag 标记 */
+  await evaluate(`(() => { const b = document.querySelector('#tcSideBody [data-tc-set-pick="all"]'); if(b) b.click(); return true; })()`);
+  await sleep(1200);
   const dynDrop = await dragTo("#tcList .tc-row", '#tcSideBody .tc-set-item[data-tc-set="' + (dynSet || {}).id + '"]');
-  assert(dynDrop.marked === false, "动态分组不成为拖拽落点");
+  assert(dynDrop.marked === false, "动态分组不成为拖拽落点", JSON.stringify(dynDrop));
   await sleep(900);
   const dynAfterDrop = await setOf((dynSet || {}).id);
   assert(dynAfterDrop && dynAfterDrop.caseCount === dynCount, "拖到动态分组不改变成员（" + dynCount + "）");
@@ -974,7 +987,7 @@ try{
     return { who: [...d.querySelectorAll(".who-chip")].map(x => x.textContent.trim()),
       foot: (d.querySelector(".tc-setd-foot")||{}).textContent || "" };
   })()`);
-  assert(memDetail.who.length === 1 && /不进交付说明与发布证据/.test(memDetail.foot), "口径条展示可见名单并写明不进证据");
+  assert(memDetail.who.length === 1 && /不进交付(说明|报告)与发布证据/.test(memDetail.foot), "口径条展示可见名单并写明不进证据", JSON.stringify(memDetail));
   await shot("set-detail-members-1440.png");
 
   /* 圈选入计划顺手存动态分组：先清掉上一步点开的分组筛选，否则圈选范围会被空分组吃掉 */
