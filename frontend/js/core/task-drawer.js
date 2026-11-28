@@ -1135,24 +1135,37 @@ function loadReqDocPickerData(el, module, seq, force){
 function chooseReqDoc(el, docId){
   var doc = docId ? el._docs.find(function(d){ return d.id === docId; }) : null;
   if(docId && !doc) return;
-  var sel = $("iReqDoc");
-  if(!sel) return;
+  if(!$("iReqDoc")) return;
   var oldReqId = currentReqId();
   var changedProject = !!(doc && doc.reqId !== oldReqId);
-  var task = rt.editingId ? taskCacheExtra[rt.editingId] : null;
-  if(changedProject){
+  function apply(){
+    var sel = $("iReqDoc");
+    if(!sel) return;
+    ensureReqDoc(docId);
+    sel.value = docId;
+    sel.dispatchEvent(new Event("change", { bubbles:true }));
+    rt.formDirty = true;
+    syncAssocViewBtns();
+    UI.closeAllPops();
+    var anchor = $("iReqDocPicker");
+    if(anchor) anchor.focus({ preventScroll:true });
+  }
+  if(!changedProject){ apply(); return; }
+  var projectName = reqDocPickerProjectName(doc);
+  UI.showConfirm({
+    title: oldReqId ? "切换所属项目并关联文档？" : "关联文档并设置所属项目？",
+    msg: "「" + esc(doc.title || "未命名文档") + "」属于项目「" + esc(projectName) + "」。" +
+      "关联后工作项所属项目会改为该项目；已选的计划版本、发现版本、所属史诗与关联需求将被清空，分类按新项目重选。",
+    okText: oldReqId ? "切换并关联" : "设置并关联",
+    cancelText: "取消",
+    danger: false
+  }).then(function(ok){
+    if(!ok || !$("iReq") || !$("iReqDoc")) return;
     iReq.value = doc.reqId;
     iReq.dispatchEvent(new Event("change", { bubbles:true }));
-  }
-  ensureReqDoc(docId);
-  sel.value = docId;
-  sel.dispatchEvent(new Event("change", { bubbles:true }));
-  rt.formDirty = true;
-  syncAssocViewBtns();
-  UI.closeAllPops();
-  var anchor = $("iReqDocPicker");
-  if(anchor) anchor.focus({ preventScroll:true });
-  if(changedProject) toast("已关联文档，所属项目已同步为「" + reqDocPickerProjectName(doc) + "」；请确认版本、史诗和关联需求", "fs");
+    apply();
+    toast("已关联文档，所属项目已同步为「" + projectName + "」；计划版本、发现版本、史诗与关联需求已清空，请重新确认", "fs");
+  });
 }
 function openReqDocPicker(){
   if(rt.drawerReadOnly) return;
@@ -1178,7 +1191,7 @@ function openReqDocPicker(){
       '</div>' +
     '</div>' +
     '<div class="search-picker-results" data-req-doc-results></div>' +
-    '<div class="search-picker-foot">无需先选项目；选择其他项目的文档时，会自动同步所属项目</div>';
+    '<div class="search-picker-foot">无需先选项目；选择其他项目的文档时会先确认并同步所属项目</div>';
   reqDocPickerEl = el;
   anchor.setAttribute("aria-controls", el.id);
   UI.openPop(el, anchor, {
@@ -2046,6 +2059,7 @@ function openDrawer(){
   taskDrawer.style.zIndex = hasBelow ? String(UI.topModalZ() + 1) : "";
   taskDrawer.classList.toggle("nested", hasBelow);
   taskDrawer.classList.add("on");
+  UI.syncDrawerFull(taskDrawer);
 }
 function closeDrawer(){
   if(inlineText) finishTaskTextEdit(inlineText.el, inlineText.field, false);
