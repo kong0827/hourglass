@@ -7,6 +7,7 @@ import com.hourglass.entity.Workspace;
 import com.hourglass.mapper.UserMapper;
 import com.hourglass.mapper.WorkspaceMapper;
 import com.hourglass.mapper.WorkspaceMemberMapper;
+import com.hourglass.wecom.WeComNotifyService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -49,11 +50,13 @@ public class NotificationEventService {
     private final MailDeliveryService mailDeliveryService;
     private final ProjectAccessService projectAccess;
     private final WorkspaceMapper workspaceMapper;
+    private final WeComNotifyService wecomNotify;
 
     public NotificationEventService(UserNotificationPreferenceService preferenceService,
                                     AppNotificationService inAppService, UserMapper userMapper,
                                     WorkspaceMemberMapper memberMapper, MailDeliveryService mailDeliveryService,
-                                    ProjectAccessService projectAccess, WorkspaceMapper workspaceMapper) {
+                                    ProjectAccessService projectAccess, WorkspaceMapper workspaceMapper,
+                                    WeComNotifyService wecomNotify) {
         this.preferenceService = preferenceService;
         this.inAppService = inAppService;
         this.userMapper = userMapper;
@@ -61,6 +64,7 @@ public class NotificationEventService {
         this.mailDeliveryService = mailDeliveryService;
         this.projectAccess = projectAccess;
         this.workspaceMapper = workspaceMapper;
+        this.wecomNotify = wecomNotify;
     }
 
     public void notify(String recipientUserId, String workspaceId, String eventType,
@@ -243,7 +247,23 @@ public class NotificationEventService {
                 ok = false;
             }
         }
+        /* 企微是与站内/邮件并列的独立渠道：只受自身开关约束，入队不阻塞当前请求 */
+        if (WeComNotifyService.pushable(eventType) && Boolean.TRUE.equals(preference.getWecom())) {
+            wecomNotify.enqueueForUser(workspaceId, recipientUserId, eventType, title,
+                    mailBody != null ? mailBody : body, wecomPath(refTaskId, refKind, refId));
+        }
         return new DeliveryOutcome(ok, delivered);
+    }
+
+    /** 企微消息的站内深链：任务优先，其次发布计划；都没有就落到「我的工作」 */
+    private static String wecomPath(String refTaskId, String refKind, String refId) {
+        if (refTaskId != null && !refTaskId.trim().isEmpty()) {
+            return "/#/board?task=" + refTaskId;
+        }
+        if ("release_plan".equals(refKind) && refId != null && !refId.trim().isEmpty()) {
+            return "/#/release?plan=" + refId + "&tab=plan";
+        }
+        return "/#/mywork";
     }
 
     /**

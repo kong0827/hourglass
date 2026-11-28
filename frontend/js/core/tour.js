@@ -377,6 +377,22 @@ function onKey(e){
   trap(e, $("tourCard"));
 }
 
+/* 引导讲的是「版本」发版闭环，只属于版本域：进入这些视图才允许自动弹出与重播 */
+var VERSION_VIEWS = { phase:1, release:1, version:1, delivery:1, record:1, "plan-wizard":1 };
+function inVersionScope(){ return !!VERSION_VIEWS[activeView]; }
+function syncReplay(){
+  var btn = $("tourReplay");
+  if(btn) btn.style.display = inVersionScope() ? "" : "none";
+}
+function maybeAutoWelcome(){
+  if(!inVersionScope()) return;
+  var seen = null;
+  try{ seen = localStorage.getItem(SEEN_KEY); }catch(e){ seen = null; }
+  if(seen) return;
+  markSeen();
+  setTimeout(function(){ if(inVersionScope() && !isMobile()) openWelcome(); }, 500);
+}
+
 export function initTour(){
   if($("welcomeMask")) return;
   var host = document.createElement("div");
@@ -392,15 +408,15 @@ export function initTour(){
     if(e.target.closest("[data-tour-prev]")){ tourGo(currentStep - 1); return; }
   });
   document.addEventListener("keydown", onKey);
+  window.addEventListener("ds:view-change", function(){
+    syncReplay();
+    maybeAutoWelcome();
+  });
 
   var search = String(window.location.search || "");
-  if(/[?&]tour=1(&|$)/.test(search)){ setTimeout(openWelcome, 600); return; }
-  if(/[?&]tour=2(&|$)/.test(search)){ setTimeout(startTour, 600); return; }
-  if(/[?&]demo=/.test(search)) return;
-  var seen = null;
-  try{ seen = localStorage.getItem(SEEN_KEY); }catch(e){ seen = null; }
-  if(!seen){
-    markSeen();
-    setTimeout(function(){ if(!isMobile()) openWelcome(); }, 700);
-  }
+  if(/[?&]tour=1(&|$)/.test(search)){ syncReplay(); setTimeout(openWelcome, 600); return; }
+  if(/[?&]tour=2(&|$)/.test(search)){ syncReplay(); setTimeout(startTour, 600); return; }
+  if(/[?&]demo=/.test(search)){ syncReplay(); return; }
+  syncReplay();
+  maybeAutoWelcome();
 }

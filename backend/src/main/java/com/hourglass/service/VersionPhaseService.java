@@ -275,9 +275,36 @@ public class VersionPhaseService {
                 canManage.put(row.getReqId(), manage);
             }
             row.setCanManage(manage);
+            row.setTodoCount(listTodoCount(row));
             rows.add(row);
         }
         return rows;
+    }
+
+    /** 版本列表的「下一步」只给数量：规则与版本详情一致，终态版本不再提示。 */
+    private static int listTodoCount(CrossProjectVersionRow row) {
+        String status = row.getVersionStatus();
+        if (!"planned".equals(status) && !"active".equals(status)) {
+            return 0;
+        }
+        int count = 0;
+        if (row.getNextPlanAt() != null && intOf(row.getProductionSuccessCount()) == 0) {
+            count++;
+        }
+        if ("draft".equals(row.getNextPlanStatus())) {
+            count++;
+        }
+        if (intOf(row.getUnestimatedTaskCount()) > 0) {
+            count++;
+        }
+        if (intOf(row.getDemandCount()) > intOf(row.getCoveredDemandCount())) {
+            count++;
+        }
+        return count;
+    }
+
+    private static int intOf(Integer value) {
+        return value == null ? 0 : value;
     }
 
     /**

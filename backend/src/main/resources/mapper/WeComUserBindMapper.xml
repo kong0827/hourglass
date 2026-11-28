@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.WeComUserBindMapper">
+
+  <sql id="cols">
+    id, user_id, corp_id, wecom_userid, bind_source, status, bound_by, bound_at, last_login_at
+  </sql>
+
+  <select id="selectByCorpUserid" resultType="WeComUserBind">
+    SELECT <include refid="cols"/> FROM wecom_user_bind
+    WHERE corp_id = #{corpId} AND wecom_userid = #{wecomUserid}
+  </select>
+
+  <select id="selectById" resultType="WeComUserBind">
+    SELECT <include refid="cols"/> FROM wecom_user_bind WHERE id = #{id}
+  </select>
+
+  <select id="selectByUserAndCorp" resultType="WeComUserBind">
+    SELECT <include refid="cols"/> FROM wecom_user_bind
+    WHERE user_id = #{userId} AND corp_id = #{corpId}
+  </select>
+
+  <select id="selectByUser" resultType="WeComUserBind">
+    SELECT <include refid="cols"/> FROM wecom_user_bind
+    WHERE user_id = #{userId} ORDER BY bound_at
+  </select>
+
+  <select id="selectByCorp" resultType="WeComUserBind">
+    SELECT <include refid="cols"/> FROM wecom_user_bind
+    WHERE corp_id = #{corpId} ORDER BY bound_at
+  </select>
+
+  <insert id="insert">
+    INSERT INTO wecom_user_bind
+      (id, user_id, corp_id, wecom_userid, bind_source, status, bound_by, bound_at, last_login_at)
+    VALUES
+      (#{id}, #{userId}, #{corpId}, #{wecomUserid}, #{bindSource}, #{status}, #{boundBy},
+       #{boundAt}, #{lastLoginAt})
+  </insert>
+
+  <update id="updateStatus">
+    UPDATE wecom_user_bind SET status = #{status}, bound_by = #{boundBy} WHERE id = #{id}
+  </update>
+
+  <update id="updateLastLogin">
+    UPDATE wecom_user_bind SET last_login_at = #{lastLoginAt} WHERE id = #{id}
+  </update>
+
+  <delete id="deleteById">
+    DELETE FROM wecom_user_bind WHERE id = #{id}
+  </delete>
+
+  <select id="countByCorp" resultType="int">
+    SELECT COUNT(*) FROM wecom_user_bind WHERE corp_id = #{corpId}
+  </select>
+</mapper>

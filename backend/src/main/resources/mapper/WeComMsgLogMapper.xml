@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.WeComMsgLogMapper">
+
+  <insert id="insert">
+    INSERT INTO wecom_msg_log
+      (id, workspace_id, corp_id, agent_id, event_type, touser_text, msgtype, title,
+       payload_json, status, errcode, errmsg, invaliduser, msgid, attempts,
+       next_retry_at, created_at, updated_at)
+    VALUES
+      (#{id}, #{workspaceId}, #{corpId}, #{agentId}, #{eventType}, #{touserText}, #{msgtype}, #{title},
+       #{payloadJson}, #{status}, #{errcode}, #{errmsg}, #{invaliduser}, #{msgid}, #{attempts},
+       #{nextRetryAt}, #{createdAt}, #{updatedAt})
+  </insert>
+
+  <update id="updateResult">
+    UPDATE wecom_msg_log
+    SET status = #{status}, errcode = #{errcode}, errmsg = #{errmsg},
+        invaliduser = #{invaliduser}, msgid = #{msgid}, attempts = #{attempts},
+        next_retry_at = #{nextRetryAt}, updated_at = #{updatedAt}
+    WHERE id = #{id}
+  </update>
+
+  <select id="selectById" resultType="WeComMsgLog">
+    SELECT id, workspace_id, corp_id, agent_id, event_type, touser_text, msgtype, title,
+           payload_json, status, errcode, errmsg, invaliduser, msgid, attempts,
+           next_retry_at, created_at, updated_at
+    FROM wecom_msg_log WHERE id = #{id}
+  </select>
+
+  <select id="selectRecent" resultType="WeComMsgLog">
+    SELECT id, workspace_id, corp_id, agent_id, event_type, touser_text, msgtype, title,
+           status, errcode, errmsg, invaliduser, msgid, attempts, next_retry_at, created_at, updated_at
+    FROM wecom_msg_log
+    <where>
+      <if test="workspaceId != null and workspaceId != ''">AND workspace_id = #{workspaceId}</if>
+      <if test="corpId != null and corpId != ''">AND corp_id = #{corpId}</if>
+    </where>
+    ORDER BY created_at DESC
+    LIMIT #{limit}
+  </select>
+
+  <select id="selectRetryDue" resultType="WeComMsgLog">
+    SELECT id, workspace_id, corp_id, agent_id, event_type, touser_text, msgtype, title,
+           payload_json, status, errcode, errmsg, invaliduser, msgid, attempts,
+           next_retry_at, created_at, updated_at
+    FROM wecom_msg_log
+    WHERE status IN ('pending', 'failed', 'partial')
+      AND next_retry_at IS NOT NULL
+      AND next_retry_at &lt;= #{now}
+    ORDER BY next_retry_at
+    LIMIT #{limit}
+  </select>
+
+  <delete id="deleteOlderThan">
+    DELETE FROM wecom_msg_log WHERE created_at &lt; #{before}
+  </delete>
+</mapper>

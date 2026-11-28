@@ -64,6 +64,16 @@ public class OutboundHttpConfig {
         return new RestTemplate(f);
     }
 
+    /** 企业微信接口（gettoken / auth/getuserinfo / message/send）：连接 3s / 读 10s */
+    @Bean
+    public RestTemplate wecomRestTemplate(CloseableHttpClient outboundHttpClient) {
+        HttpComponentsClientHttpRequestFactory f =
+                new HttpComponentsClientHttpRequestFactory(outboundHttpClient);
+        f.setConnectTimeout(3000);
+        f.setReadTimeout(10000);
+        return new RestTemplate(f);
+    }
+
     /** GitLab 只读同步：连接 5s / 读 30s；分页可能较大，但不应无限等待 */
     @Bean
     public RestTemplate gitRestTemplate(CloseableHttpClient outboundHttpClient) {

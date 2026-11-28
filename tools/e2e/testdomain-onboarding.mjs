@@ -1,7 +1,7 @@
 /* 测试域新手友好改版 E2E（工作台落地页 + 空态三入口 + 示例包 + 三步向导 + 报告引导）
    覆盖：
      1. 测试域子导航五入口（工作台/用例/测试计划/报告/缺陷），默认落工作台
-     2. 工作台：欢迎条与提示条可关闭（localStorage 记忆）、四步流程条、五项新手任务派生态
+     2. 工作台：四步引导（进度由数据派生）、常驻帮助弹层、待我执行/测试计划两卡
      3. 示例包：API 载入 20 条 → 清单派生完成 → 用例页包横幅 → 整包删除（含二次确认）
      4. 零用例空态三入口（AI / 导入 Excel / 载入示例包）+ 教育卡
      5. 新建计划三步向导：整个项目模式自动圈选；检查并创建后落计划详情
@@ -205,23 +205,27 @@ async function main(){
     pass("子导航：" + subnav);
     await waitFor(`import("./js/views/testcases.js").then(m => m.currentTcMode() === "bench")`, "默认工作台模式");
     await waitFor(`!!document.getElementById("tcBench") && !document.getElementById("tcBench").hidden`, "工作台容器可见");
-    await waitFor(`document.querySelectorAll("#tcBench .tb-flow-step").length === 4`, "四步流程条");
-    await waitFor(`document.querySelectorAll("#tcBench .tb-check").length === 5`, "五项新手任务");
-    const checkMeta = await waitFor(`(() => {
-      const t = document.querySelector("#tcBench .tb-checklist .toolbar-meta").textContent.replace(/\\s+/g, "");
-      return /^\\d+\\/5$/.test(t) ? t : false;
-    })()`, "清单进度格式 N/5");
-    pass("工作台：流程条 4 步 + 任务 5 项（当前 " + checkMeta + "，共享空间可能已有完成项）+ 欢迎/提示条");
+    await waitFor(`document.querySelectorAll("#tcBench .tb-guide .tb-flow-step").length === 4`, "四步引导");
+    await waitFor(`!document.querySelector("#tcBench .tb-banner") && !document.querySelector("#tcBench .tb-check")`, "旧横幅与五项清单已移除");
+    const benchGuide = await waitFor(`(() => {
+      const t = (document.querySelector("#tcBench .tb-guide-t") || {}).textContent || "";
+      const pill = ((document.querySelector("#tcBench .tb-guide-pill") || {}).textContent || "").trim();
+      return t === "测试四步" && /^(进行中|已完成)/.test(pill) ? { t, pill } : false;
+    })()`, "引导头与进度");
+    const cards = await evaluate(`[...document.querySelectorAll("#tcBench .tb-cols .tb-card-title h3")].map(e => e.textContent.trim()).join("|")`);
+    assert(cards === "待我执行|测试计划", "计划卡应为待我执行+测试计划：" + cards);
+    pass("工作台：四步引导（" + benchGuide.pill + "）+ 待我执行/测试计划两卡");
 
-    /* 欢迎条与提示条关闭并记忆 */
-    await evaluate(`document.querySelector("#tcBench [data-bench-dismiss='welcome']").click()`);
-    await evaluate(`document.querySelector("#tcBench [data-bench-dismiss='tips']").click()`);
-    await waitFor(`!document.querySelector("#tcBench .tb-banner")`, "两条横幅已关闭");
+    /* 常驻帮助：弹层可开，重载后入口仍在（不再靠可关闭横幅） */
+    await evaluate(`document.querySelector("#tcBench [data-bench-help]").click()`);
+    await waitFor(`!!document.querySelector(".menu.tc-help-pop") && /测试工作台怎么用/.test(document.querySelector(".menu.tc-help-pop").textContent)`, "帮助弹层");
+    const helpText = await evaluate(`document.querySelector(".menu.tc-help-pop").textContent.replace(/\\s+/g, " ")`);
+    assert(helpText.indexOf("发布检查") >= 0 && helpText.indexOf("键盘") >= 0, "帮助内容缺报告口径或键盘说明：" + helpText.slice(0, 80));
     await evaluate(`(() => { location.reload(); return true; })()`);
     await waitFor(`document.readyState === 'complete'`, "重载完成", 20000);
     await waitFor(`document.body.dataset.view === "testcases"`, "回到测试域", 20000);
-    await waitFor(`import("./js/views/testcases.js").then(m => m.currentTcMode() === "bench") && !document.querySelector("#tcBench .tb-banner")`, "关闭状态已记忆");
-    pass("横幅关闭后本机记忆，重载不再出现");
+    await waitFor(`!!document.querySelector("#tcBench .tb-guide [data-bench-help]") && document.querySelectorAll("#tcBench .tb-flow-step").length === 4`, "帮助入口重载后仍在");
+    pass("帮助入口常驻：弹层含报告口径/键盘说明，重载后仍可用");
 
     /* 4. 示例包：载入 → 清单派生 → 用例页横幅 → 整包删除 */
     const pack = await evaluate(`(async () => {
@@ -233,9 +237,12 @@ async function main(){
     assert(pack && pack.total === 20, "示例包应载入 20 条，实际 " + (pack && pack.total));
     pass("示例包载入：20 条用例 + 分组 " + pack.groupId);
 
-    await evaluate(`import("./js/views/testcases.js").then(m => m.setTcMode("bench"))`);
-    await waitFor(`document.querySelector("#tcBench .tb-check.done .tb-check-body strong") && document.querySelector("#tcBench .tb-check.done").textContent.indexOf("备好用例") >= 0`, "「备好用例」已勾选");
-    pass("清单派生：备好用例完成");
+    await evaluate(`import("./js/views/testcases.js").then(m => { m.setTcMode("cases"); m.setTcMode("bench"); })`);
+    await waitFor(`(() => {
+      const el = document.querySelector("#tcBench .tb-flow-step.done .tb-flow-body");
+      return !!el && el.textContent.indexOf("备好用例") >= 0 && /\\d+ 条 · 已就绪/.test(el.textContent);
+    })()`, "「备好用例」按用例数派生完成");
+    pass("引导派生：备好用例完成，描述显示用例数");
 
     await evaluate(`import("./js/views/testcases.js").then(m => m.setTcProject(${JSON.stringify(RID)}))`);
     await evaluate(`import("./js/views/testcases.js").then(m => m.setTcMode("cases"))`);
@@ -321,6 +328,48 @@ async function main(){
     await evaluate(`document.querySelector("#tcReport [data-rep-guide-go='plans']").click()`);
     await waitFor(`import("./js/views/testcases.js").then(m => m.currentTcMode() === "plans")`, "引导跳计划页");
     pass("引导卡跳转计划页");
+
+    /* 8.5 报告口径：执行后出现发布证据 / 跳过 KPI / 按计划出报告 */
+    const evPlan = await evaluate(`(async () => {
+      const { API } = await import("./js/core/api.js");
+      const rows = await API.getAllPages("/api/test-plans", { reqId: ${JSON.stringify(RID)} });
+      const p = rows.filter(r => r.status !== "done" && r.caseCount > 0)[0];
+      if(!p) return null;
+      const page = await API.get("/api/test-plans/" + p.id + "/cases", { limit: 5 });
+      const ids = (page.items || []).slice(0, 2).map(c => c.caseId);
+      if(ids.length < 2) return null;
+      await API.put("/api/test-plans/" + p.id + "/cases/" + ids[0] + "/required?required=true", {});
+      await API.put("/api/test-plans/" + p.id + "/cases/" + ids[1] + "/required?required=true", {});
+      await API.post("/api/test-plans/" + p.id + "/runs", { caseIds: [ids[0]], status: "passed", note: "E2E 报告口径" });
+      await API.post("/api/test-plans/" + p.id + "/runs", { caseIds: [ids[1]], status: "skipped", note: "E2E 报告口径" });
+      await API.put("/api/test-plans/" + p.id + "/status?status=done", {});
+      return { id: p.id, name: p.name };
+    })()`);
+    assert(!!evPlan, "找不到可执行计划的用例");
+    await evaluate(`import("./js/views/testcases.js").then(m => m.setTcMode("report"))`);
+    await waitFor(`document.querySelectorAll("#tcReport .rep-kpi").length === 5`, "报告 5 格 KPI", 20000);
+    const rep = await evaluate(`(() => {
+      const kpis = [...document.querySelectorAll("#tcReport .rep-kpi")].map(e => e.textContent.replace(/\\s+/g, ""));
+      return {
+        kpis,
+        sub: (document.getElementById("pageSub") || {}).textContent || "",
+        banner: (document.querySelector("#tcReport .rep-banner") || {}).textContent || "",
+        note: (document.querySelector("#tcReport .rep-scope-note") || {}).textContent || "",
+        evidence: (document.querySelector("#tcReport .rep-evidence") || {}).textContent.replace(/\\s+/g, "") || "",
+        planBtn: !!document.querySelector("#tcReport [data-tc-report-plan]")
+      };
+    })()`);
+    assert(rep.kpis.some(t => t.indexOf("跳过") >= 0), "缺少跳过 KPI：" + rep.kpis.join("|"));
+    assert(/非发布证据/.test(rep.sub) && /非发布证据/.test(rep.note), "报告未标注非发布证据：sub=" + JSON.stringify(rep.sub) + " note=" + JSON.stringify(rep.note));
+    assert(rep.planBtn && /按计划出报告/.test(rep.banner), "缺少「按计划出报告」入口");
+    assert(rep.evidence.indexOf("发布必测通过1/2") >= 0, "发布必测证据异常：" + rep.evidence);
+    assert(rep.evidence.indexOf("未执行/跳过1") >= 0, "发布必测跳过未按未执行计：" + rep.evidence);
+    pass("报告口径：跳过 KPI + 非发布证据 + 发布必测证据");
+    await evaluate(`document.querySelector("#tcReport [data-tc-report-plan]").click()`);
+    await waitFor(`!!document.querySelector(".menu [data-rep-pick-plan]")`, "按计划出报告菜单");
+    await evaluate(`document.querySelector(".menu [data-rep-pick-plan]").click()`);
+    await waitFor(`!!document.querySelector("#tcPlans .plan-head") && document.querySelector("#tcPlans .plan-head .toolbar-title").textContent === ${JSON.stringify(evPlan.name)}`, "按计划出报告落详情", 15000);
+    pass("按计划出报告：落到已完成计划详情");
 
     /* 9. 手动圈选模式：创建后空计划提示圈选 */
     await evaluate(`document.getElementById("btnPlanNew").click()`);

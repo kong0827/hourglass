@@ -16,6 +16,7 @@ import { refreshOwnerSelect } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { avatarColor, avatarColorIndex, initial, pad2 } from "../lib/format.js";
 import { loadMemberLabelOptions } from "../lib/member-labels.js";
+import { renderProfile as renderWeComProfile } from "../lib/wecom.js";
 import { loadBoard } from "./board.js";
 import { saveWorkspaceHandoff, clearWorkspaceHandoff } from "./mine.js";
 
@@ -60,6 +61,7 @@ function enterProfileView(){
   /* AI 配置每次进页面都重新拉：可能在别的设备上改过 */
   loadAiConfig();
   loadNotificationPreferences();
+  renderWeComProfile();
   syncAssistantPref();
 }
 /* 公司与岗位：空间级展示属性。个人空间不展示；查看者只读；非查看者可改自己。 */
@@ -184,11 +186,13 @@ var NOTIFY_GROUPS = [
   { title: "测试", types: ["test_plan_assigned"] },
   { title: "每日汇总", types: ["daily_digest"] }
 ];
-/* 仅重要事件：直接指向我的（指派/评论@/关注）与低频日报保留，广播类关闭，邮件全关 */
+/* 仅重要事件：直接指向我的（指派/评论@/关注）与低频日报保留，广播类关闭，邮件全关；企微只覆盖三类重要事件，不随预设改动 */
 var NOTIFY_PRESET = {
   inApp: ["task_assigned", "task_comment", "doc_mention", "task_watch", "demand_watch", "test_plan_assigned", "release_prep", "release_watch", "daily_digest"],
   email: []
 };
+/* 企微只推这三类事件，其余行在企微列显示「—」，避免给出无效开关 */
+var NOTIFY_WECOM_EVENTS = ["task_assigned", "test_plan_assigned", "release_prep"];
 function applyNotifyPreset(){
   var box = $("meNotificationPrefs");
   if(!box) return;
@@ -218,7 +222,7 @@ function renderNotificationPreferences(items){
   var byType = {};
   items.forEach(function(p){ byType[p.eventType] = p; });
   var consumed = {};
-  var html = '<div class="notification-pref-head"><span>事件</span><span>站内通知</span><span>邮件通知</span></div>';
+  var html = '<div class="notification-pref-head"><span>事件</span><span>站内通知</span><span>邮件通知</span><span>企业微信</span></div>';
   NOTIFY_GROUPS.forEach(function(group){
     var rows = group.types.filter(function(type){ return byType[type]; }).map(function(type){
       consumed[type] = true;
@@ -237,20 +241,26 @@ function notificationPrefRow(p){
   var emailCell = p.eventType === "daily_digest"
     ? '<span class="foot-note">—</span>'
     : '<label><input type="checkbox" data-notify-email ' + (p.email ? "checked" : "") + ' /><span>接收</span></label>';
+  /* 企微只推指派/测试指派/发布准备，其余事件同样留空 */
+  var wecomCell = NOTIFY_WECOM_EVENTS.indexOf(p.eventType) >= 0
+    ? '<label><input type="checkbox" data-notify-wecom ' + (p.wecom !== false ? "checked" : "") + ' /><span>接收</span></label>'
+    : '<span class="foot-note">—</span>';
   return '<div class="notification-pref-row" data-notify-event="' + esc(p.eventType) + '">' +
     '<span><b>' + esc(meta[0]) + '</b><small>' + esc(meta[1]) + '</small></span>' +
     '<label><input type="checkbox" data-notify-inapp ' + (p.inApp ? "checked" : "") + ' /><span>接收</span></label>' +
-    emailCell + '</div>';
+    emailCell + wecomCell + '</div>';
 }
 if($("meNotificationSave")) $("meNotificationSave").addEventListener("click", function(){
   var btn = this;
   var preferences = [];
   $("meNotificationPrefs").querySelectorAll("[data-notify-event]").forEach(function(row){
     var emailEl = row.querySelector("[data-notify-email]");
+    var wecomEl = row.querySelector("[data-notify-wecom]");
     preferences.push({
       eventType: row.dataset.notifyEvent,
       inApp: row.querySelector("[data-notify-inapp]").checked,
-      email: emailEl ? emailEl.checked : false
+      email: emailEl ? emailEl.checked : false,
+      wecom: wecomEl ? wecomEl.checked : null
     });
   });
   if(!preferences.length) return;

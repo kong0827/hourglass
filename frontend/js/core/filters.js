@@ -118,6 +118,17 @@ function updateBrand(){
     brandSub.innerHTML = segs.join('<span class="sep">/</span>');
     return;
   }
+  /* 版本列表按范围做中段（原型「空间 / 全部项目 / 版本」），与深页「空间 / 版本 / 项目名」区分 */
+  if(activeView === "phase" && rt.phaseListScope){
+    var listSegs = [];
+    if(wsName) listSegs.push('<span title="' + esc(wsName) + '">' + esc(wsName) + '</span>');
+    listSegs.push('<span title="' + esc(rt.phaseListScope) + '">' + esc(rt.phaseListScope) + '</span>');
+    listSegs.push('<span>版本</span>');
+    brandSub.classList.add("breadcrumb");
+    brandSub.title = (wsName ? wsName + " / " : "") + rt.phaseListScope + " / 版本";
+    brandSub.innerHTML = listSegs.join('<span class="sep">/</span>');
+    return;
+  }
   var parts = [];
   if(wsName) parts.push(wsName);
   if(!wsName) parts.push(viewMeta.title || activeView);

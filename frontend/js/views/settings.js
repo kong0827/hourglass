@@ -22,6 +22,7 @@ import { BACKUP_NAME, CAT_DEFAULT_COLOR, avatarHTML, dayDiff, fmtShortMD, fmtTs,
 import { loadBoard, loadReqs } from "./board.js";
 import { ganttState, syncGanttUndoUI } from "./gantt.js";
 import { loadReqDocs } from "./requirements.js";
+import { renderSpacePanel as renderWeComSpace } from "../lib/wecom.js";
 
 var trashList = $("trashList");
 function loadTrash(opts){
@@ -558,6 +559,7 @@ function setSettingsTab(tab){
   if(prevTab !== tab && (prevTab === "members" || tab === "members")) resetMemberPicker();
   if(tab === "visibility" && isManager && !isPersonal) loadProjectAccess();
   if(tab === "integration") loadAutomation();
+  if(tab === "integration") renderWeComSpace();
   if(tab === "integration" && isAdmin){ loadMailSettings(); loadTeamAiSettings(); loadAiUsage(); }
   if(tab === "platform" && isAdmin) setPlatformTab(platformTab);
   if(tab === "workflow") setWorkflowTab(wfTab);

@@ -92,6 +92,23 @@ app:
       # 每个令牌的滑动窗口限流（每分钟），单实例内存实现
       read-per-minute: ${API_RATE_READ_PER_MINUTE:120}
       write-per-minute: ${API_RATE_WRITE_PER_MINUTE:30}
+  # 企业微信自建应用免登（多企业：一个空间可同时启用多家企业的 corp）
+  # 企业登记、应用 Secret、回调地址都在页面里按企业配置，不走环境变量；这里只放全局开关与时限
+  wecom:
+    enabled: ${WECOM_ENABLED:true}
+    # OAuth state 有效期（秒）；企微回调一般几秒内到达，5 分钟足够
+    state-ttl-seconds: ${WECOM_STATE_TTL:300}
+    # 允许的回调 Host（逗号分隔，如 hg.a.com,hg.b.com）；留空表示不校验，生产建议填满
+    allowed-callback-hosts: ${WECOM_ALLOWED_HOSTS:}
+    # 发消息失败重试次数与退避（秒）；重试仍失败则标记 failed，由消息记录页手工重发
+    send-max-attempts: ${WECOM_SEND_MAX_ATTEMPTS:3}
+    send-retry-backoff-seconds: ${WECOM_SEND_RETRY_BACKOFF:60}
+    # 企微接口根地址；内网代理或测试隔离时可覆盖
+    api-base-url: ${WECOM_API_BASE:https://qyapi.weixin.qq.com}
+    # 未绑定企微身份时跳转的登录页（相对 context-path）
+    login-page: ${WECOM_LOGIN_PAGE:/login.html}
+    # 重试扫描间隔（毫秒）
+    retry-ms: ${WECOM_RETRY_MS:60000}
   attach:
     # 附件存储目录（相对工作目录或绝对路径）
     dir: ${ATTACH_DIR:./data/attachments}

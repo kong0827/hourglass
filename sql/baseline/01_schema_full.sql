@@ -1,6 +1,6 @@
 -- ============================================================================
 -- sql/baseline/01_schema_full.sql · 沙漏 Hourglass 完整基线 DDL（MySQL 8，utf8mb4）
--- Updated 2026-11-28: full schema after migrations 01-141 (100 tables；107/108/130 为数据回填、110/116/117/118/122/124/126/127/128/129/132/137/138/139/140 为列变更，均不改表数；123 新增周五补记承接表、131 新增文档收藏表、133 新增 AI 用量日聚合表、134 新增交付说明计划草稿表并扩展快照范围列、135 新增文档引用表、136 新增发布计划分享表、141 新增 API 个人访问令牌表；138 发布计划名称列、139 用例集示例包标记列、140 需求业务提出日期列）。
+-- Updated 2026-11-28: full schema after migrations 01-143 (105 tables；107/108/130 为数据回填、110/116/117/118/122/124/126/127/128/129/132/137/138/139/140/143 为列变更，均不改表数；123 新增周五补记承接表、131 新增文档收藏表、133 新增 AI 用量日聚合表、134 新增交付说明计划草稿表并扩展快照范围列、135 新增文档引用表、136 新增发布计划分享表、141 新增 API 个人访问令牌表、142 新增企业微信多企业免登与消息 5 张表；138 发布计划名称列、139 用例集示例包标记列、140 需求业务提出日期列）。
 --
 -- 完整结构与 sql/01-70、71-89 增量链等效（含 64 测试流程、65 计划-版本关联、66 新成员默认不参与、68 成员公司与项目角色标注、69 成员职能与标签选项、70 项目手动排序、71 富文本描述、74 用例编号、76 需求人工交付判定、77 测试负责人、78 版本终态、79 承诺基线、80 项目里程碑、81 交付说明、82 工作项编号、83 发布条目编号、84 需求编号、85 发布计划编号、86 快照需求编号、87 编号序列、88 用例-工作项追溯、89 发布测试检查策略、93 模块目录层级与用例集、94 文档分类树与空间级文档、95 团队共享 AI 配置、96 动态分组与指定成员可见、97 子任务排序、98 项目多仓库 Git 只读同步、99 文档可见范围、100 用例目录合并与嵌套分组、101 文档分类默认可见范围、102 工作项历史发布人工标记、103 需求池评论、104 需求关注人、105 需求已完成主状态、106 项目集与项目拆分、109 工作项终态已取消、110 评论正文放宽 2000 字、113 需求评审人、114 测试计划执行人、115 发布准备与计划关注、116 推送补充说明、117 企业微信群发送结果、118 保存视图参数放宽、119 交付说明分享补强、120 周五补记、121 轻量自动化与定时报告、123 周五补记未处理项承接、124 工作项创建人、125 文档表格格式、126 发布制品摘要选填、127 发布维护权限范围、128 文档回收站与分享复制开关、129 人工标记发布的空间可配置、130 已有列偏好补入发布态列、131 文档收藏、132 用例执行逐步结果、133 AI 用量日聚合、134 交付说明按发布计划生成、135 文档引用与反链、136 发布计划只读分享、137 本轮提测时间、140 需求业务提出日期、141 API 个人访问令牌）；不包含历史业务数据回填。
 -- 全新部署执行本文件即可，无需再跑 sql/ 目录；已有库的日常升级仍使用 sql/ 增量脚本。
@@ -1455,6 +1455,7 @@ CREATE TABLE `user_notification_preference` (
   `event_type` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'task_assigned/task_updated/task_comment/demand_status',
   `in_app_enabled` tinyint(1) NOT NULL DEFAULT '1',
   `email_enabled` tinyint(1) NOT NULL DEFAULT '0',
+  `wecom_enabled` tinyint(1) DEFAULT NULL COMMENT '企业微信应用消息：仅指派/测试指派/发布准备使用；NULL 视为默认开启',
   PRIMARY KEY (`user_id`,`event_type`),
   CONSTRAINT `fk_unp_user` FOREIGN KEY (`user_id`) REFERENCES `app_user` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='个人事件通知偏好';
@@ -1982,6 +1983,105 @@ CREATE TABLE `report_subscription` (
   UNIQUE KEY `uk_report_subscription` (`workspace_id`,`user_id`,`report_type`),
   KEY `idx_report_subscription_type` (`report_type`,`enabled`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='定时周报/版本报告订阅';
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `wecom_corp`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `wecom_corp` (
+  `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '企业配置ID',
+  `corp_key` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '入口短键（不可猜测，可重置）',
+  `corp_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '企业 CorpID（OAuth appid）',
+  `corp_name` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '企业显示名',
+  `agent_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '自建应用 AgentId',
+  `secret_cipher` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '应用 Secret 密文（AES-GCM，v1: 前缀）',
+  `callback_base_url` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '该企业可信域名下的沙漏根地址，如 https://pm.corp.com/hourglass',
+  `auth_mode` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'self_built' COMMENT 'self_built=自建应用；agent=代开发（预留）',
+  `status` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active' COMMENT 'active/disabled',
+  `remark` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '备注（如密钥托管方式/环境变量名）',
+  `created_by` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '登记人',
+  `created_at` datetime NOT NULL,
+  `updated_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_wecom_corp_key` (`corp_key`),
+  UNIQUE KEY `uk_wecom_corp_id` (`corp_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='企业微信企业配置（一个部署多家）';
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `wecom_corp_space`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `wecom_corp_space` (
+  `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '空间ID',
+  `corp_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '企业 CorpID',
+  `created_by` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '启用人',
+  `created_at` datetime NOT NULL,
+  PRIMARY KEY (`workspace_id`,`corp_id`),
+  KEY `idx_wecom_corp_space_corp` (`corp_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='空间启用的企业微信企业';
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `wecom_user_bind`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `wecom_user_bind` (
+  `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '绑定ID',
+  `user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '本地账号ID',
+  `corp_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '企业 CorpID',
+  `wecom_userid` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '企微成员 UserID（统一小写）',
+  `bind_source` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'admin/self',
+  `status` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active' COMMENT 'active/disabled',
+  `bound_by` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '操作人',
+  `bound_at` datetime NOT NULL,
+  `last_login_at` datetime DEFAULT NULL COMMENT '最近一次企微登录',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_wecom_bind_corp_user` (`corp_id`,`wecom_userid`),
+  UNIQUE KEY `uk_wecom_bind_user_corp` (`user_id`,`corp_id`),
+  KEY `idx_wecom_bind_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='企微成员与本地账号绑定（按企业隔离）';
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `wecom_oauth_state`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `wecom_oauth_state` (
+  `state` varchar(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT '一次性随机串（[A-Za-z0-9]）',
+  `purpose` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'login/bind',
+  `corp_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '发起授权的企业',
+  `user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'bind 用途：发起绑定的本地账号',
+  `target` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '回跳站内路径',
+  `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '入口所在空间（可选）',
+  `expires_at` datetime NOT NULL,
+  `consumed_at` datetime DEFAULT NULL COMMENT '消费时间；非空即已用',
+  `client_ip` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` datetime NOT NULL,
+  PRIMARY KEY (`state`),
+  KEY `idx_wecom_state_expires` (`expires_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='企微 OAuth 一次性 state';
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `wecom_msg_log`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `wecom_msg_log` (
+  `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '日志ID',
+  `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '空间ID',
+  `corp_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '企业 CorpID',
+  `agent_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '应用 AgentId',
+  `event_type` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '事件类型',
+  `touser_text` varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '接收 userid（截断留痕）',
+  `msgtype` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'textcard 等',
+  `title` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '消息标题',
+  `payload_json` mediumtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '重试用请求体',
+  `status` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'success/partial/failed',
+  `errcode` int DEFAULT NULL,
+  `errmsg` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `invaliduser` varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '无效/无权限成员',
+  `msgid` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `attempts` int NOT NULL DEFAULT '1' COMMENT '已尝试次数',
+  `next_retry_at` datetime DEFAULT NULL COMMENT '下次重试时间；空表示不重试',
+  `created_at` datetime NOT NULL,
+  `updated_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_wecom_msg_corp_created` (`corp_id`,`created_at`),
+  KEY `idx_wecom_msg_status_retry` (`status`,`next_retry_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='企业微信应用消息发送日志';;
+/*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.WeComCorpSpaceMapper">
+
+  <select id="selectCorpIdsByWorkspace" resultType="string">
+    SELECT corp_id FROM wecom_corp_space WHERE workspace_id = #{workspaceId}
+  </select>
+
+  <select id="selectByWorkspace" resultType="WeComCorpSpace">
+    SELECT workspace_id, corp_id, created_by, created_at
+    FROM wecom_corp_space WHERE workspace_id = #{workspaceId}
+    ORDER BY created_at
+  </select>
+
+  <insert id="insert">
+    INSERT IGNORE INTO wecom_corp_space (workspace_id, corp_id, created_by, created_at)
+    VALUES (#{workspaceId}, #{corpId}, #{createdBy}, #{createdAt})
+  </insert>
+
+  <delete id="delete">
+    DELETE FROM wecom_corp_space WHERE workspace_id = #{workspaceId} AND corp_id = #{corpId}
+  </delete>
+
+  <delete id="deleteByWorkspace">
+    DELETE FROM wecom_corp_space WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <delete id="deleteByCorp">
+    DELETE FROM wecom_corp_space WHERE corp_id = #{corpId}
+  </delete>
+</mapper>

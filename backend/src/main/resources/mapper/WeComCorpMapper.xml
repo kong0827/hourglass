@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.WeComCorpMapper">
+
+  <sql id="cols">
+    id, corp_key, corp_id, corp_name, agent_id, secret_cipher, callback_base_url,
+    auth_mode, status, remark, created_by, created_at, updated_at
+  </sql>
+
+  <select id="selectById" resultType="WeComCorp">
+    SELECT <include refid="cols"/> FROM wecom_corp WHERE id = #{id}
+  </select>
+
+  <select id="selectByCorpKey" resultType="WeComCorp">
+    SELECT <include refid="cols"/> FROM wecom_corp WHERE corp_key = #{corpKey}
+  </select>
+
+  <select id="selectByCorpId" resultType="WeComCorp">
+    SELECT <include refid="cols"/> FROM wecom_corp WHERE corp_id = #{corpId}
+  </select>
+
+  <select id="selectAll" resultType="WeComCorp">
+    SELECT <include refid="cols"/> FROM wecom_corp ORDER BY created_at, corp_name
+  </select>
+
+  <select id="selectActiveRegistered" resultType="WeComCorp">
+    SELECT DISTINCT c.id, c.corp_key, c.corp_id, c.corp_name, c.agent_id, c.secret_cipher,
+           c.callback_base_url, c.auth_mode, c.status, c.remark, c.created_by, c.created_at, c.updated_at
+    FROM wecom_corp c
+    JOIN wecom_corp_space s ON s.corp_id = c.corp_id
+    WHERE c.status = 'active'
+    ORDER BY c.corp_name
+  </select>
+
+  <select id="selectActiveByIds" resultType="WeComCorp">
+    SELECT <include refid="cols"/> FROM wecom_corp
+    WHERE status = 'active'
+    <choose>
+      <when test="corpIds != null and corpIds.size() > 0">
+        AND corp_id IN
+        <foreach collection="corpIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+      </when>
+      <otherwise>AND 1 = 0</otherwise>
+    </choose>
+    ORDER BY created_at, corp_name
+  </select>
+
+  <insert id="insert">
+    INSERT INTO wecom_corp
+      (id, corp_key, corp_id, corp_name, agent_id, secret_cipher, callback_base_url,
+       auth_mode, status, remark, created_by, created_at, updated_at)
+    VALUES
+      (#{id}, #{corpKey}, #{corpId}, #{corpName}, #{agentId}, #{secretCipher}, #{callbackBaseUrl},
+       #{authMode}, #{status}, #{remark}, #{createdBy}, #{createdAt}, #{updatedAt})
+  </insert>
+
+  <update id="update">
+    UPDATE wecom_corp
+    <set>
+      corp_key = #{corpKey},
+      corp_id = #{corpId},
+      corp_name = #{corpName},
+      agent_id = #{agentId},
+      callback_base_url = #{callbackBaseUrl},
+      status = #{status},
+      remark = #{remark},
+      updated_at = NOW(),
+      <if test="secretCipher != null">secret_cipher = #{secretCipher},</if>
+    </set>
+    WHERE id = #{id}
+  </update>
+
+  <update id="updateStatus">
+    UPDATE wecom_corp SET status = #{status}, updated_at = NOW() WHERE id = #{id}
+  </update>
+
+  <delete id="deleteById">
+    DELETE FROM wecom_corp WHERE id = #{id}
+  </delete>
+</mapper>

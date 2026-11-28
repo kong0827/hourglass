@@ -195,6 +195,12 @@
   font-size:11px;font-weight:600;letter-spacing:0;
 }
 .ph-pill[hidden]{display:none;}
+/* 标题内联口径：「N 个项目 · M 个版本 · 更新于 14:32」跟在 H1 后，与原型同基线 */
+.ph-inline-meta{
+  flex:0 0 auto;margin-left:2px;font-size:12.5px;font-weight:500;letter-spacing:0;
+  color:var(--text-3);white-space:nowrap;
+}
+.ph-inline-meta[hidden]{display:none;}
 .ph-custom{display:flex;align-items:center;gap:6px;}
 .ph-custom[hidden]{display:none;}
 .pagehead .sub{

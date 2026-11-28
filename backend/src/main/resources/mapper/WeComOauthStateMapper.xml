@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.WeComOauthStateMapper">
+
+  <insert id="insert">
+    INSERT INTO wecom_oauth_state
+      (state, purpose, corp_id, user_id, target, workspace_id, expires_at, consumed_at, client_ip, created_at)
+    VALUES
+      (#{state}, #{purpose}, #{corpId}, #{userId}, #{target}, #{workspaceId},
+       #{expiresAt}, #{consumedAt}, #{clientIp}, #{createdAt})
+  </insert>
+
+  <update id="consume">
+    UPDATE wecom_oauth_state
+       SET consumed_at = NOW()
+     WHERE state = #{state}
+       AND consumed_at IS NULL
+       AND expires_at &gt; NOW()
+  </update>
+
+  <select id="selectByState" resultType="WeComOauthState">
+    SELECT state, purpose, corp_id, user_id, target, workspace_id,
+           expires_at, consumed_at, client_ip, created_at
+    FROM wecom_oauth_state WHERE state = #{state}
+  </select>
+
+  <delete id="deleteExpired">
+    DELETE FROM wecom_oauth_state WHERE expires_at &lt; #{before}
+  </delete>
+</mapper>

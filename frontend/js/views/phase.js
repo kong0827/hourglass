@@ -8,7 +8,7 @@ import { openTaskDrawer, syncAssocRead } from "../core/task-drawer.js";
 import { updateBrand } from "../core/filters.js";
 import { reloadFilteredViews } from "../core/filters-ui.js";
 import { showView } from "../core/router.js";
-import { canEditReq, projectOptionsHTML, projectRefsEnriched, reqNameById, reqSetId, rt, setNameById, state, taskCacheExtra } from "../core/state.js";
+import { canEditReq, projectOptionsHTML, projectRefsEnriched, reqNameById, reqSetId, roleReadOnly, rt, setNameById, state, taskCacheExtra } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
 import { assocLinkHTML, normalizedIds, taskVersionIds, taskVersionsText, sameIds, taskPublicationHTML, taskHref, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, itemNoText, releaseNoText, releasePlanNoText, COLUMNS, colName, dayKey, dayDiff, parseDate, fmtMinute, fmtMinutesShort, versionPhaseInfoHTML, VERSION_STATUS_META, PLAN_STATUS_META, versionStatusTagHTML, planStatusName } from "../lib/format.js";
@@ -37,22 +37,24 @@ var phaseReq = $("phaseReq"), phaseMeta = $("phaseMeta"), phaseBody = $("phaseBo
 var editingVerId = null;
 /* 打开编辑时的版本令牌：保存时不能从缓存重读（缓存可能已被迟到的列表响应换掉，静默覆盖并发修改） */
 var editingVerRevision = null, editingVerStatus = null;
-var viewMode = "version";          /* version | phase | allversions | overview */
-var PHASE_MODES = { version:1, phase:1, allversions:1, overview:1 };
+var viewMode = "list";             /* list | version | phase | allversions | overview */
+var PHASE_MODES = { list:1, version:1, phase:1, allversions:1, overview:1 };
 var PHASE_SCOPE = {
   allversions: { name:"全部项目", desc:"跨项目版本清单，可按项目集或项目筛选，勾选后新建发布计划" },
   overview: { name:"投入总览", desc:"项目级的首版 / 迭代投入与风险总览" }
 };
+/* 版本列表范围：单项目（默认）/ 项目集 / 全部项目；分析口径从同一个范围菜单进入 */
+var listUi = { scopeType:"proj", scopeId:"", status:"all", sort:"updated", q:"" };
 function phaseModeFromHash(){
   var raw = String(window.location.hash || "").replace(/^#\/?/, "");
   var qi = raw.indexOf("?");
-  if((qi >= 0 ? raw.substring(0, qi) : raw) !== "phase") return "version";
-  var m = new URLSearchParams(qi >= 0 ? raw.substring(qi + 1) : "").get("pmode") || "version";
+  if((qi >= 0 ? raw.substring(0, qi) : raw) !== "phase") return "list";
+  var m = new URLSearchParams(qi >= 0 ? raw.substring(qi + 1) : "").get("pmode") || "list";
   /* 旧链接 ?pmode=phase 继续有效，语义收敛为「首版 / 迭代分析」 */
-  return PHASE_MODES[m] ? m : "version";
+  return PHASE_MODES[m] ? m : "list";
 }
 function syncPhaseModeHash(mode){
-  var h = "#/phase" + (mode === "version" ? "" : "?pmode=" + mode);
+  var h = "#/phase" + (mode === "list" ? "" : "?pmode=" + mode);
   if(String(window.location.hash || "") === h) return;
   try{ history.replaceState(null, "", h); }
   catch(e){ /* file:// 等受限环境：模式仍生效，只是不写地址栏 */ }
@@ -65,9 +67,9 @@ var verInline = null;              /* { id, field:"name"|"dates", busy } */
 var cache = null;                  /* { phase, vstats, versions, tasks } */
 var overviewCache = null;
 var allVersionsCache = null, allVersionsSeq = 0, allVersionsSel = [];
-var allVersionsFilters = { set:"", project:"", status:"", q:"" };
 var cacheReqId = null;             /* cache 对应的项目，跨项目视图来回切换后避免串项目 */
 var loadSeq = 0;
+var pendingPhaseLoad = false;      /* 项目列表未就绪时进入版本分析，等 ds:reqs-loaded 再补渲染 */
 /* 任务抽屉的「计划版本」选项缓存：按项目缓存，写版本后失效 */
 var versionOptionsCache = {};
 var taskOptionsCache = {};
@@ -168,7 +170,19 @@ function syncReqSel(){
    以最终落地的项目列表补一次同步，避免刷新后误判「还没有项目」 */
 window.addEventListener("ds:reqs-loaded", function(){
   if(document.body.dataset.view !== "phase" || !rt.reqsLoaded) return;
-  if(viewMode === "allversions"){ syncModeSeg(); loadAllVersions(); return; }
+  if(viewMode === "allversions" || viewMode === "list"){
+    if(allVersionsCache) return;
+    syncModeSeg();
+    loadVersionList();
+    return;
+  }
+  if(pendingPhaseLoad){
+    pendingPhaseLoad = false;
+    syncReqSel();
+    if(viewMode === "overview") loadOverview();
+    else loadPhaseData();
+    return;
+  }
   if(!rt.reqList.length || (phaseReq && phaseReq.options.length)) return;
   syncReqSel();
   if(viewMode === "overview") loadOverview();
@@ -179,7 +193,7 @@ window.addEventListener("ds:milestones-changed", function(e){
   if(document.body.dataset.view !== "phase") return;
   var reqId = e && e.detail && e.detail.reqId;
   if(reqId && reqId !== rt.phaseReqId) return;
-  if(viewMode === "phase" || viewMode === "version") reloadView();
+  if(viewMode === "phase" || viewMode === "version" || viewMode === "list" || viewMode === "allversions") reloadView();
 });
 function invalidateVersionCache(reqId){
   delete versionOptionsCache[reqId];
@@ -190,7 +204,13 @@ function notifyDeliveryChanged(reqId){
   try{ window.dispatchEvent(new CustomEvent("ds:delivery-changed", { detail:{ reqId: reqId || rt.phaseReqId } })); }catch(e){ /* noop */ }
 }
 function loadPhaseData(){
+  clearVersionListPageHead();
   if(!rt.phaseReqId || !rt.reqList.length){
+    if(!rt.reqsLoaded){
+      pendingPhaseLoad = true;
+      phaseBody.innerHTML = UI.skeletonRows(4);
+      return;
+    }
     phaseBody.innerHTML = UI.emptyState({
       icon:"folder", title:"还没有项目",
       text:"先在「项目」里创建项目并归入工作项，这里就能按阶段、按版本看投入与偏差。"
@@ -222,7 +242,7 @@ function loadPhaseData(){
     /* 版本工时汇总的分类维度：分类名与颜色，失败只影响分类分组标题 */
     API.get("/api/categories", { project: reqId }).catch(function(){ return []; })
   ]).then(function(rs){
-    if(current !== loadSeq || rt.phaseReqId !== reqId || viewMode === "overview" || viewMode === "allversions") return;
+    if(current !== loadSeq || rt.phaseReqId !== reqId || viewMode === "list" || viewMode === "overview" || viewMode === "allversions") return;
     cache = { phase: rs[0], vstats: rs[1], versions: rs[2], tasks: rs[3], milestones: rs[4] || [] };
     rollupUi.cats = rs[5] || [];
     cacheReqId = reqId;
@@ -230,7 +250,7 @@ function loadPhaseData(){
     taskOptionsCache[reqId] = rs[3];
     renderPhaseView();
   }).catch(function(ex){
-    if(current !== loadSeq || rt.phaseReqId !== reqId || viewMode === "overview" || viewMode === "allversions") return;
+    if(current !== loadSeq || rt.phaseReqId !== reqId || viewMode === "list" || viewMode === "overview" || viewMode === "allversions") return;
     phaseBody.innerHTML = UI.emptyState({
       icon:"alert", title:"加载失败", text: ex.message || "网络异常，请稍后重试", actionLabel:"重试"
     });
@@ -238,7 +258,7 @@ function loadPhaseData(){
   });
 }
 function enterPhaseView(){
-  /* 默认落在按版本；旧链接 ?pmode=phase 仍然映射到「首版 / 迭代分析」，刷新与分享保持同一视图 */
+  /* 默认落在版本列表；?pmode=version 仍可回到旧工作台，?pmode=phase 是首版 / 迭代分析 */
   viewMode = phaseModeFromHash();
   syncModeSeg();
   /* 全局「新建」菜单跨视图创建：#/phase?new=1 进入即开新建版本弹窗（参数消费一次即清） */
@@ -249,12 +269,13 @@ function enterPhaseView(){
   var afterReqs = function(){
     syncReqSel();
     if(wantNew){
-      /* 跨项目视图没有「当前项目」可写：若还记着上次进入的项目，先切回该项目的按版本视图再开弹窗，
-         避免「跳转过来只得到一句提示」；没有可回落的项目或只读时才提示。 */
-      var crossMode = viewMode === "overview" || viewMode === "allversions";
+      /* 合成范围没有「当前项目」可写：若还记着上次进入的项目，先切回该项目的列表再开弹窗 */
+      var crossMode = viewMode === "overview" || viewMode === "allversions" || (viewMode === "list" && listUi.scopeType !== "proj");
       if(crossMode && rt.phaseReqId && canWritePhase()){
         toast("已切到 " + (reqNameById(rt.phaseReqId) || "上次的项目") + "，继续新建版本", "fs");
-        viewMode = "version";
+        viewMode = "list";
+        listUi.scopeType = "proj";
+        listUi.scopeId = rt.phaseReqId;
         syncPhaseModeHash(viewMode);
         syncModeSeg();
       }
@@ -264,7 +285,7 @@ function enterPhaseView(){
       else openVersionDialog(null);
     }
     if(viewMode === "overview") loadOverview();
-    else if(viewMode === "allversions") loadAllVersions();
+    else if(viewMode === "allversions" || viewMode === "list") loadVersionList();
     else loadPhaseData();
   };
   if(rt.reqsLoaded){
@@ -281,7 +302,7 @@ function enterPhaseView(){
 }
 function reloadView(){
   if(viewMode === "overview"){ return loadOverview(); }
-  if(viewMode === "allversions"){ return loadAllVersions(); }
+  if(viewMode === "allversions" || viewMode === "list"){ allVersionsCache = null; return loadVersionList(); }
   invalidateVersionCache(rt.phaseReqId);
   return loadPhaseData();
 }
@@ -289,6 +310,7 @@ function reloadView(){
 /* ---------- 全部项目总览（管理端） ---------- */
 
 function loadOverview(){
+  clearVersionListPageHead();
   var current = ++loadSeq;
   if(phaseMeta) phaseMeta.textContent = "全部项目";
   rt.phaseProjectName = "";
@@ -367,133 +389,415 @@ function renderOverviewMode(){
     + '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
 }
 
-/* ---------- 全部版本（跨项目勾选 → 现有发布计划） ---------- */
+/* ---------- 版本列表（原型 versions-default：范围 / 状态 / 排序 / 搜索 + 七列） ---------- */
 
 function allVersionRowMap(){
   var map = {};
   (allVersionsCache || []).forEach(function(r){ map[r.versionId] = r; });
   return map;
 }
-function loadAllVersions(){
-  var current = ++allVersionsSeq;
-  if(phaseMeta) phaseMeta.textContent = "全部版本";
-  rt.phaseProjectName = "";
-  updateBrand();
-  phaseBody.innerHTML = UI.skeletonRows(4);
-  return API.get("/api/versions/cross-project").then(function(rows){
-    if(current !== allVersionsSeq || viewMode !== "allversions") return;
-    allVersionsCache = rows || [];
-    var alive = {};
-    allVersionsCache.forEach(function(r){ alive[r.versionId] = versionEnded({ status: r.versionStatus }) ? null : true; });
-    allVersionsSel = allVersionsSel.filter(function(id){ return alive[id]; });
-    renderAllVersions();
-  }).catch(function(ex){
-    if(current !== allVersionsSeq || viewMode !== "allversions") return;
-    phaseBody.innerHTML = UI.emptyState({
-      icon:"alert", title:"全部版本加载失败", text: ex.message || "网络异常，请稍后重试", actionLabel:"重试"
-    });
-    bindRetry(phaseBody, loadAllVersions);
-  });
+function vlistMD(s){
+  var m = String(s || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? m[2] + "-" + m[3] : "";
 }
-function allVersionsFiltered(){
-  var f = allVersionsFilters, q = String(f.q || "").trim().toLowerCase();
-  return (allVersionsCache || []).filter(function(r){
-    if(f.set && reqSetId(r.reqId) !== f.set) return false;
-    if(f.project && r.reqId !== f.project) return false;
-    if(f.status && r.versionStatus !== f.status) return false;
-    if(q && String(r.versionName || "").toLowerCase().indexOf(q) === -1
-      && String(r.projectName || "").toLowerCase().indexOf(q) === -1) return false;
+function vlistEnvName(env){
+  return { production:"生产", staging:"预发", test:"测试" }[env] || "";
+}
+function vlistTimeHM(iso){
+  var d = iso ? new Date(iso) : null;
+  if(!d || isNaN(d.getTime())) return "";
+  return (d.getHours() < 10 ? "0" : "") + d.getHours() + ":" + (d.getMinutes() < 10 ? "0" : "") + d.getMinutes();
+}
+/* 范围项目：优先用已加载的项目列表；尚未加载时退回版本行里出现过的项目，避免页头数字闪成 0 */
+function vlistAllProjects(){
+  var list = (rt.reqList || []).filter(function(r){ return !r.archivedAt; });
+  if(list.length) return list;
+  var seen = {}, out = [];
+  (allVersionsCache || []).forEach(function(r){
+    if(seen[r.reqId]) return;
+    seen[r.reqId] = 1;
+    out.push({ id:r.reqId, name:r.projectName });
+  });
+  return out;
+}
+function vlistScopeProjects(){
+  var all = vlistAllProjects();
+  if(listUi.scopeType === "proj"){
+    var id = listUi.scopeId || rt.phaseReqId;
+    var hit = all.filter(function(r){ return r.id === id; });
+    if(!hit.length && id){
+      var row = (allVersionsCache || []).filter(function(r){ return r.reqId === id; })[0];
+      hit = [{ id:id, name:row ? row.projectName : reqNameById(id) }];
+    }
+    return hit;
+  }
+  if(listUi.scopeType === "set"){
+    return all.filter(function(r){ return reqSetId(r.id) === listUi.scopeId; });
+  }
+  return all;
+}
+function vlistScopeLabel(){
+  if(listUi.scopeType === "set") return "项目集 · " + (setNameById(listUi.scopeId) || listUi.scopeId || "");
+  if(listUi.scopeType === "all") return "全部项目";
+  var id = listUi.scopeId || rt.phaseReqId;
+  var row = (allVersionsCache || []).filter(function(r){ return r.reqId === id; })[0];
+  return reqNameById(id) || (row && row.projectName) || "当前项目";
+}
+function vlistScopedRows(rows){
+  return (rows || []).filter(function(r){
+    if(listUi.scopeType === "proj") return r.reqId === (listUi.scopeId || rt.phaseReqId);
+    if(listUi.scopeType === "set") return reqSetId(r.reqId) === listUi.scopeId;
     return true;
   });
 }
-function allVersionsSelect(name, pairs, chosen, label){
-  return '<select class="mini-select" data-allv-filter="' + name + '" aria-label="' + esc(label) + '">'
-    + pairs.map(function(p){ return '<option value="' + esc(p[0]) + '"' + (p[0] === chosen ? ' selected' : '') + '>' + esc(p[1]) + '</option>'; }).join("")
-    + '</select>';
+function vlistFiltered(rows){
+  var q = String(listUi.q || "").trim().toLowerCase();
+  var out = vlistScopedRows(rows);
+  if(listUi.status !== "all") out = out.filter(function(r){ return r.versionStatus === listUi.status; });
+  if(q) out = out.filter(function(r){ return String(r.versionName || "").toLowerCase().indexOf(q) !== -1; });
+  out.sort(function(a, b){
+    if(listUi.sort === "name") return String(a.versionName || "").localeCompare(String(b.versionName || ""), "zh");
+    if(listUi.sort === "target"){
+      var at = a.targetDate || "", bt = b.targetDate || "";
+      if(!at && bt) return 1;
+      if(at && !bt) return -1;
+      if(at !== bt) return at < bt ? -1 : 1;
+    }
+    return String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
+  });
+  return out;
 }
-function renderAllVersions(){
-  var rows = allVersionsCache || [];
-  if(!rows.length){
-    phaseBody.innerHTML = UI.emptyState({
-      icon:"folder", title:"还没有版本", text:"先在项目中新建版本，这里会汇总全部可见项目的版本。"
-    });
-    return;
-  }
-  var map = allVersionRowMap();
-  var selected = allVersionsSel.map(function(id){ return map[id]; }).filter(Boolean);
-  var selectedProjects = {};
-  selected.forEach(function(r){ selectedProjects[r.reqId] = true; });
-  var projectIds = [], projectNames = {}, manageable = {};
-  rows.forEach(function(r){
-    if(projectIds.indexOf(r.reqId) === -1){ projectIds.push(r.reqId); projectNames[r.reqId] = r.projectName; }
-    if(r.canManage) manageable[r.reqId] = true;
+function vlistLatestUpdated(rows){
+  var best = "";
+  (rows || []).forEach(function(r){
+    var t = r.updatedAt || r.releasedAt || "";
+    if(t && t > best) best = t;
   });
-  var filtered = allVersionsFiltered();
-  var setOptions = (rt.projectSets || []).filter(function(s){
-    return projectIds.some(function(id){ return reqSetId(id) === s.id; });
+  return vlistTimeHM(best);
+}
+function clearVersionListPageHead(){
+  rt.phaseListScope = "";
+  var inline = document.getElementById("pageInlineMeta");
+  if(inline){ inline.textContent = ""; inline.hidden = true; }
+  var acts = document.getElementById("pageActions");
+  if(acts){ acts.hidden = true; acts.innerHTML = ""; }
+  var nw = document.getElementById("newWrap");
+  if(nw) nw.hidden = false;
+  var pill = document.getElementById("pagePill");
+  if(pill){ pill.hidden = true; pill.textContent = ""; }
+  var sub = document.getElementById("pageSub");
+  if(sub) sub.textContent = "版本计划、工作项范围与交付情况";
+  var title = document.getElementById("pageTitleText");
+  if(title) title.textContent = "版本";
+}
+/* 页头按原型：H1 版本 + 内联口径「N 个项目 · M 个版本 · 更新于 HH:mm」，右端 导出 / 新建版本 */
+function syncVersionListPageHead(rows, scoped){
+  if(document.body.dataset.view !== "phase") return;
+  var title = document.getElementById("pageTitleText"), sub = document.getElementById("pageSub");
+  var inline = document.getElementById("pageInlineMeta"), pill = document.getElementById("pagePill");
+  var acts = document.getElementById("pageActions"), nw = document.getElementById("newWrap");
+  var loading = scoped === null;
+  var multi = listUi.scopeType !== "proj";
+  var projects = vlistScopeProjects();
+  var listed = {}, listedN = 0;
+  (scoped || []).forEach(function(r){ if(!listed[r.reqId]){ listed[r.reqId] = 1; listedN++; } });
+  var meta = loading ? "加载中…"
+    : (multi ? (listedN || projects.length) + " 个项目 · " : "") + (scoped || []).length + " 个版本"
+      + (vlistLatestUpdated(scoped) ? " · 更新于 " + vlistLatestUpdated(scoped) : "");
+  rt.phaseListScope = vlistScopeLabel();
+  if(title) title.textContent = "版本";
+  if(sub) sub.textContent = "";
+  if(pill){ pill.hidden = true; pill.textContent = ""; }
+  if(inline){ inline.textContent = meta; inline.hidden = !meta; }
+  var writable = listUi.scopeType === "proj" && canEditReq(listUi.scopeId || rt.phaseReqId);
+  /* 只读项目：写入口不渲染（规格 §2「写操作按钮隐藏不禁用」），由列表横幅解释原因 */
+  var hideNew = listUi.scopeType === "proj" && !writable;
+  var reason = multi ? "新建版本需先选定一个具体项目" : "";
+  if(acts){
+    acts.innerHTML = '<button class="btn" type="button" data-vlist-export>导出</button>'
+      + (hideNew ? "" : '<button class="btn primary" type="button" data-vlist-new'
+      + (multi ? ' disabled title="' + esc(reason) + '"' : '') + '>'
+      + '<svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 4.4v11.2M4.4 10h11.2"/></svg>新建版本</button>');
+    acts.hidden = false;
+  }
+  if(nw) nw.hidden = true;
+  document.title = "版本 · 沙漏";
+}
+function vlistScopeMenuHTML(){
+  var projects = vlistAllProjects();
+  var sets = (rt.projectSets || []).filter(function(s){
+    return projects.some(function(p){ return reqSetId(p.id) === s.id; });
   });
-  var manageCount = projectIds.filter(function(id){ return manageable[id]; }).length;
-  var selbar = "";
-  if(selected.length){
-    selbar = '<div class="allv-selbar"><div class="allv-selinfo"><b>已选 ' + selected.length + ' 个版本 · 跨 ' + Object.keys(selectedProjects).length + ' 个项目</b>'
-      + '<div class="release-chips">' + selected.map(function(r){ return '<span class="release-chip" title="' + esc(r.projectName) + '">' + esc(r.versionName) + '</span>'; }).join("") + '</div></div>'
-      + '<button class="btn sm" type="button" data-allv-clear>清空</button>'
-      + '<button class="btn sm primary" type="button" data-allv-plan>新建发布计划</button></div>';
-  }else{
-    selbar = '<p class="allv-hint">' + (manageCount
-      ? "勾选可管理的版本后，可跨项目新建一个发布计划；无发布计划权限的项目不可勾选。"
-      : "当前项目均无发布计划权限，仅可查看版本；如需创建计划，请联系空间主或管理员在「设置 → 工作流 → 发布权限」中勾选你的身份。") + '</p>';
+  var op = function(attrs, name, tail){
+    return '<button class="vlist-op" type="button" role="menuitem"' + attrs + '>'
+      + '<span>' + esc(name) + '</span>' + (tail ? '<small>' + tail + '</small>' : '') + '</button>';
+  };
+  var cur = function(type, id){
+    return listUi.scopeType === type && (type === "all" || listUi.scopeId === id) ? ' aria-current="true"' : '';
+  };
+  var html = op(' data-vlist-scope="all"' + cur("all"), "全部项目", projects.length + " 个项目");
+  if(sets.length){
+    html += '<div class="vlist-gh">项目集</div>'
+      + sets.map(function(s){
+        var n = projects.filter(function(p){ return reqSetId(p.id) === s.id; }).length;
+        return op(' data-vlist-scope="set" data-vlist-id="' + esc(s.id) + '"' + cur("set", s.id), s.name, n + " 个项目");
+      }).join("");
   }
-  var body = "";
-  if(!filtered.length){
-    body = '<tr><td colspan="7"><div class="allv-empty">没有匹配的版本，试试清空筛选。</div></td></tr>';
-  }else{
-    var lastReq = null;
-    filtered.forEach(function(r){
-      if(r.reqId !== lastReq){
-        lastReq = r.reqId;
-        var count = filtered.filter(function(x){ return x.reqId === r.reqId; }).length;
-        body += '<tr class="allv-group"><td colspan="7"><span class="allv-gname">' + esc(r.projectName) + '</span>'
-          + '<span class="allv-gmeta">' + count + ' 个版本 · ' + (r.canManage ? '可创建计划' : '无计划权限') + '</span></td></tr>';
-      }
-      var on = allVersionsSel.indexOf(r.versionId) !== -1;
-      var ended = versionEnded({ status: r.versionStatus });
-      body += '<tr' + (on ? ' class="is-selected"' : '') + '>'
-        + '<td class="allv-checkcol"><label class="allv-pick"' + (r.versionStatus === "released" ? ' title="已发布的版本不能再加入新计划"' : '') + '><input type="checkbox" data-allv-pick="' + esc(r.versionId) + '"'
-          + (on ? ' checked' : '') + (r.canManage && !ended && r.versionStatus !== "released" ? '' : ' disabled') + ' aria-label="选择 ' + esc(r.versionName) + '"></label></td>'
-        + '<td><button class="allv-vname link-cell" type="button" data-ver-open="' + esc(r.versionId) + '" data-ver-req="' + esc(r.reqId) + '" title="打开「' + esc(r.versionName) + '」的版本详情页">'
-          + '<span>' + esc(r.versionName) + '</span>' + icon("chevronRight", 12) + '</button><div class="allv-vsub">'
-          + (ended ? esc(versionStatusName(r.versionStatus)) + ' · 历史保留，不参与发布计划'
-            : (r.versionStatus === "released" ? '已发布 · 内容只读，不能再加入新计划' : '工作项 ' + (r.taskCount == null ? "—" : r.taskCount) + ' 项')) + '</div></td>'
-        + '<td>' + versionStatusTag(r.versionStatus) + '</td>'
-        + '<td>' + (r.targetDate ? esc(String(r.targetDate).substring(0, 10)) : '<span class="mute">未设置</span>') + '</td>'
-        + '<td class="num">' + (r.taskCount == null ? "—" : r.taskCount) + '</td>'
-        + '<td>' + (r.latestReleaseDate ? esc(String(r.latestReleaseDate).substring(0, 10)) : "—") + '</td>'
-        + '<td><span class="allv-perm' + (r.canManage ? '' : ' is-off') + '">' + (r.canManage ? '可创建计划' : '无计划权限') + '</span></td>'
-        + '</tr>';
-    });
-  }
-  phaseBody.innerHTML = '<div class="panel allv-panel">'
-    + '<div class="phase-tbl-tools allv-tools">'
-    + (setOptions.length ? '<label class="phase-filter">项目集<select class="mini-select" data-allv-filter="set" aria-label="按项目集筛选">'
-      + '<option value="">全部项目集</option>'
-      + setOptions.map(function(s){ return '<option value="' + esc(s.id) + '"' + (s.id === allVersionsFilters.set ? ' selected' : '') + '>' + esc(s.name) + '</option>'; }).join("")
-      + '</select></label>' : "")
-    + '<label class="phase-filter">项目<select class="mini-select" data-allv-filter="project" aria-label="按项目筛选">'
-    + '<option value="">全部项目</option>'
-    + projectOptionsHTML(projectRefsEnriched(projectIds.map(function(id){ return { id:id, name:projectNames[id] }; })), allVersionsFilters.project)
-    + '</select></label>'
-    + '<label class="phase-filter">状态' + allVersionsSelect("status", [["", "全部状态"], ["active", "进行中"], ["planned", "计划中"], ["released", "已发布"], ["closed", "已关闭"], ["canceled", "已取消"]], allVersionsFilters.status, "按状态筛选") + '</label>'
-    + '<input class="phase-filter-input" type="search" data-allv-kw value="' + esc(allVersionsFilters.q) + '" placeholder="搜索版本或项目" aria-label="搜索版本或项目">'
-    + '<span class="phase-tbl-count">' + filtered.length + ' 个版本 · ' + manageCount + ' 个可管理项目</span>'
+  html += '<div class="vlist-gh">单个项目</div>'
+    + '<div class="vlist-scroll">'
+    + projects.map(function(p){
+      return op(' data-vlist-scope="proj" data-vlist-id="' + esc(p.id) + '"' + cur("proj", p.id), p.name, canEditReq(p.id) ? "" : "只读");
+    }).join("")
+    + '</div>';
+  html += '<div class="vlist-sep" aria-hidden="true"></div><div class="vlist-gh">分析</div>'
+    + op(' data-vlist-analysis="version"', "版本工作台", "单项目")
+    + op(' data-vlist-analysis="phase"', "首版 / 迭代分析", "单项目")
+    + op(' data-vlist-analysis="overview"', "投入总览", "全部项目");
+  return '<div class="menu vlist-menu" id="vlistScopeMenu" hidden>' + html + '</div>';
+}
+function vlistToolbarHTML(){
+  var chevron = '<svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5 6 8l3-3.5"/></svg>';
+  var statuses = [["all", "全部"], ["active", "进行中"], ["planned", "计划中"], ["released", "已发布"]];
+  var sorts = [["updated", "按更新时间"], ["target", "按目标日期"], ["name", "按名称"]];
+  return '<div class="vlist-bar">'
+    + '<div class="vlist-scope" id="vlistScopeWrap">'
+    + '<button class="vlist-scope-btn" type="button" id="vlistScopeBtn" aria-haspopup="true" aria-expanded="false">范围 <b>' + esc(vlistScopeLabel()) + '</b>' + chevron + '</button>'
+    + vlistScopeMenuHTML()
     + '</div>'
-    + selbar
-    + '<div class="tbl-wrap phase-tbl-wrap"><table class="phase-tbl allv-tbl"><thead><tr>'
-    + '<th class="allv-checkcol"><span class="sr-only">选择</span></th><th>版本</th><th>状态</th><th>目标就绪日</th><th class="num">工作项</th><th>最近发布</th><th>可管理</th>'
-    + '</tr></thead><tbody>' + body + '</tbody></table></div>'
-    + '<p class="allv-foot">发布计划可跨项目、跨版本；主版本取第一个勾选版本。已发布版本内容只读，且不能再加入新计划（已在计划内的不受影响）。列表按项目分组、版本倒序。</p>'
+    + '<span class="vlist-div" aria-hidden="true"></span>'
+    + '<div class="seg mini" role="group" aria-label="版本状态">'
+    + statuses.map(function(s){
+      return '<button type="button" data-vlist-status="' + s[0] + '" aria-pressed="' + (listUi.status === s[0]) + '">' + s[1] + '</button>';
+    }).join("")
+    + '</div>'
+    + '<span class="vlist-div" aria-hidden="true"></span>'
+    + '<label class="vlist-sort">排序<select class="mini-select" data-vlist-sort aria-label="版本排序">'
+    + sorts.map(function(s){
+      return '<option value="' + s[0] + '"' + (listUi.sort === s[0] ? ' selected' : '') + '>' + s[1] + '</option>';
+    }).join("")
+    + '</select></label>'
+    + '<div class="vlist-search">' + icon("search", 14)
+    + '<input type="search" data-vlist-q value="' + esc(listUi.q) + '" placeholder="搜索版本名称" aria-label="搜索版本名称" autocomplete="off"></div>'
     + '</div>';
 }
+function vlistSelectionBarHTML(multi){
+  if(!multi || !allVersionsSel.length) return "";
+  var map = allVersionRowMap();
+  var selected = allVersionsSel.map(function(id){ return map[id]; }).filter(Boolean);
+  if(!selected.length) return "";
+  var projects = {};
+  selected.forEach(function(r){ projects[r.reqId] = true; });
+  return '<div class="allv-selbar"><div class="allv-selinfo"><b>已选 ' + selected.length + ' 个版本 · 跨 ' + Object.keys(projects).length + ' 个项目</b>'
+    + '<div class="release-chips">' + selected.map(function(r){
+      return '<span class="release-chip" title="' + esc(r.projectName) + '">' + esc(r.versionName) + '</span>';
+    }).join("") + '</div></div>'
+    + '<button class="btn sm" type="button" data-allv-clear>清空</button>'
+    + '<button class="btn sm primary" type="button" data-allv-plan>新建发布计划</button></div>';
+}
+function vlistReleaseHTML(r){
+  var prod = r.productionSuccessCount || 0, stage = r.stagingSuccessCount || 0;
+  if(prod > 0){
+    var d = vlistMD(r.latestReleaseDate || r.releasedAt || r.targetDate);
+    return '<div class="vlist-rel">生产发布 ' + (d || "已") + ' 成功</div>'
+      + (r.deliveryConfirmed ? '<div class="vlist-sub is-ok">交付说明已确认</div>' : '');
+  }
+  if(r.nextPlanAt){
+    var env = vlistEnvName(r.nextPlanEnvironment);
+    var sub = [];
+    if(stage > 0) sub.push("预发已成功 " + stage + " 次");
+    if(!prod) sub.push("生产未发布");
+    return '<div class="vlist-rel">下一计划 ' + vlistMD(r.nextPlanAt) + (env ? " " + env : "") + '发布</div>'
+      + (sub.length ? '<div class="vlist-sub' + (stage > 0 ? ' is-ok' : '') + '">' + esc(sub.join(" · ")) + '</div>' : '');
+  }
+  if(r.versionStatus === "released") return '<div class="vlist-rel">已标记发布</div><div class="vlist-sub">暂无生产记录</div>';
+  if(versionEnded({ status:r.versionStatus })) return '<div class="vlist-rel is-empty">未发布</div>';
+  return '<div class="vlist-rel is-empty">尚未创建发布计划</div>';
+}
+var VLIST_STATUS_TONE = { planned:"is-purple", active:"is-blue", released:"is-green", closed:"is-gray", canceled:"is-gray" };
+function vlistRowHTML(r){
+  var multi = listUi.scopeType !== "proj";
+  var total = r.taskCount || 0, done = r.doneTaskCount || 0;
+  var pct = total ? Math.round(done * 100 / total) : 0;
+  /* 原型：完成用绿、有进度用主色、0 进度留浅灰；不引入第三种告警色到进度条 */
+  var barTone = pct >= 100 ? " is-green" : (pct > 0 ? " is-blue" : "");
+  var selected = allVersionsSel.indexOf(r.versionId) !== -1;
+  var ended = versionEnded({ status:r.versionStatus }) || r.versionStatus === "released";
+  var pickable = r.canManage && !ended;
+  var pickTitle = pickable ? "加入新的发布计划"
+    : (ended ? "已发布或已结束的版本不能加入新计划" : "无发布计划权限");
+  var range = (function(){
+    var s = vlistMD(r.startDate), t = vlistMD(r.targetDate);
+    if(s && t) return s + " ~ " + t;
+    if(t) return "目标 " + t;
+    if(s) return s + " 起";
+    return "未定日期";
+  })();
+  var todo = r.todoCount || 0;
+  var statusName = versionStatusName(r.versionStatus);
+  return '<tr' + (selected ? ' class="is-selected"' : '') + ' data-ver-row="' + esc(r.versionId) + '" data-ver-req="' + esc(r.reqId) + '" tabindex="0" role="button" aria-label="进入「' + esc(r.versionName) + '」的版本详情">'
+    + (multi ? '<td class="vlist-check"><label class="vlist-pick" title="' + esc(pickTitle) + '"><input type="checkbox" data-allv-pick="' + esc(r.versionId) + '"'
+      + (selected ? ' checked' : '') + (pickable ? '' : ' disabled') + ' aria-label="选择 ' + esc(r.versionName) + '"></label></td>' : '')
+    + '<td class="vlist-name-cell" data-l="版本"><button class="vlist-name allv-vname" type="button" data-ver-open="' + esc(r.versionId) + '" data-ver-req="' + esc(r.reqId) + '" title="打开「' + esc(r.versionName) + '」的版本详情页">' + esc(r.versionName) + '</button>'
+    + '<div class="vlist-sub">' + (multi ? '<span class="vlist-proj">' + esc(r.projectName) + '</span>' : '') + esc(range) + ' · 负责人 ' + esc(r.ownerName || "未指派") + '</div></td>'
+    + '<td class="vlist-progress" data-l="工作项进度"><div class="vlist-pbar"><i class="' + barTone + '" style="width:' + pct + '%"></i></div><span class="vlist-pct">' + done + '/' + total + '</span></td>'
+    + '<td class="vlist-demand" data-l="需求覆盖" title="已覆盖 ' + (r.coveredDemandCount || 0) + ' / 共 ' + (r.demandCount || 0) + ' 个需求">' + (r.coveredDemandCount || 0) + '/' + (r.demandCount || 0) + '</td>'
+    + '<td class="vlist-release" data-l="发布">' + vlistReleaseHTML(r) + '</td>'
+    + '<td data-l="下一步">' + (todo > 0
+      ? '<span class="vlist-pill is-orange" title="打开版本详情处理待办"><i></i>' + todo + ' 件事待处理</span>'
+      : '<span class="vlist-pill is-gray"><i></i>无待办</span>') + '</td>'
+    + '<td data-l="状态"><span class="vlist-pill ' + (VLIST_STATUS_TONE[r.versionStatus] || "is-gray") + '"><i></i>' + esc(statusName) + '</span></td>'
+    + '<td class="vlist-act" data-l="操作"><button class="btn sm soft" type="button" data-ver-open="' + esc(r.versionId) + '" data-ver-req="' + esc(r.reqId) + '">' + (ended ? '查看' : '继续推进') + '</button></td>'
+    + '</tr>';
+}
+function renderVersionList(){
+  var rows = allVersionsCache || [];
+  if(listUi.scopeType === "proj" && !listUi.scopeId) listUi.scopeId = rt.phaseReqId || "";
+  var scoped = vlistScopedRows(rows);
+  syncVersionListPageHead(rows, scoped);
+  rt.phaseProjectName = listUi.scopeType === "proj" ? (reqNameById(listUi.scopeId) || "") : "";
+  updateBrand();
+  var multi = listUi.scopeType !== "proj";
+  var filtered = vlistFiltered(rows);
+  var cols = multi ? 8 : 7;
+  var card;
+  if(!rows.length){
+    card = '<div class="panel vlist-card">' + UI.emptyState({
+      icon:"folder", title:"还没有版本",
+      text:"先在「项目」里创建项目并在其中新建版本，这里会按范围汇总可见的版本。"
+    }) + '</div>';
+  }else if(!scoped.length){
+    var canNew = !multi && canEditReq(listUi.scopeId || rt.phaseReqId);
+    card = '<div class="panel vlist-card">' + UI.emptyState({
+      icon:"folder", title:vlistScopeLabel() + "下还没有版本",
+      text: multi ? "版本 = 一次要交付的批次，先创建一个空壳，内容随时可以补。把范围切到单个项目后即可新建版本。" : "版本 = 一次要交付的批次，先创建一个空壳，内容随时可以补。",
+      actionLabel: canNew ? "新建版本" : ""
+    }) + '</div>';
+  }else{
+    var body = filtered.length
+      ? filtered.map(vlistRowHTML).join("")
+      : '<tr><td colspan="' + cols + '"><div class="allv-empty">没有匹配的版本，试试清空筛选。'
+        + '<div class="vlist-empty-act"><button class="btn sm" type="button" data-vlist-reset>清空筛选</button></div></div></td></tr>';
+    card = '<div class="panel vlist-card">' + vlistSelectionBarHTML(multi)
+      + '<div class="tbl-wrap phase-tbl-wrap vlist-wrap"><table class="phase-tbl vlist-tbl allv-tbl"><thead><tr>'
+      + (multi ? '<th class="vlist-check"><span class="sr-only">选择</span></th>' : '')
+      + '<th>版本</th><th>工作项进度</th><th>需求覆盖</th><th>发布</th><th>下一步</th><th>状态</th><th class="vlist-act"></th>'
+      + '</tr></thead><tbody>' + body + '</tbody></table></div></div>';
+  }
+  var note = multi
+    ? '范围为「' + vlistScopeLabel() + '」：版本按项目汇总展示；新建版本需先选定一个具体项目。点版本行进入聚合视图。'
+    : '点任意版本行进入聚合视图；「下一步」由系统自动汇总，处理完自动消失。';
+  var roBanner = !multi && !roleReadOnly() && !canEditReq(listUi.scopeId || rt.phaseReqId)
+    ? '<div class="readonly-banner" role="status">'
+      + '<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.4 10S5.2 4.8 10 4.8 17.6 10 17.6 10 14.8 15.2 10 15.2 2.4 10 2.4 10Z"/><circle cx="10" cy="10" r="2.2"/></svg>'
+      + '<span><b>只读项目</b>：你没有该项目的写入权限，可查看与导出。</span></div>'
+    : "";
+  phaseBody.innerHTML = roBanner + vlistToolbarHTML() + card + '<p class="vlist-foot">' + esc(note) + '</p>';
+  wireVersionList();
+}
+function openNewVersionFromList(){
+  var reqId = listUi.scopeType === "proj" ? (listUi.scopeId || rt.phaseReqId) : "";
+  if(!reqId){ toast("新建版本需先选定一个具体项目", "warn"); return; }
+  rt.phaseReqId = reqId;
+  if(!canEditReq(reqId)){ denyPhaseReadOnly(); return; }
+  openVersionDialog(null);
+}
+function exportVersionListCSV(){
+  if(!allVersionsCache){ toast("版本列表还在加载，请稍后再导出", "warn"); return; }
+  var rows = vlistFiltered(allVersionsCache);
+  var lines = [["项目", "版本", "状态", "开始日期", "目标日期", "负责人", "已完成工作项", "工作项总数", "已覆盖需求", "需求总数", "下一计划时间", "下一计划环境", "下一计划状态", "生产成功次数", "预发成功次数", "最近生产发布", "待办数"]];
+  rows.forEach(function(r){
+    lines.push([r.projectName, r.versionName, versionStatusName(r.versionStatus), r.startDate || "", r.targetDate || "", r.ownerName || "",
+      r.doneTaskCount || 0, r.taskCount || 0, r.coveredDemandCount || 0, r.demandCount || 0,
+      r.nextPlanAt || "", vlistEnvName(r.nextPlanEnvironment), r.nextPlanStatus || "",
+      r.productionSuccessCount || 0, r.stagingSuccessCount || 0, r.latestReleaseDate || "", r.todoCount || 0]);
+  });
+  var url = URL.createObjectURL(new Blob(["\uFEFF" + lines.map(function(row){ return row.map(csvCell).join(","); }).join("\r\n")], {type:"text/csv;charset=utf-8"}));
+  var a = document.createElement("a");
+  a.href = url;
+  a.download = "版本清单-" + new Date().toISOString().slice(0, 10) + ".csv";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 0);
+}
+function wireVersionList(){
+  var btn = document.getElementById("vlistScopeBtn"), menu = document.getElementById("vlistScopeMenu");
+  if(btn && menu){
+    btn.addEventListener("click", function(e){
+      e.stopPropagation();
+      menu.hidden = !menu.hidden;
+      btn.setAttribute("aria-expanded", menu.hidden ? "false" : "true");
+    });
+  }
+  if(menu) menu.addEventListener("click", function(e){
+    var sb = e.target.closest("[data-vlist-scope]");
+    if(sb){
+      var type = sb.getAttribute("data-vlist-scope");
+      listUi.scopeType = type;
+      listUi.scopeId = type === "all" ? "" : (sb.getAttribute("data-vlist-id") || "");
+      if(type === "proj" && listUi.scopeId) rt.phaseReqId = listUi.scopeId;
+      allVersionsSel = [];
+      menu.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
+      viewMode = type === "proj" ? "list" : "allversions";
+      syncPhaseModeHash(viewMode);
+      syncModeSeg();
+      syncReqSel();
+      renderVersionList();
+      return;
+    }
+    var ab = e.target.closest("[data-vlist-analysis]");
+    if(ab) applyPhaseMode(ab.getAttribute("data-vlist-analysis"));
+  });
+  phaseBody.querySelectorAll("[data-vlist-status]").forEach(function(b){
+    b.addEventListener("click", function(){ listUi.status = b.getAttribute("data-vlist-status"); renderVersionList(); });
+  });
+  var sort = phaseBody.querySelector("[data-vlist-sort]");
+  if(sort) sort.addEventListener("change", function(){ listUi.sort = sort.value; renderVersionList(); });
+  var q = phaseBody.querySelector("[data-vlist-q]");
+  if(q) q.addEventListener("input", function(){
+    listUi.q = q.value;
+    var pos = q.selectionStart;
+    renderVersionList();
+    var next = phaseBody.querySelector("[data-vlist-q]");
+    if(next){ next.focus(); try{ next.setSelectionRange(pos, pos); }catch(e){ /* search 输入不支持选区 API */ } }
+  });
+  var reset = phaseBody.querySelector("[data-vlist-reset]");
+  if(reset) reset.addEventListener("click", function(){ listUi.status = "all"; listUi.q = ""; renderVersionList(); });
+  var emptyNew = phaseBody.querySelector(".vlist-card [data-empty-action]");
+  if(emptyNew) emptyNew.addEventListener("click", openNewVersionFromList);
+  var fresh = document.querySelector("#pageActions [data-vlist-new]");
+  if(fresh) fresh.addEventListener("click", openNewVersionFromList);
+  var exp = document.querySelector("#pageActions [data-vlist-export]");
+  if(exp) exp.addEventListener("click", exportVersionListCSV);
+}
+function loadVersionList(){
+  /* 深链 ?pmode=allversions 直接落全部项目；项目集范围在菜单里已写入 scopeType，保持不动 */
+  if(viewMode === "allversions" && listUi.scopeType === "proj"){ listUi.scopeType = "all"; listUi.scopeId = ""; }
+  if(listUi.scopeType === "proj" && !listUi.scopeId) listUi.scopeId = rt.phaseReqId || ((rt.reqList || [])[0] || {}).id || "";
+  var current = ++allVersionsSeq;
+  rt.phaseProjectName = listUi.scopeType === "proj" ? (reqNameById(listUi.scopeId) || "") : "";
+  updateBrand();
+  syncVersionListPageHead(allVersionsCache, null);
+  phaseBody.innerHTML = UI.skeletonRows(5);
+  var aliveMode = function(){ return current === allVersionsSeq && (viewMode === "list" || viewMode === "allversions"); };
+  return API.get("/api/versions/cross-project").then(function(rows){
+    if(!aliveMode()) return;
+    allVersionsCache = rows || [];
+    var alive = {};
+    allVersionsCache.forEach(function(r){ alive[r.versionId] = !versionEnded({ status:r.versionStatus }); });
+    allVersionsSel = allVersionsSel.filter(function(id){ return alive[id]; });
+    renderVersionList();
+  }).catch(function(ex){
+    if(!aliveMode()) return;
+    phaseBody.innerHTML = UI.emptyState({
+      icon:"alert", title:"版本列表加载失败", text: ex.message || "网络异常，请稍后重试", actionLabel:"重试"
+    });
+    bindRetry(phaseBody, loadVersionList);
+  });
+}
+/* 旧入口保留同名：外部与 E2E 仍按「全部版本」调用，落到的就是同一个列表 */
+function loadAllVersions(){ return loadVersionList(); }
+function renderAllVersions(){ renderVersionList(); }
 function createPlanFromAllVersions(){
   var map = allVersionRowMap();
   var picked = allVersionsSel.map(function(id){ return map[id]; })
@@ -521,7 +825,12 @@ function coverageName(c){ return { full:"全量", partial:"部分", unknown:"覆
 
 function syncModeSeg(){
   var seg = $("phaseModeSeg");
+  var listMode = viewMode === "list" || viewMode === "allversions";
   var cross = viewMode === "overview" || viewMode === "allversions";
+  /* 新列表自带范围 / 状态工具条：旧工具条只在工作台、阶段分析与投入总览露出，
+     但节点仍保留在 DOM 里，外部按 id 触发的入口（发布计划、项目切换）继续可用 */
+  var legacyBar = document.querySelector("#phasePage > .page-toolbar");
+  if(legacyBar) legacyBar.hidden = listMode;
   if(seg){
     seg.classList.toggle("is-scope", cross);
     seg.querySelectorAll("[data-pmode]").forEach(function(b){
@@ -530,8 +839,8 @@ function syncModeSeg(){
   }
   /* 跨项目口径：项目选择与新建版本让位给范围条；单项目分段置灰；
      发布计划与记录仍保留（进入时按当前项目上下文，与 IA 稿一致） */
-  if(phaseReq) phaseReq.style.display = cross ? "none" : "";
-  if($("phaseLabelRange")) $("phaseLabelRange").style.display = cross ? "none" : "";
+  if(phaseReq) phaseReq.style.display = (cross || listMode) ? "none" : "";
+  if($("phaseLabelRange")) $("phaseLabelRange").style.display = (cross || listMode) ? "none" : "";
   if($("btnVerNew")){
     /* 合成范围里新建版本会被拒绝：按钮保留但禁用并写清原因，不直接消失 */
     $("btnVerNew").style.display = "";
@@ -542,7 +851,7 @@ function syncModeSeg(){
   var scopeLabel = $("phaseScopeLabel");
   if(scopeLabel){
     scopeLabel.textContent = !cross ? "范围"
-      : viewMode === "allversions" ? (allVersionsFilters.set ? "项目集 · " + (setNameById(allVersionsFilters.set) || allVersionsFilters.set) : "全部项目")
+      : viewMode === "allversions" ? vlistScopeLabel()
       : (PHASE_SCOPE[viewMode] || {}).name || "范围";
   }
   var setsBox = $("phaseScopeSets");
@@ -552,7 +861,7 @@ function syncModeSeg(){
       return scopeProjects.some(function(r){ return (r.setId || "") === s.id; });
     });
     setsBox.innerHTML = setList.map(function(s){
-      var on = viewMode === "allversions" && allVersionsFilters.set === s.id;
+      var on = listUi.scopeType === "set" && listUi.scopeId === s.id;
       return '<button class="scope-item" type="button" role="menuitem" data-scope-set="' + esc(s.id) + '"' + (on ? ' aria-current="true"' : '') + '>'
         + '<span class="si-ic" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5A2 2 0 0 1 5 4.5h3l1.5 2H15a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></span>'
         + '<span class="si-tx"><b>项目集 · ' + esc(s.name) + '</b><span>只列该集下项目的版本</span></span></button>';
@@ -566,16 +875,16 @@ function syncModeSeg(){
   var menu = $("phaseScopeMenu");
   if(menu){ menu.hidden = true; }
   if(menu) menu.querySelectorAll("[data-pmode]").forEach(function(b){
-    var on = b.dataset.pmode === viewMode && !(viewMode === "allversions" && allVersionsFilters.set);
+    var on = b.dataset.pmode === viewMode && !(viewMode === "allversions" && listUi.scopeType === "set");
     if(on) b.setAttribute("aria-current", "true"); else b.removeAttribute("aria-current");
   });
   var backName = $("phaseScopeBackName");
   if(backName) backName.textContent = rt.phaseReqId ? " · " + (reqNameById(rt.phaseReqId) || "") : "";
   var strip = $("phaseScopeStrip");
   if(strip){
-    strip.hidden = !cross;
-    if(cross){
-      var meta = PHASE_SCOPE[viewMode] || {};
+    strip.hidden = viewMode !== "overview";
+    if(viewMode === "overview"){
+      var meta = PHASE_SCOPE.overview || {};
       if($("phaseScopeName")) $("phaseScopeName").textContent = meta.name || "";
       if($("phaseScopeDesc")) $("phaseScopeDesc").textContent = meta.desc || "";
     }
@@ -585,17 +894,33 @@ function applyPhaseMode(mode){
   if(!PHASE_MODES[mode]) return;
   viewMode = mode;
   syncPhaseModeHash(mode);
-  if(mode === "version"){
-    /* 从范围回到单项目：下拉恢复成具体项目，三种范围共用同一个切换器 */
+  if(mode === "list"){
+    listUi.scopeType = "proj";
+    listUi.scopeId = rt.phaseReqId || ((rt.reqList || [])[0] || {}).id || "";
     syncReqSel();
     syncModeSeg();
-    if(cache) renderPhaseView();
+    if(allVersionsCache) renderVersionList();
+    else loadVersionList();
+    return;
+  }
+  if(mode === "allversions"){
+    if(listUi.scopeType === "proj"){ listUi.scopeType = "all"; listUi.scopeId = ""; }
+    syncModeSeg();
+    if(allVersionsCache) renderVersionList();
+    else loadVersionList();
+    return;
+  }
+  if(mode === "version" || mode === "phase"){
+    /* 从范围回到单项目：下拉恢复成具体项目，三种范围共用同一个切换器 */
+    if(!rt.phaseReqId && (rt.reqList || []).length) rt.phaseReqId = rt.reqList[0].id;
+    syncReqSel();
+    syncModeSeg();
+    if(cache && cacheReqId === rt.phaseReqId) renderPhaseView();
     else loadPhaseData();
     return;
   }
   syncModeSeg();
-  if(mode === "overview"){ loadOverview(); return; }
-  loadAllVersions();
+  loadOverview();
 }
 function metricCells(cells, drill){
   return '<div class="pgrid">' + cells.map(function(c){
@@ -2541,7 +2866,7 @@ function releaseStatusName(status){ return PLAN_STATUS_META[status] ? PLAN_STATU
 function openProjectReleasePlan(entry){
   entry = entry === "history" ? "history" : "plan";
   if(!rt.phaseReqId){ toast("先选择项目，再查看发布计划与记录", "warn"); return; }
-  var fromOverview = viewMode === "overview" || viewMode === "allversions";
+  var fromOverview = viewMode === "overview" || viewMode === "allversions" || viewMode === "list";
   viewMode = "version";
   syncPhaseModeHash(viewMode);
   syncModeSeg();
@@ -6252,20 +6577,31 @@ if(phaseReq) phaseReq.addEventListener("change", function(){
   var val = phaseReq.value || "";
   /* 全部项目 / 项目集：范围是合成视图，落到跨项目版本清单再筛 */
   if(val === "__all"){
-    allVersionsFilters.set = "";
-    allVersionsFilters.project = "";
+    listUi.scopeType = "all";
+    listUi.scopeId = "";
     applyPhaseMode("allversions");
     return;
   }
   if(val.indexOf("__set:") === 0){
-    allVersionsFilters.set = val.slice(6);
-    allVersionsFilters.project = "";
+    listUi.scopeType = "set";
+    listUi.scopeId = val.slice(6);
     applyPhaseMode("allversions");
     return;
   }
   rt.phaseReqId = val || null;
+  /* 列表里改项目：范围收窄到该项目，工具条上的范围标签同步 */
+  if(viewMode === "list" || viewMode === "allversions"){
+    viewMode = "list";
+    listUi.scopeType = "proj";
+    listUi.scopeId = rt.phaseReqId || "";
+    allVersionsSel = [];
+    syncPhaseModeHash(viewMode);
+    syncModeSeg();
+    renderVersionList();
+    return;
+  }
   /* 跨项目视图里改项目：回到单项目按版本，范围条同步收起 */
-  if(viewMode === "overview" || viewMode === "allversions"){
+  if(viewMode === "overview"){
     viewMode = "version";
     syncPhaseModeHash(viewMode);
     syncModeSeg();
@@ -6288,27 +6624,35 @@ if($("phaseScopeMenu")) $("phaseScopeMenu").addEventListener("click", function(e
   var b = e.target.closest("[data-pmode]");
   if(b){
     /* 「全部项目」是范围基线：清掉残留的项目集筛选 */
-    if(b.dataset.pmode === "allversions"){ allVersionsFilters.set = ""; allVersionsFilters.project = ""; }
+    if(b.dataset.pmode === "allversions"){ listUi.scopeType = "all"; listUi.scopeId = ""; }
     applyPhaseMode(b.dataset.pmode);
     return;
   }
   var setB = e.target.closest("[data-scope-set]");
   if(setB){
-    allVersionsFilters.set = setB.getAttribute("data-scope-set") || "";
-    allVersionsFilters.project = "";
+    listUi.scopeType = "set";
+    listUi.scopeId = setB.getAttribute("data-scope-set") || "";
     applyPhaseMode("allversions");
     return;
   }
   if(e.target.closest("[data-open-plans]")){ openPlanListJump(); return; }
-  if(e.target.closest("[data-scope-back]")) applyPhaseMode("version");
+  if(e.target.closest("[data-scope-back]")) applyPhaseMode("list");
 });
-if($("phaseScopeBack")) $("phaseScopeBack").addEventListener("click", function(){ applyPhaseMode("version"); });
+if($("phaseScopeBack")) $("phaseScopeBack").addEventListener("click", function(){ applyPhaseMode("list"); });
 document.addEventListener("click", function(e){
   var menu = $("phaseScopeMenu");
   if(!menu || menu.hidden) return;
   if(e.target.closest("#phaseScopeWrap")) return;
   menu.hidden = true;
   if($("phaseScopeBtn")) $("phaseScopeBtn").setAttribute("aria-expanded", "false");
+});
+document.addEventListener("click", function(e){
+  var menu = document.getElementById("vlistScopeMenu");
+  if(!menu || menu.hidden) return;
+  if(e.target.closest("#vlistScopeWrap")) return;
+  menu.hidden = true;
+  var btn = document.getElementById("vlistScopeBtn");
+  if(btn) btn.setAttribute("aria-expanded", "false");
 });
 if($("btnVerNew")) $("btnVerNew").addEventListener("click", function(){
   if(!rt.phaseReqId){ toast("先选择项目，再新建版本", "warn"); return; }
@@ -6500,16 +6844,6 @@ if(phaseBody) phaseBody.addEventListener("change", function(e){
     paintRollup();
     return;
   }
-  var avf = e.target.closest("[data-allv-filter]");
-  if(avf){
-    var key = avf.dataset.allvFilter;
-    allVersionsFilters[key] = avf.value;
-    /* 项目集与单项目是同一层范围：改一个就清掉另一个，避免组合出空结果 */
-    if(key === "set") allVersionsFilters.project = "";
-    else if(key === "project" && avf.value) allVersionsFilters.set = "";
-    renderAllVersions();
-    return;
-  }
   var avp = e.target.closest("[data-allv-pick]");
   if(avp){
     var vid = avp.getAttribute("data-allv-pick"), at = allVersionsSel.indexOf(vid);
@@ -6543,13 +6877,6 @@ if(phaseBody) phaseBody.addEventListener("keydown", function(e){
 });
 if(phaseBody) phaseBody.addEventListener("input", function(e){
   if(e.target.closest("[data-ver-q]")){ verListUi.q = e.target.value; paintVersionList(); return; }
-  if(e.target.closest("[data-allv-kw]")){
-    allVersionsFilters.q = e.target.value;
-    renderAllVersions();
-    var kw = phaseBody.querySelector("[data-allv-kw]");
-    if(kw){ kw.focus(); kw.setSelectionRange(kw.value.length, kw.value.length); }
-    return;
-  }
   if(e.target.closest("[data-tbl-kw]")) applyPhaseTblFilters();
 });
 /* 列数随窗口变化，说明的截断与否要重新量 */
@@ -6562,10 +6889,15 @@ function setPhaseProject(reqId, mode){
   rt.phaseReqId = reqId;
   if(mode === "phase" || mode === "version" || mode === "overview" || mode === "allversions") viewMode = mode;
   else if(viewMode === "overview") viewMode = "phase";
+  /* 路由懒加载的 enterPhaseView 可能晚于本调用执行：先把模式写进 hash，
+     让它读到的是刚选中的模式而不是默认列表，否则列表会盖回落成的分析页 */
+  syncPhaseModeHash(viewMode);
   if(document.body.dataset.view === "phase"){
     syncModeSeg();
     syncReqSel();
-    loadPhaseData();
+    if(viewMode === "overview") loadOverview();
+    else if(viewMode === "allversions"){ listUi.scopeType = "all"; listUi.scopeId = ""; loadVersionList(); }
+    else loadPhaseData();
   }
 }
 export { enterPhaseView, ensureEpicOptions, ensureFoundVersionOptions, ensureVersionOptions, exportReleaseRecordCSV, invalidateTaskOptionsCache, loadPhaseData, openVersionTool, reloadView, renderPhaseView, setPhaseProject, showReleaseNote };

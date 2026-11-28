@@ -154,8 +154,20 @@ async function main(){
     await waitFor(`import("./js/core/state.js").then(({rt}) => !!rt.currentUser && !!rt.currentWs)`, "应用初始化", 25000);
     pass("登录 " + USER);
 
-    /* ---------- ① 首次打开自动欢迎卡 ---------- */
-    await waitFor(`!!document.querySelector("#welcomeMask") && !document.querySelector("#welcomeMask").hidden`, "自动欢迎卡", 8000);
+    /* ---------- ① 引导只在版本域自动出现 ---------- */
+    await sleep(1200);
+    assert(await evaluate(`document.querySelector("#welcomeMask").hidden`), "登录后落在非版本视图不自动弹欢迎卡");
+    assert(await evaluate(`getComputedStyle(document.querySelector("#tourReplay")).display === "none"`), "非版本视图不显示重播入口");
+    pass("非版本视图不弹版本引导");
+    await navigate(BASE + "/index.html#/testcases");
+    await waitFor(`document.body.dataset.view === "testcases"`, "进入测试域", 15000);
+    await sleep(1200);
+    assert(await evaluate(`document.querySelector("#welcomeMask").hidden`), "测试域不自动弹版本欢迎卡");
+    assert(await evaluate(`getComputedStyle(document.querySelector("#tourReplay")).display === "none"`), "测试域不显示版本重播入口");
+    pass("测试域不弹版本引导");
+    await navigate(BASE + "/index.html#/phase");
+    await waitFor(`document.body.dataset.view === "phase"`, "进入版本域", 15000);
+    await waitFor(`!!document.querySelector("#welcomeMask") && !document.querySelector("#welcomeMask").hidden`, "版本域自动欢迎卡", 8000);
     const wc = await evaluate(`(() => {
       const m = document.querySelector("#welcomeMask");
       const steps = [...m.querySelectorAll(".wc-steps .ws")].map(s => ({
@@ -183,6 +195,8 @@ async function main(){
     await evaluate(`(() => { document.querySelector("[data-wc-skip]").click(); return true; })()`);
     await waitFor(`document.querySelector("#welcomeMask").hidden`, "欢迎卡关闭");
     assert(await evaluate(`!document.body.classList.contains("tour-lock")`), "跳过欢迎后解除滚动锁");
+    assert(await evaluate(`getComputedStyle(document.querySelector("#tourReplay")).display !== "none"`), "版本域显示重播入口");
+    pass("版本域显示重播入口");
     await navigate(BASE + "/index.html#/phase");
     await waitFor(`document.body.dataset.view && !document.querySelector("#welcomeMask").hidden === false`, "再次进入应用", 20000);
     await sleep(1200);

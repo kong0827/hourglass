@@ -7,7 +7,7 @@
    1) 发布时 tools/stamp-sw.js 按 SHELL 内容哈希改写 CACHE_NAME，前端一改 sw.js 就变；
    2) 页面每次打开主动 registration.update()，不等浏览器最多约 24 小时的自动检查；
    3) 安装与后台回源一律 cache:"no-cache"，不吃 HTTP 缓存里的旧副本。 */
-var CACHE_NAME = "hourglass-shell-v299";
+var CACHE_NAME = "hourglass-shell-v300";
 var SHELL = [
   "./",
   "index.html",
@@ -120,6 +120,7 @@ var SHELL = [
   "js/lib/stage-hours.js",
   "js/lib/stage-panel.js",
   "js/lib/text-diff.js",
+  "js/lib/wecom.js",
   "js/main.js",
   "js/share.js",
   "js/views/analysis.js",

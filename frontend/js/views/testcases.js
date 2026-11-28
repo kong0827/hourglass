@@ -1484,14 +1484,6 @@ function enterTestCasesView(){
 /* ---------- 测试工作台：测试域落地页（新手引导 + 全景） ---------- */
 var benchData = null;
 var benchSeq = 0;
-var BENCH_WELCOME_KEY = "ds.tcBenchWelcome";
-var BENCH_TIPS_KEY = "ds.tcBenchTips";
-function benchStore(key, val){
-  try{ localStorage.setItem(key, val); }catch(e){ /* 受限环境：忽略 */ }
-}
-function benchStored(key){
-  try{ return localStorage.getItem(key); }catch(e){ return null; }
-}
 function loadBench(){
   render();
   var box = $("tcBench");
@@ -1526,48 +1518,51 @@ function benchDerived(){
     bugsTotal: Number(b.total) || 0
   };
 }
-function benchFlowHTML(d){
-  var steps = [
-    { label: "备好用例", desc: "录入 / 导入 / 载入示例包", done: d.casesTotal >= 1, go: "cases" },
-    { label: "圈选计划", desc: "按项目或筛选圈一批用例", done: d.plansTotal >= 1, go: "plans" },
-    { label: "记录执行", desc: "逐条执行并标记结果", done: d.executed >= 1, go: "plans" },
-    { label: "导出报告", desc: "计划完成后出测试报告", done: d.plansDone >= 1, go: "report" }
+function benchSteps(d){
+  return [
+    { label: "备好用例", desc: d.casesTotal ? (d.casesTotal + " 条 · 已就绪") : "还没有用例 · 载入示例包最快", done: d.casesTotal >= 1, go: "cases" },
+    { label: "圈选计划", desc: d.plansTotal ? (d.plansTotal + " 个计划" + (d.plansRunning ? " · " + d.plansRunning + " 个进行中" : "")) : "把要测的用例圈成一轮", done: d.plansTotal >= 1, go: "plans" },
+    { label: "记录执行", desc: d.executed ? ("已记录 " + d.executed + " 条执行") : "逐条标记结果，失败转缺陷", done: d.executed >= 1, go: "plans" },
+    { label: "导出报告", desc: d.plansDone ? ("已完成 " + d.plansDone + " 个计划，可出报告") : "计划完成后可导出", done: d.plansDone >= 1, go: "report" }
   ];
-  var curHit = false;
-  return '<ol class="tb-flow">' + steps.map(function(s, i){
-    var cur = !s.done && !curHit;
-    if(cur) curHit = true;
-    return '<li class="tb-flow-step' + (s.done ? " done" : "") + (cur ? " cur" : "") + '">'
+}
+function benchGuideHTML(d, newbie){
+  var steps = benchSteps(d);
+  if(newbie) steps[3].desc = "Word / CSV / PDF 一键出";
+  var doneCount = 0, cur = -1;
+  steps.forEach(function(s, i){
+    if(s.done) doneCount++;
+    else if(cur < 0) cur = i;
+  });
+  var right = "";
+  if(newbie && caseCreateTargets().length){
+    right = '<button class="btn sm" type="button" data-bench-sample>载入示例用例包</button>';
+  }else if(doneCount === steps.length){
+    right = '<span class="tb-guide-pill">已完成 · ' + doneCount + ' / ' + steps.length + ' 步</span>';
+  }else{
+    right = '<span class="tb-guide-pill">进行中 · 第 ' + (cur + 1) + ' / ' + steps.length + ' 步</span>';
+  }
+  right += '<button class="btn sm ghost tb-guide-help" type="button" data-bench-help aria-label="测试工作台帮助" title="测试工作台帮助">'
+    + icon("alertCircle", 14) + '<span class="tb-help-t">帮助</span></button>';
+  var cards = steps.map(function(s, i){
+    var state = s.done ? " done" : (i === cur ? " cur" : "");
+    return '<button class="tb-flow-step' + state + '" type="button" data-bench-go="' + s.go + '">'
       + '<span class="tb-flow-no">' + (s.done ? icon("check", 13) : (i + 1)) + '</span>'
       + '<span class="tb-flow-body"><strong>' + esc(s.label) + '</strong><small>' + esc(s.desc) + '</small></span>'
-      + (s.done ? '' : '<button class="btn sm ghost" type="button" data-bench-go="' + s.go + '">去做</button>')
-      + '</li>';
-  }).join("") + '</ol>';
-}
-function benchChecklistHTML(d){
-  var canTest = caseCreateTargets().length > 0;
-  var items = [
-    { label: "备好用例", desc: "项目里至少有 1 条用例", done: d.casesTotal >= 1,
-      action: canTest ? '<button class="btn sm" type="button" data-bench-sample>载入示例用例包</button>' : "" },
-    { label: "圈一个计划", desc: "把用例圈进一个测试计划", done: d.plansTotal >= 1,
-      action: '<button class="btn sm ghost" type="button" data-bench-go="plans">去圈选</button>' },
-    { label: "记录一次执行", desc: "执行一条用例并留下结果", done: d.executed >= 1,
-      action: '<button class="btn sm ghost" type="button" data-bench-go="plans">去执行</button>' },
-    { label: "转一条缺陷", desc: "失败用例一键转缺陷", done: d.bugsTotal >= 1,
-      action: '<button class="btn sm ghost" type="button" data-bench-go="defects">看缺陷</button>' },
-    { label: "完成一次计划", desc: "计划跑完即可出报告（导出动作不单独计数）", done: d.plansDone >= 1,
-      action: '<button class="btn sm ghost" type="button" data-bench-go="report">看报告</button>' }
-  ];
-  var done = items.filter(function(it){ return it.done; }).length;
-  return '<section class="tb-card tb-checklist">'
-    + '<header class="tb-card-head"><h3>新手任务</h3><span class="toolbar-meta">' + done + ' / ' + items.length + '</span></header>'
-    + '<ul class="tb-check-list">' + items.map(function(it){
-      return '<li class="tb-check' + (it.done ? " done" : "") + '">'
-        + '<span class="tb-check-ic">' + (it.done ? icon("checkCircle", 16) : '') + '</span>'
-        + '<span class="tb-check-body"><strong>' + esc(it.label) + '</strong><small>' + esc(it.desc) + '</small></span>'
-        + (it.done ? '<span class="mini-tag ok">已完成</span>' : it.action)
-        + '</li>';
-    }).join("") + '</ul></section>';
+      + (s.done ? '' : '<span class="btn sm soft tb-flow-go">去做</span>')
+      + '</button>';
+  }).join("");
+  return '<section class="tb-guide">'
+    + '<div class="tb-guide-head">'
+    + '<span class="tb-guide-t">测试四步</span>'
+    + '<span class="tb-guide-hint">' + (newbie ? "第一次测试 10 分钟跑通；完成的步骤会自动勾掉" : "进度由真实数据自动汇总，点步骤直达") + '</span>'
+    + '<span class="tb-guide-right">' + right + '</span>'
+    + '</div>'
+    + '<div class="tb-flow" role="group" aria-label="测试四步">' + cards + '</div>'
+    + '<p class="tb-guide-note">' + (newbie
+      ? "提示：示例数据只进当前项目、标注「示例」，可一键删除，不影响真实数据。"
+      : "提示：用例列表支持 J / K 键盘流；计划创建后随时可以追加范围；失败先转缺陷，报告里会留痕。") + '</p>'
+    + '</section>';
 }
 function benchPlanRowHTML(p){
   var total = Number(p.caseCount) || 0;
@@ -1581,51 +1576,75 @@ function benchPlanRowHTML(p){
     + '<small>' + executed + ' / ' + total + ' 已执行</small></span>'
     + '</button>';
 }
-function benchPlanCardHTML(title, rows, emptyText, emptyAction){
-  var body = rows && rows.length
-    ? rows.map(benchPlanRowHTML).join("")
-    : '<div class="tb-empty"><p>' + esc(emptyText) + '</p>' + (emptyAction || "") + '</div>';
-  return '<section class="tb-card"><header class="tb-card-head"><h3>' + esc(title) + '</h3></header>'
+function benchPlanGroupHTML(label, rows){
+  return '<div class="tb-pgroup">'
+    + '<div class="tb-phead">' + label + ' <span class="tb-pcount">' + rows.length + '</span></div>'
+    + '<div class="tb-plan-list">' + rows.map(benchPlanRowHTML).join("") + '</div></div>';
+}
+function benchMineCardHTML(mine, newbie){
+  var rows = (mine && mine.rows) || [];
+  return '<section class="tb-card">'
+    + '<header class="tb-card-head"><div class="tb-card-title"><h3>待我执行</h3><span class="tb-card-hint">指派给我的计划</span></div>'
+    + (newbie ? '' : '<button class="btn sm" type="button" data-bench-go="plans">全部计划</button>') + '</header>'
+    + '<div class="tb-plan-list">'
+    + (rows.length
+      ? rows.map(benchPlanRowHTML).join("")
+      : '<div class="tb-empty"><strong class="tb-empty-t">还没有待办</strong>'
+        + '<p>建好计划并把自己选成执行人，待跑的计划会出现在这里。</p>'
+        + (newbie ? '' : '<button class="btn sm" type="button" data-bench-go="plans">去看全部计划</button>')
+        + '</div>')
+    + '</div></section>';
+}
+function benchPlansCardHTML(active, done, newbie){
+  var body = "";
+  if(active && active.length) body += benchPlanGroupHTML("进行中", active);
+  if(done && done.length) body += benchPlanGroupHTML("最近完成", done);
+  if(!body){
+    body = '<div class="tb-empty"><strong class="tb-empty-t">还没有测试计划</strong>'
+      + '<p>按四步走下去，第一个计划建好后，执行进度和报告都会出现在这里。</p>'
+      + '<span class="tb-empty-acts"><button class="btn sm primary" type="button" data-bench-new-plan>新建测试计划</button>'
+      + '<button class="btn sm" type="button" data-bench-go="cases">先备用例</button></span></div>';
+  }
+  return '<section class="tb-card">'
+    + '<header class="tb-card-head"><div class="tb-card-title"><h3>测试计划</h3><span class="tb-card-hint">进行中与最近完成</span></div>'
+    + (newbie ? '' : '<button class="btn sm" type="button" data-bench-go="plans">全部计划</button>') + '</header>'
     + '<div class="tb-plan-list">' + body + '</div></section>';
 }
 function renderBench(){
   var box = $("tcBench");
   if(!box || !benchData) return;
   var d = benchDerived();
-  var mine = benchData.mine || {};
-  var welcome = !benchStored(BENCH_WELCOME_KEY);
-  var tips = !benchStored(BENCH_TIPS_KEY);
+  var newbie = d.casesTotal === 0 && d.plansTotal === 0;
   var html = '<div class="tb-inner">';
-  if(welcome){
-    html += '<div class="tb-banner welcome"><span class="tb-banner-ic">' + icon("infoCircle", 18) + '</span>'
-      + '<div class="tb-banner-body"><strong>这是测试工作台</strong>'
-      + '<p>测试的日常从这里开始：上面是推荐路径，左边是新手任务，下面是进行中的计划。完成后随时可以关掉这两块。</p></div>'
-      + '<button class="icon-btn sm" type="button" data-bench-dismiss="welcome" aria-label="关闭欢迎条">' + icon("close", 14) + '</button></div>';
-  }
-  if(tips){
-    html += '<div class="tb-banner tips"><span class="tb-banner-ic">' + icon("ai", 16) + '</span>'
-      + '<div class="tb-banner-body"><strong>三个上手提示</strong><ul>'
-      + '<li>用例列表支持键盘流：J / K 移动，Enter 打开，N / P 上下一条。</li>'
-      + '<li>计划创建后随时可以「圈选用例」追加范围，不用一次圈完。</li>'
-      + '<li>执行失败别急着重跑，先一键转缺陷，报告里会留痕。</li>'
-      + '</ul></div>'
-      + '<button class="icon-btn sm" type="button" data-bench-dismiss="tips" aria-label="关闭提示条">' + icon("close", 14) + '</button></div>';
-  }
-  html += benchFlowHTML(d);
-  html += '<div class="tb-cols">'
-    + benchChecklistHTML(d)
-    + benchPlanCardHTML("待我执行", mine.rows, "没有指派给你的计划；新建计划时把执行人选成你，就会出现在这里。",
-      '<button class="btn sm" type="button" data-bench-go="plans">去看全部计划</button>')
-    + '</div>';
-  html += '<div class="tb-cols">'
-    + benchPlanCardHTML("进行中的计划", benchData.activePlans, "还没有进行中的计划；草稿或执行中的计划会显示在这里。",
-      '<button class="btn sm" type="button" data-bench-new-plan>新建测试计划</button>')
-    + benchPlanCardHTML("最近完成的计划", benchData.donePlans, "完成的计划会沉淀在这里，报告页可按计划导出结论。",
-      '<button class="btn sm ghost" type="button" data-bench-go="report">去出报告</button>')
+  html += benchGuideHTML(d, newbie);
+  html += '<div class="tb-cols' + (newbie ? " tb-cols-newbie" : "") + '">'
+    + benchMineCardHTML(benchData.mine, newbie)
+    + benchPlansCardHTML(benchData.activePlans || [], benchData.donePlans || [], newbie)
     + '</div>';
   html += '<p class="tb-updated">更新于 ' + esc(benchData.updatedAt || "") + ' · 统计范围为可见且未归档的项目</p>';
   html += '</div>';
   box.innerHTML = html;
+  syncTcPageHead();
+}
+var benchHelpPop = null;
+function benchHelpHTML(){
+  function row(tag, text){
+    return '<div class="type-help-row"><span class="mini-tag">' + tag + '</span><span class="type-help-desc">' + text + '</span></div>';
+  }
+  return '<div class="menu-title">测试工作台怎么用</div><div class="type-help-list">'
+    + row("四步", "备好用例 → 圈选计划 → 记录执行 → 导出报告；进度按真实数据自动汇总，点任一卡片直达。")
+    + row("范围", "计划创建后仍可随时追加用例，不必一次圈完；失败用例可一键转缺陷。")
+    + row("报告", "报告页是项目当前状态（每个用例取最近一轮），属非发布证据；发布放行以版本「发布检查」为准。")
+    + row("键盘", "用例列表：J / K 移动，Enter 打开，N / P 上一条 / 下一条。")
+    + '</div><p class="foot-note">示例用例包只进当前项目、可整包删除，不影响真实数据。</p>';
+}
+function openBenchHelp(anchor){
+  if(UI.popOpen(benchHelpPop)){ UI.closeAllPops(); return; }
+  var el = document.createElement("div");
+  el.className = "menu tc-help-pop";
+  el.innerHTML = benchHelpHTML();
+  benchHelpPop = el;
+  UI.openPop(el, anchor, { align:"right", width:380, onClose:function(){ el.remove(); benchHelpPop = null; } });
 }
 /* 新手没项目可选时兜底：载入示例包前先落到具体项目 */
 function openSamplePack(anchor){
@@ -1933,6 +1952,26 @@ function loadAllCases(params){
   }
   return next();
 }
+/* 发布证据：取本项目最近更新的已完成计划，只读核对发布必测；
+   跳过按未执行计，与版本「发布检查」同一口径；取不到不影响项目报告本身 */
+function loadPlanEvidence(reqId){
+  return API.getAllPages("/api/test-plans", { reqId: reqId }).then(function(rows){
+    var done = (rows || []).filter(function(p){ return p.status === "done"; })
+      .sort(function(a, b){ return String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")); });
+    var plan = done[0];
+    if(!plan) return null;
+    return API.getAllPages("/api/test-plans/" + encodeURIComponent(plan.id) + "/cases").then(function(cases){
+      var req = (cases || []).filter(function(c){ return c.required; });
+      var passed = 0, failed = 0, untested = 0;
+      req.forEach(function(c){
+        if(c.result === "passed") passed++;
+        else if(c.result === "failed" || c.result === "blocked") failed++;
+        else untested++;
+      });
+      return { plan: plan, total: req.length, passed: passed, failed: failed, untested: untested };
+    });
+  }).catch(function(){ return null; });
+}
 function loadTestReport(){
   render();
   var box = $("tcReport");
@@ -1948,7 +1987,8 @@ function loadTestReport(){
     loadAllCases({ reqId: reqId, status: "failed" }),
     loadAllCases({ reqId: reqId, status: "blocked" }),
     API.get("/api/test-cases/coverage", { reqId: reqId }),
-    API.get("/api/test-cases/run-stats", { reqId: reqId }).catch(function(){ return null; })
+    API.get("/api/test-cases/run-stats", { reqId: reqId }).catch(function(){ return null; }),
+    loadPlanEvidence(reqId)
   ]).then(function(rs){
     if(seq !== reportSeq || caseReqId !== reqId) return;
     reportData = {
@@ -1959,6 +1999,7 @@ function loadTestReport(){
       blockedTotal: (rs[2] && rs[2].total) || 0,
       coverage: rs[3] || [],
       runStats: rs[4] || null,
+      evidence: rs[5] || null,
       generatedAt: new Date()
     };
     renderTestReport();
@@ -2316,6 +2357,61 @@ function repDrillCaseById(id){
   for(var i = 0; i < repDrill.items.length; i++) if(repDrill.items[i].id === id) return repDrill.items[i];
   return null;
 }
+function planEvidenceHTML(ev){
+  if(!ev){
+    return '<section class="rep-section rep-evidence" id="repEvidence">'
+      + '<div class="rep-section-head"><b>发布证据</b><span>还没有已完成的计划</span></div>'
+      + '<p class="rep-empty">完成并标记一个测试计划后，这里显示该计划的发布必测结果；发布放行以版本「发布检查」按版本全部计划核对为准。</p></section>';
+  }
+  var p = ev.plan;
+  var pct = ev.total ? Math.round(ev.passed * 100 / ev.total) : 0;
+  return '<section class="rep-section rep-evidence" id="repEvidence">'
+    + '<div class="rep-section-head"><b>发布证据</b><span>最近完成计划</span></div>'
+    + '<div class="rep-evidence-body">'
+    + '<div class="rep-evidence-main"><b>' + esc(p.name) + '</b><small>' + planBadgeHTML(p.status)
+    + ' · 更新于 ' + esc(p.updatedAt ? fmtTs(p.updatedAt) : "—") + '</small></div>'
+    + '<div class="rep-evidence-kpi"><div class="v">' + (ev.total ? pct + '<small>%</small>' : "—")
+    + '</div><small>发布必测通过 ' + ev.passed + ' / ' + ev.total + '</small></div>'
+    + '<div class="rep-evidence-meta">失败/阻塞 <b>' + ev.failed + '</b> · 未执行/跳过 <b>' + ev.untested + '</b></div>'
+    + '<button class="btn sm ghost" type="button" data-rep-evidence-plan="' + esc(p.id) + '">查看计划</button>'
+    + '</div>'
+    + (ev.total ? '' : '<p class="foot-note">该计划还没有标注「发布必测」的用例。</p>')
+    + '<p class="foot-note">口径：取本项目最近更新的已完成计划；发布必测跳过按未执行计。发布放行以版本「发布检查」为准。</p>'
+    + '</section>';
+}
+function openPlanFromReport(id){
+  if(!id) return;
+  planPendingOpen = id;
+  if(tcMode === "plans") openPlanDetail(id);
+  else setTcMode("plans");
+}
+/* 报告页的「按计划出报告」：只列已完成计划，落到计划详情导出轮次报告 */
+function openReportPlanPicker(anchor){
+  if(!caseReqId){ toast("先选择项目，再按计划出报告", "warn"); return; }
+  var seq = reportSeq;
+  API.getAllPages("/api/test-plans", { reqId: caseReqId }).then(function(rows){
+    if(seq !== reportSeq) return;
+    var done = (rows || []).filter(function(p){ return p.status === "done"; })
+      .sort(function(a, b){ return String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")); });
+    var el = document.createElement("div");
+    el.className = "menu";
+    el.innerHTML = '<div class="menu-title">按已完成计划出报告</div>'
+      + (done.length
+        ? done.slice(0, 10).map(function(p){
+            return '<button class="menu-item" type="button" data-rep-pick-plan="' + esc(p.id) + '">'
+              + '<span>' + esc(cut(p.name, 22)) + '</span>'
+              + '<small>' + (p.executedCount || 0) + '/' + (p.caseCount || 0) + ' 已执行</small></button>';
+          }).join("")
+        : '<p class="menu-note">还没有已完成的计划；完成计划后可按轮次导出。</p>');
+    el.addEventListener("click", function(e){
+      var b = e.target.closest("[data-rep-pick-plan]");
+      if(!b) return;
+      UI.closeAllPops();
+      openPlanFromReport(b.getAttribute("data-rep-pick-plan"));
+    });
+    UI.openPop(el, anchor, { align:"right", width:286, onClose:function(){ el.remove(); } });
+  }).catch(function(ex){ toast(ex.message || "计划加载失败", "warn"); });
+}
 function renderTestReport(){
   var box = $("tcReport");
   if(!box || !reportData) return;
@@ -2326,6 +2422,7 @@ function renderTestReport(){
   /* 通过与通过率都不把跳过算作未通过：分母剔除跳过的用例 */
   var rateBase = Math.max(0, total - (s.skipped || 0));
   var passRate = rateBase ? Math.round((s.passed || 0) * 100 / rateBase) : 0;
+  var skipRate = total ? Math.round((s.skipped || 0) * 100 / total) : 0;
   var cov = coverageSummary(reportData.coverage);
   var failed = reportData.failed || [];
   var blocked = reportData.blocked || [];
@@ -2353,12 +2450,15 @@ function renderTestReport(){
   /* 原型：标题只留在页头，报告卡里先给导出范围（含截止时间），格式按钮常驻 */
   var banner = '<div class="rep-banner">'
     + '<span class="rep-banner-ic">' + icon("eye", 14) + '</span>'
-    + '<span>导出范围：本轮执行 <b>' + total + ' 条</b> · 跳过 ' + (s.skipped || 0) + ' 条不计入通过率 · 截止 ' + esc(stampShort) + '</span>'
+    + '<span>导出范围：项目当前状态 · 最近一轮执行 <b>' + total + ' 条</b> · 跳过 ' + (s.skipped || 0) + ' 条（' + skipRate + '%）不计入通过率 · 截止 ' + esc(stampShort) + '</span>'
     + '<span class="spacer"></span>'
+    + '<button class="btn sm" type="button" data-tc-report-plan title="选择已完成的测试计划，按轮次导出报告">按计划出报告</button>'
     + '<button class="btn sm" type="button" data-tc-report-print title="打开打印对话框，在目标里选择「另存为 PDF」">PDF</button>'
     + '<button class="btn sm" type="button" data-tc-report-doc>Word</button>'
     + '<button class="btn sm" type="button" data-tc-report-csv>CSV</button>'
-    + '</div>';
+    + '</div>'
+    + '<p class="rep-scope-note">' + icon("infoCircle", 12)
+    + ' 本页是项目当前状态（每个用例取最近一轮），属非发布证据；发布放行以版本「发布检查」为准。</p>';
   /* 四张 KPI 卡都可下钻：点开弹层看构成明细（用例按结果切换 / 需求按覆盖切换） */
   function kpiHTML(cls, key, sub, val, foot, drill, drillTitle){
     var attrs = drill
@@ -2373,6 +2473,7 @@ function renderTestReport(){
     + kpiHTML("good", "通过率", "最近一轮", passRate + '<small>%</small>', (s.passed || 0) + ' / ' + rateBase + ' · 排除跳过', "pass", "查看本轮执行明细")
     + kpiHTML((s.failed || 0) ? "bad" : "", "失败", "", (s.failed || 0), "已转缺陷 " + failedWithBug, (s.failed || 0) ? "failed" : "", "查看失败用例明细")
     + kpiHTML((s.blocked || 0) ? "warn" : "", "阻塞", "", (s.blocked || 0), "等待环境与权限", (s.blocked || 0) ? "blocked" : "", "查看阻塞用例明细")
+    + kpiHTML((s.skipped || 0) ? "warn" : "", "跳过", "", (s.skipped || 0), "占 " + skipRate + "% · 不计入通过率", (s.skipped || 0) ? "skipped" : "", "查看跳过用例明细")
     + kpiHTML("", "覆盖率", "全部需求", cov.pct + '<small>%</small>', cov.covered + ' / ' + cov.total + ' 条需求有至少 1 条用例', cov.total ? "coverage" : "", "查看需求覆盖明细")
     + '</div>';
   var failBlock = '<section class="rep-section" id="repFailed"><div class="rep-section-head"><b>失败用例</b><span>'
@@ -2403,7 +2504,10 @@ function renderTestReport(){
       + '<p class="foot-note">0 表示未发生，不代表通过或失败。</p></section>';
   }
   var runHTML = runStatsSection(reportData.runStats);
+  var evidenceHTML = planEvidenceHTML(reportData.evidence);
   var navItems = [];
+  navItems.push({ id:"repEvidence", label:"发布证据",
+    n: reportData.evidence ? (reportData.evidence.passed + "/" + reportData.evidence.total) : "—" });
   if(runHTML) navItems.push({ id:"repRunStats", label:"执行统计", n:(reportData.runStats.totalRuns || 0) + " 次" });
   navItems.push({ id:"repFailed", label:"失败用例", n:(reportData.failedTotal || 0) + " 条" });
   if(blockBlock) navItems.push({ id:"repBlocked", label:"阻塞用例", n:(reportData.blockedTotal || 0) + " 条" });
@@ -2413,7 +2517,7 @@ function renderTestReport(){
         return '<a href="#' + it.id + '" data-rep-nav="' + it.id + '"><span>' + it.label + '</span><span class="n">' + it.n + '</span></a>';
       }).join("")
     + '</aside>';
-  box.innerHTML = banner + '<div class="repwrap"><div class="repcol">' + kpis + runHTML + failBlock + blockBlock + covBlock
+  box.innerHTML = banner + '<div class="repwrap"><div class="repcol">' + kpis + evidenceHTML + runHTML + failBlock + blockBlock + covBlock
     + '<p class="foot-note">证据附件在执行历史中随执行记录保存；CSV / Word 直接下载，PDF 走浏览器打印（目标选「另存为 PDF」），均基于当前项目与最近一轮结果。</p></div>'
     + nav + '</div>';
 }
@@ -2443,6 +2547,13 @@ function reportPlainRows(){
     ["通过率", (rateBase ? Math.round((s.passed || 0) * 100 / rateBase) : 0) + "%"],
     ["需求覆盖", cov.covered + "/" + cov.total + "（" + cov.pct + "%）"]
   ];
+  var ev = reportData.evidence;
+  if(ev){
+    rows.push([], ["发布证据", "最近完成计划：" + ev.plan.name],
+      ["发布必测通过", ev.passed + " / " + ev.total + "（跳过按未执行）"],
+      ["发布必测失败/阻塞", ev.failed],
+      ["发布必测未执行/跳过", ev.untested]);
+  }
   var sd = reportStatsDims();
   if(sd){
     rows.push([], ["执行统计", "共 " + sd.totalRuns + " 次执行 · 按全部执行流水聚合（跳过不计入通过率分母）"]);
@@ -2495,6 +2606,13 @@ function exportTestReportDoc(){
     + '<tr>' + th("阻塞") + td(s.blocked || 0) + th("跳过") + td(s.skipped || 0) + th("未执行") + td(s.untested || 0) + '</tr>'
     + '<tr>' + th("通过率") + td(passRate + "%") + th("需求覆盖") + td(cov.covered + "/" + cov.total + "（" + cov.pct + "%）") + th("报告范围") + td("当前项目") + '</tr>'
     + '</table>';
+  var ev = reportData.evidence;
+  if(ev){
+    html += '<p><b>发布证据 · 最近完成计划</b></p>'
+      + '<table><tr>' + th("计划") + td(ev.plan.name) + th("发布必测通过") + td(ev.passed + " / " + ev.total) + '</tr>'
+      + '<tr>' + th("失败/阻塞") + td(ev.failed) + th("未执行/跳过") + td(ev.untested) + '</tr></table>'
+      + '<p class="meta">跳过按未执行计；发布放行以版本「发布检查」为准。</p>';
+  }
   var sd = reportStatsDims();
   if(sd){
     html += '<p><b>执行统计 · 共 ' + sd.totalRuns + ' 次执行</b></p>'
@@ -3731,7 +3849,7 @@ function tcCaseCount(){
 }
 function syncTcPageHead(){
   if(document.body.dataset.view !== "testcases") return;
-  var titles = { cases:"测试 · 用例", defects:"测试 · 缺陷", plans:"测试 · 计划", coverage:"测试 · 覆盖矩阵", report:"测试 · 测试报告" };
+  var titles = { bench:"测试 · 工作台", cases:"测试 · 用例", defects:"测试 · 缺陷", plans:"测试 · 计划", coverage:"测试 · 覆盖矩阵", report:"测试 · 测试报告" };
   var scope = tcScopeName() || "全部项目";
   var phTitle = $("pageTitleText"), phSub = $("pageSub"), pill = $("pagePill"), acts = $("pageActions");
   if(phTitle) phTitle.textContent = titles[tcMode] || "测试";
@@ -3744,8 +3862,13 @@ function syncTcPageHead(){
     sub = scope + " · 圈选用例 → 批量执行 → 完成留痕";
   }else if(tcMode === "coverage"){
     sub = scope + " · 需求 × 用例 × 缺陷";
+  }else if(tcMode === "bench"){
+    var bd = benchData && benchDerived();
+    var zero = bd && bd.casesTotal === 0 && bd.plansTotal === 0;
+    /* 工作台汇总始终是空间内可见且未归档的全部项目，不跟用例页的项目筛选 */
+    sub = "全部项目 · " + (zero ? "从零开始，四步跑通第一次测试" : "测试的日常从这里开始");
   }else{
-    sub = scope + " · 最近一轮执行结果汇总";
+    sub = scope + " · 项目当前状态（最近一轮），非发布证据";
   }
   if(phSub) phSub.textContent = sub;
   if(pill){
@@ -10632,7 +10755,7 @@ if($("pageActions")) $("pageActions").addEventListener("click", function(e){
   }else if(kind === "cov-export"){
     exportCoverageCsv();
   }else if(kind === "report-note"){
-    toast("口径：每个用例取最近一轮执行结果；通过率剔除跳过，按本轮执行条数计算。", "info");
+    toast("口径：本页是项目当前状态，每个用例取最近一轮执行结果；通过率剔除跳过。发布放行看版本「发布检查」，按轮次导出用「按计划出报告」。", "info");
   }else if(kind === "report-export"){
     var el = document.createElement("div");
     el.className = "menu";
@@ -10962,13 +11085,7 @@ $("tcPackBanner").addEventListener("click", function(e){
   });
 });
 $("tcBench").addEventListener("click", function(e){
-  var dis = e.target.closest("[data-bench-dismiss]");
-  if(dis){
-    if(dis.dataset.benchDismiss === "welcome") benchStore(BENCH_WELCOME_KEY, "1");
-    else benchStore(BENCH_TIPS_KEY, "1");
-    renderBench();
-    return;
-  }
+  if(e.target.closest("[data-bench-help]")){ openBenchHelp(e.target.closest("[data-bench-help]")); return; }
   var go = e.target.closest("[data-bench-go]");
   if(go){ setTcMode(go.dataset.benchGo); return; }
   if(e.target.closest("[data-bench-new-plan]")){ openPlanWizard(); return; }
@@ -11988,6 +12105,10 @@ if($("tcReport")){
     if(e.target.closest("[data-tc-report-csv]")){ exportTestReport(); return; }
     if(e.target.closest("[data-tc-report-doc]")){ exportTestReportDoc(); return; }
     if(e.target.closest("[data-tc-report-print]")){ printTestReport(); return; }
+    var reportPlanBtn = e.target.closest("[data-tc-report-plan]");
+    if(reportPlanBtn){ openReportPlanPicker(reportPlanBtn); return; }
+    var evPlan = e.target.closest("[data-rep-evidence-plan]");
+    if(evPlan){ openPlanFromReport(evPlan.dataset.repEvidencePlan); return; }
     var kpiCard = e.target.closest("[data-rep-kpi-drill]");
     if(kpiCard){ openRepDrill(kpiCard.dataset.repKpiDrill); return; }
     var guideGo = e.target.closest("[data-rep-guide-go]");

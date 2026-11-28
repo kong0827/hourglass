@@ -35,7 +35,33 @@ class UserNotificationPreferenceServiceTest {
             assertTrue(result.get(i).getInApp());
             boolean emailDefaultOn = UserNotificationPreferenceService.DOC_MENTION.equals(result.get(i).getEventType());
             assertEquals(emailDefaultOn, result.get(i).getEmail());
+            /* 企微缺省只在指派/测试指派/发布准备三类开启，其余事件返回 null 表示不适用 */
+            String type = result.get(i).getEventType();
+            boolean wecomApplies = UserNotificationPreferenceService.TASK_ASSIGNED.equals(type)
+                    || UserNotificationPreferenceService.TEST_PLAN_ASSIGNED.equals(type)
+                    || UserNotificationPreferenceService.RELEASE_PREP.equals(type);
+            assertEquals(wecomApplies ? Boolean.TRUE : null, result.get(i).getWecom());
         }
+    }
+
+    @Test
+    void updateStoresWecomOnlyForPushableEvents() {
+        NotificationPreferenceUpdateRequest req = new NotificationPreferenceUpdateRequest();
+        req.setPreferences(java.util.Arrays.asList(
+                new NotificationPreferenceItem(UserNotificationPreferenceService.TASK_ASSIGNED, true, false, false),
+                new NotificationPreferenceItem(UserNotificationPreferenceService.RELEASE_PREP, true, false),
+                new NotificationPreferenceItem(UserNotificationPreferenceService.TASK_COMMENT, true, false)));
+        when(mapper.selectByUser("U1")).thenReturn(Collections.emptyList());
+
+        service.update("U1", req);
+
+        org.mockito.ArgumentCaptor<com.hourglass.entity.UserNotificationPreference> captor =
+                org.mockito.ArgumentCaptor.forClass(com.hourglass.entity.UserNotificationPreference.class);
+        verify(mapper, org.mockito.Mockito.times(3)).upsert(captor.capture());
+        /* 显式关闭写 false；推送事件未提交企微字段按开启；不支持的事件写 null */
+        assertEquals(Boolean.FALSE, captor.getAllValues().get(0).getWecomEnabled());
+        assertEquals(Boolean.TRUE, captor.getAllValues().get(1).getWecomEnabled());
+        org.junit.jupiter.api.Assertions.assertNull(captor.getAllValues().get(2).getWecomEnabled());
     }
 
     @Test

@@ -16,6 +16,25 @@
 - **文档**：新增《对外 API 与 MCP P0 实施设计》，接口契约「对外只读 API」、管理员指南 3.9 / 3.11、常见问题与 README 同步；`check-docs.py` 与基线校验全绿。
 - 未部署；前端令牌管理页、写接口与飞书 / 企微适配仍属后续批次。
 
+## 2026-11-28 · 版本列表显示「交付说明已确认」（前后端）
+
+- **口径**：`GET /api/versions/cross-project` 的 `CrossProjectVersionRow` 新增 `deliveryConfirmed`——由 `ProjectVersionMapper.xml` 对 `delivery_note.confirmed` 做四个键（`summary` / `change` / `issue` / `acceptance`）的 `JSON_CONTAINS` 派生，与交付页「待确认」同一口径；不新增表、不加埋点，四段没全确认时为 false。
+- **列表**：已生产发布的版本如果交付说明四段都确认过，在「生产发布 MM-DD 成功」下方补绿字「交付说明已确认」（沿用 `.vlist-sub.is-ok`，与原型一致）。
+- **验证**：本地库 Xkv16（已发布、四段已确认）返回 true，Xkv14（未确认）/ Xkv10（未发布）返回 false；1440 截图确认绿字只出现在已确认行；`version-detail.mjs` 全过、`check-assets.js` 全绿。
+- 未提交、未部署；`phase.js` 有改动，部署前需重跑 `tools/stamp-sw.js`（现为 v300）。
+
+## 2026-11-28 · 企业微信多企业接入与独立通知渠道（前后端，含 SQL 142–143）
+
+- **多企业模型**：一个空间可能同时有甲方与多家供应商，各自属于不同企业微信企业。部署级 `wecom_corp` 登记每家的 CorpID、AgentId、Secret 密文与回调根地址，`wecom_corp_space` 决定本空间启用哪些企业，`wecom_user_bind` 做显式身份绑定，`wecom_oauth_state` 落一次性 state，`wecom_msg_log` 记录消息发送。Secret 只存 AES-GCM 密文，接口只回显 `hasSecret`；不引入 Redis，state 与消息队列都在 MySQL。
+- **免登**：公开入口 `GET /wecom/entry` 按企业跳转 `snsapi_base` 授权，回调原子消费 state 后走与密码登录相同的容器会话；未绑定用户回登录页提示先密码登录再绑定，已有绑定时在个人设置发起绑定，也可由平台管理员代绑。
+- **推送**：指派、测试指派、发布准备三类事件按接收人绑定的企业分组入队，定时任务用对应企业的 token 发送，失败退避重试、无效成员标为部分失败，可在空间设置按企业重发。
+- **独立通知渠道**：sql/143 给 `user_notification_preference` 加可空 `wecom_enabled`，企微不再由「站内或邮件已送达」隐式触发，改为与两者并列的逐人逐事件开关；只覆盖上述三类事件（缺省开，NULL 视为开，升级后行为不变），其余事件设置页该列显示「—」。设置页消息通知改为「事件 / 站内 / 邮件 / 企业微信」四列，桌面 104px×3、手机 56px×3，390 无横向溢出。
+- **管理界面**：平台管理员可登记、启停、删除企业（有绑定只允许停用）、重置入口短键、代绑定与连通性测试；企业表新增「回调地址」与「入口链接」两列，入口链接可直接复制到企微应用主页或工作台菜单，重置短键后提示旧链接失效；空间主启用企业与重发消息；个人设置展示绑定状态与解绑。
+- **投递细节**：无效成员（部分失败）重试到 `WECOM_SEND_MAX_ATTEMPTS` 即停止，不再无限占用队列；`deploy/nginx-hourglass.conf` 新增 `/hourglass/wecom/` 反代与 30r/m 限流，修掉生产只代理 `/hourglass/api/` 时免登入口与回调 404 的缺口。
+- **数据库**：sql/142 新建 5 张表（100 → 105 表），sql/143 只增可空列（表数不变），均已收敛进 `sql/baseline/01_schema_full.sql`；`check_baseline_drift.py` 127 个脚本全绿。
+- **验证**：`NotificationEventServiceTest` 14 项、`UserNotificationPreferenceServiceTest` 3 项、`WeComCorpServiceTest` 9 项、`WeComNotifyServiceTest` 3 项（入队 URL、三类事件边界、部分失败重试上限）全过（JDK 8）；浏览器走查创建/启用/删除企业、一次性 state、绑定与 push 入队，并逐页核对偏好保存后 `GET /api/auth/notification-preferences` 回读；`check-docs.py`、`check-assets.js` 全绿（顺带把 `js/lib/wecom.js` 补进 SW SHELL，修掉离线白屏缺口）。
+- 未提交、未部署，SW `CACHE_NAME` 升至 v300。
+
 ## 2026-11-28 · 测试报告 KPI 卡下钻（纯前端）
 
 - **入口**：报告页四张指标卡变可点（button 语义、键盘 Enter / Space、右上「明细」提示）：通过率看本轮执行明细，失败与阻塞卡直接落到对应清单，覆盖率卡看需求覆盖明细；失败 / 阻塞为 0 时该卡不显示下钻。
@@ -51,7 +70,7 @@
 - **验证**：新增 `tools/e2e/version-release-b6.mjs` 69 项断言全过（欢迎卡只出现一次、9 步高亮尺寸与说明卡在视口内、指引焦点进入卡内且 Tab 不逃逸、键盘与 Esc、默认时间窗与 pill、收口时间夹具、CSV 表头与行数、390 卡片化与页头布局、向导吸底与 FAB 隐藏、无控制台异常）；`VersionReleaseServiceTest` 74 项全过（JDK 8）；`release-list-layout.mjs` 与 `plan-layout.mjs` 回归全过；1440 欢迎卡、9 步、计划列表与 390 计划列表 / 向导共 12 张截图逐页对照原型，存 `docs/audit/prototypes/version-release-impl-2026-11-28/`。390 另做全流程复查：版本详情（概览 / 发布）、交付报告、发布工作台、记录发布页均 `scrollWidth - innerWidth = 0`，滚动到底后正文与控件让开底部 tabbar。
 - **收口复查（本批内修复）**：真机实测发现指引打开后焦点停在 `body`，首个 Tab 会跳到背景导航——改为进入指引即聚焦「下一步」，Tab 在卡内循环；计划清单搜索补上自定义计划名与计划编号（`rp.name` / `planNo`），避免有名称的计划搜不到；CSV 就绪检查的「通过」与列表「已通过」口径对齐，下载对象回收延时改为 1.5s；手册注明手机端不弹欢迎卡、也不显示「?」。
 - **文档**：用户使用手册补「新建计划向导（4 步）」与「记录发布页（三段式）」两条，并把版本页范围口径的默认时间窗从「前后 3 个月」改为「未来 90 天」；快速上手指南同步发布入口与导出排期口径。`docs/接口契约.md` 补 `ReleasePlanRow.name / completedAt`、`Plan.name` 与基线列清单 SQL 138。手册三副本、快速上手两副本一致，`tools/check-docs.py` 全绿。
-- **已知残留（登记）**：`tools/e2e/version-detail.mjs` 仍按旧 `.vl-row` 断言当前版本卡（B1 起改为 focus 卡片），未随本批刷新；`tools/e2e/release-check.mjs` 内置旧空间 ID，在当前演示库下登录后报「空间不存在」，属重灌种子后的既有漂移；`tools/e2e/version-detail-proto.mjs` 校验的是 11-14 静态原型，该 HTML 仍引用已拆分的 `frontend/css/views.css`，每次加载报 `ERR_FILE_NOT_FOUND`（70 过 / 13 项控制台断言失败），属静态原型陈旧，与本批无关；手机端不自动弹欢迎卡（按原型只做桌面引导）；欢迎卡与计划列表的演示数据为合成数据。
+- **已知残留（登记）**：手机端不自动弹欢迎卡（按原型只做桌面引导）；欢迎卡与计划列表的演示数据为合成数据。此前登记的三套 E2E 漂移已收口：`version-detail.mjs` 改按焦点卡（`.ver-focus` 与菜单「计划与历史」）进入并固定 `E2E_WS=SXk01`；`release-check.mjs` 改为从 `GET /api/release-plans` 自动发现项目 / 版本 / 计划，自建临时用例与非草稿计划形成阻断、结束即删并还原策略；`version-detail-proto.mjs` 改用内联原型样式，不再引用已拆分的 `frontend/css/views.css`。三套现全绿（release-check 33 项、version-detail 全过、proto 83 项）；release-check 另把无头 Chrome 偶发的 PWA 图标抓取中止列入基线过滤，并在 390 断点把三步条触控高度补到 44px。
 - 未提交、未部署，SW `CACHE_NAME` 保持 v298；`sw.js` SHELL 补 `css/tour.css`、`js/core/tour.js`、`js/views/record.js`，`tools/check-assets.js` 与 modulepreload 检查全绿。
 
 ## 2026-11-28 · 测试域新手友好改版：工作台落地页 + 三步建计划向导 + 示例用例包（前后端，含 SQL 139）

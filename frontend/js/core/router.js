@@ -302,6 +302,9 @@ function showView(name){
   /* 页级覆盖先清空：项目 / 项目集等页面进入后再按原型补标题 pill 与专属按钮 */
   var phPill = $("pagePill");
   if(phPill){ phPill.hidden = true; phPill.textContent = ""; }
+  var phInlineMeta = $("pageInlineMeta");
+  if(phInlineMeta){ phInlineMeta.hidden = true; phInlineMeta.textContent = ""; }
+  rt.phaseListScope = "";
   var phActs = $("pageActions");
   if(phActs){ phActs.hidden = true; phActs.innerHTML = ""; }
   var newWrap = $("newWrap");

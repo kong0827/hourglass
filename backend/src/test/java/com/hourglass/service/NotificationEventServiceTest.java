@@ -6,6 +6,7 @@ import com.hourglass.entity.WorkspaceMember;
 import com.hourglass.mapper.AppNotificationMapper;
 import com.hourglass.mapper.UserMapper;
 import com.hourglass.mapper.WorkspaceMemberMapper;
+import com.hourglass.wecom.WeComNotifyService;
 import org.junit.jupiter.api.Test;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -26,8 +27,9 @@ class NotificationEventServiceTest {
     private final MailDeliveryService deliveries = mock(MailDeliveryService.class);
     private final ProjectAccessService projectAccess = mock(ProjectAccessService.class);
     private final com.hourglass.mapper.WorkspaceMapper workspaces = mock(com.hourglass.mapper.WorkspaceMapper.class);
+    private final WeComNotifyService wecom = mock(WeComNotifyService.class);
     private final NotificationEventService service = new NotificationEventService(preferences, inApp, users, members,
-            deliveries, projectAccess, workspaces);
+            deliveries, projectAccess, workspaces, wecom);
 
     @Test
     void preferenceControlsBothChannels() {
@@ -193,6 +195,53 @@ class NotificationEventServiceTest {
         verify(inApp).pushImmediate("U1", "W1", NotificationEventService.MENTION_TYPE,
                 "「Task」提到了你", "body", "K1", null, null, "R1");
         verify(deliveries, never()).enqueue(anyString(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void wecomIsIndependentChannelAndSurvivesOffInAppAndEmail() {
+        when(members.selectMember("W1", "U1")).thenReturn(mock(WorkspaceMember.class));
+        when(projectAccess.canView(anyString(), anyString(), any())).thenReturn(true);
+        when(preferences.get("U1", UserNotificationPreferenceService.TASK_ASSIGNED))
+                .thenReturn(new NotificationPreferenceItem(UserNotificationPreferenceService.TASK_ASSIGNED,
+                        false, false, true));
+
+        service.notify("U1", "W1", UserNotificationPreferenceService.TASK_ASSIGNED,
+                "assigned", "body", "K1");
+
+        /* 站内与邮件都关，企微仍按自己的开关入队 */
+        verify(wecom).enqueueForUser("W1", "U1", UserNotificationPreferenceService.TASK_ASSIGNED,
+                "assigned", "body", "/#/board?task=K1");
+        verifyNoInteractions(inApp, users, deliveries);
+    }
+
+    @Test
+    void wecomSwitchOffSkipsEnqueueWhileInAppStillDelivers() {
+        when(members.selectMember("W1", "U1")).thenReturn(mock(WorkspaceMember.class));
+        when(projectAccess.canView(anyString(), anyString(), any())).thenReturn(true);
+        when(preferences.get("U1", UserNotificationPreferenceService.TASK_ASSIGNED))
+                .thenReturn(new NotificationPreferenceItem(UserNotificationPreferenceService.TASK_ASSIGNED,
+                        true, false, false));
+
+        service.notify("U1", "W1", UserNotificationPreferenceService.TASK_ASSIGNED,
+                "assigned", "body", "K1");
+
+        verify(inApp).pushImmediate(anyString(), anyString(), anyString(), anyString(), anyString(),
+                anyString(), any(), any(), any());
+        verifyNoInteractions(wecom);
+    }
+
+    @Test
+    void wecomNeverEnqueuesForNonPushableEvents() {
+        when(members.selectMember("W1", "U1")).thenReturn(mock(WorkspaceMember.class));
+        when(projectAccess.canView(anyString(), anyString(), any())).thenReturn(true);
+        when(preferences.get("U1", UserNotificationPreferenceService.TASK_UPDATED))
+                .thenReturn(new NotificationPreferenceItem(UserNotificationPreferenceService.TASK_UPDATED,
+                        true, false, true));
+
+        service.notify("U1", "W1", UserNotificationPreferenceService.TASK_UPDATED,
+                "updated", "body", "K1");
+
+        verifyNoInteractions(wecom);
     }
 
     @Test

@@ -148,10 +148,10 @@ async function main(){
     pass("筛选模式：确认页含圈选方式 → 建计划 → 跳用例页（项目已选）toast=" + toastShown);
 
     /* 4. 工作台「去做」与空态计划卡「新建计划」。
-       共享空间数据齐全时清单全 done、没有去做按钮：此时校验全部完成为真即可；
+       共享空间数据齐全时四步全 done、没有去做按钮：此时校验四步全完成为真即可；
        有按钮时（全新空间）必须验证点击跳转。 */
     await evaluate(`import('./js/views/testcases.js').then(m => m.setTcMode("bench"))`);
-    await waitFor(`!document.getElementById("tcBench").hidden`, "工作台");
+    await waitFor(`!document.getElementById("tcBench").hidden && document.querySelectorAll('#tcBench .tb-flow-step').length === 4`, "工作台");
     const goBtn = await evaluate(`(() => {
       const b = document.querySelector('[data-bench-go="plans"]');
       if(!b) return null;
@@ -167,9 +167,13 @@ async function main(){
       await evaluate(`import('./js/views/testcases.js').then(m => m.setTcMode("bench"))`);
       await waitFor(`!document.getElementById("tcBench").hidden`, "回工作台");
     }else{
-      const allDone = await evaluate(`[...document.querySelectorAll('#tcBench .tb-check')].every(c => c.classList.contains('done'))`);
-      if(!allDone) throw new Error("无「去做」按钮但清单未全完成");
-      pass("工作台无「去做」按钮（清单全完成，共享空间预期）");
+      const flow = await evaluate(`(() => {
+        const steps = [...document.querySelectorAll('#tcBench .tb-flow-step')];
+        return { total: steps.length, done: steps.filter(s => s.classList.contains('done')).length };
+      })()`);
+      if(flow.total !== 4) throw new Error("四步引导步骤数异常：" + flow.total);
+      if(flow.done !== 4) throw new Error("无「去做」按钮但四步未全部完成：" + flow.done + "/4");
+      pass("工作台无「去做」按钮（四步全完成，共享空间预期）");
     }
     const emptyCardBtn = await evaluate(`(() => {
       const b = document.querySelector('[data-bench-new-plan]');

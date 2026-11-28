@@ -376,7 +376,7 @@
     <!-- 页面标题行：标题 + 定位副标题 + 视图切换 + 主操作（原型 pagehead） -->
     <div class="pagehead" id="pageHead">
       <div class="ph-main">
-        <h1 id="pageTitle"><span id="pageTitleText">工作项</span><span class="ph-pill" id="pagePill" hidden></span></h1>
+        <h1 id="pageTitle"><span id="pageTitleText">工作项</span><span class="ph-inline-meta" id="pageInlineMeta" hidden></span><span class="ph-pill" id="pagePill" hidden></span></h1>
         <p class="sub" id="pageSub"></p>
       </div>
       <div class="ph-acts">
@@ -3223,6 +3223,15 @@
               </div>
             </div>
 
+            <div class="panel" data-set-pane="integration" id="set-wecom" hidden>
+              <div class="panel-head">
+                <h3>企业微信</h3>
+                <span class="meta-right">免登与消息 · 按企业隔离</span>
+              </div>
+              <p class="set-hint">同一个空间可能同时有甲方与多家供应商，各自属于不同的企业微信企业。这里选择本空间启用哪些企业：启用后，成员可在个人设置里绑定对应企业的身份，并在该企业微信里收到指派、评审与发布准备提醒。企业登记由平台管理员完成。</p>
+              <div id="setWeCom"></div>
+            </div>
+
             <div class="panel" data-set-pane="integration" id="set-automation" hidden>
               <div class="panel-head">
                 <h3>自动化规则</h3>
@@ -3809,6 +3818,7 @@
             <a href="#me-basic">基本信息</a>
             <a href="#me-timer">计时设置</a>
             <a href="#me-notify">消息通知</a>
+            <a href="#me-wecom">企业微信</a>
             <a href="#me-appearance">外观</a>
             <a href="#me-ai">AI 设置</a>
             <a href="#me-pwd">修改密码</a>
@@ -3901,12 +3911,22 @@
                 <h3>消息通知</h3>
                 <span class="meta-right">只接收与你相关的事件</span>
               </div>
-              <p class="set-hint">工作项指派、工作项变动、评论和需求池状态变化可分别选择站内或邮件通知；自己的操作不会通知自己。</p>
+              <p class="set-hint">工作项指派、工作项变动、评论和需求池状态变化可分别选择站内、邮件或企业微信通知；企微只覆盖指派、测试指派和发布准备，需先在下方绑定企业微信；自己的操作不会通知自己。</p>
               <div class="notification-prefs" id="meNotificationPrefs"></div>
               <div class="set-actions">
                 <button class="btn ghost" type="button" id="meNotificationPreset" title="只保留指派、评论与@、关注与每日汇总的站内通知">仅重要事件</button>
                 <button class="btn" type="button" id="meNotificationSave">保存通知设置</button>
               </div>
+            </div>
+
+            <div class="panel" id="me-wecom">
+              <div class="panel-head">
+                <h3>企业微信</h3>
+                <span class="meta-right">免登与消息 · 按企业隔离</span>
+              </div>
+              <p class="set-hint">一个空间可能同时有甲方与多家供应商，各自属于不同的企业微信企业。绑定后可在企业微信内免密进入沙漏，并接收指派、测试计划指派与发布准备提醒；同一人可在多家企业各绑一次，消息只发到你对应的企业应用。</p>
+              <div id="meWeComBinds"></div>
+              <div class="set-actions" id="meWeComActions" hidden></div>
             </div>
 
             <div class="panel" id="me-appearance">

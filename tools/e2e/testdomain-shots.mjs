@@ -100,10 +100,10 @@ async function main(){
     })()`);
     const RID = created.id;
 
-    /* 工作台（新用户视角：清空本机横幅记忆） */
-    await evaluate(`(() => { localStorage.removeItem("ds.tcBenchWelcome"); localStorage.removeItem("ds.tcBenchTips"); location.hash = "#/testcases"; return 1; })()`);
+    /* 工作台 */
+    await evaluate(`location.hash = "#/testcases"`);
     await waitFor(`document.body.dataset.view === "testcases"`, "测试域");
-    await waitFor(`import("./js/views/testcases.js").then(m => m.currentTcMode() === "bench") && document.querySelectorAll("#tcBench .tb-flow-step").length === 4`, "工作台渲染");
+    await waitFor(`import("./js/views/testcases.js").then(m => m.currentTcMode() === "bench") && document.querySelectorAll("#tcBench .tb-guide .tb-flow-step").length === 4`, "工作台渲染");
     await sleep(400);
     await shot("home-1440-impl");
 
@@ -153,7 +153,7 @@ async function main(){
     /* 390 工作台 */
     await call("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
     await evaluate(`import("./js/views/testcases.js").then(m => m.setTcMode("bench"))`);
-    await waitFor(`!document.getElementById("tcBench").hidden && document.querySelectorAll("#tcBench .tb-flow-step").length === 4`, "移动工作台");
+    await waitFor(`!document.getElementById("tcBench").hidden && document.querySelectorAll("#tcBench .tb-guide .tb-flow-step").length === 4`, "移动工作台");
     await sleep(400);
     await shot("home-390-impl");
     await call("Emulation.clearDeviceMetricsOverride");

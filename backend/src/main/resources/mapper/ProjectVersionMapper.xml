@@ -45,7 +45,9 @@
   <select id="selectCrossProjectRows" resultType="com.hourglass.dto.CrossProjectVersionRow">
     SELECT r.id AS reqId, r.name AS projectName,
       v.id AS versionId, v.name AS versionName, v.status AS versionStatus,
-      v.target_date AS targetDate, v.released_at AS releasedAt,
+      v.start_date AS startDate, v.target_date AS targetDate, v.released_at AS releasedAt,
+      v.updated_at AS updatedAt,
+      (SELECT u.display_name FROM app_user u WHERE u.id = r.owner_user_id) AS ownerName,
       (SELECT COUNT(DISTINCT vt.task_id) FROM version_task vt
         INNER JOIN task t ON t.workspace_id = vt.workspace_id AND t.id = vt.task_id
        WHERE vt.workspace_id = v.workspace_id AND vt.version_id = v.id
@@ -56,14 +58,69 @@
        WHERE vt.workspace_id = v.workspace_id AND vt.version_id = v.id
          AND t.req_id = v.req_id AND t.deleted_at IS NULL
          AND t.board_column = 'done') AS doneTaskCount,
+      (SELECT COUNT(DISTINCT vt.task_id) FROM version_task vt
+        INNER JOIN task t ON t.workspace_id = vt.workspace_id AND t.id = vt.task_id
+       WHERE vt.workspace_id = v.workspace_id AND vt.version_id = v.id
+         AND t.req_id = v.req_id AND t.deleted_at IS NULL
+         AND t.board_column NOT IN ('done', 'canceled')
+         AND (t.estimate_minutes IS NULL OR t.estimate_minutes = 0)) AS unestimatedTaskCount,
+      /* 需求覆盖与发布检查同口径：已关闭/驳回/取消的需求退出分母，有用例才算覆盖 */
+      (SELECT COUNT(*) FROM demand d
+       WHERE d.workspace_id = v.workspace_id AND d.req_id = v.req_id AND d.version_id = v.id
+         AND d.status NOT IN ('closed', 'rej', 'canceled')) AS demandCount,
+      (SELECT COUNT(*) FROM demand d
+       WHERE d.workspace_id = v.workspace_id AND d.req_id = v.req_id AND d.version_id = v.id
+         AND d.status NOT IN ('closed', 'rej', 'canceled')
+         AND EXISTS (SELECT 1 FROM test_case c
+                      WHERE c.workspace_id = d.workspace_id AND c.req_id = d.req_id AND c.demand_id = d.id)) AS coveredDemandCount,
+      /* 下一计划：未取消/未完成的最早计划；兼容旧的单版本计划字段 */
+      (SELECT p.planned_at FROM version_release_plan p
+       WHERE p.workspace_id = v.workspace_id AND p.status NOT IN ('canceled', 'completed')
+         AND (EXISTS (SELECT 1 FROM version_release_plan_version x
+                       WHERE x.workspace_id = p.workspace_id AND x.plan_id = p.id AND x.version_id = v.id)
+              OR (p.version_id = v.id
+                  AND NOT EXISTS (SELECT 1 FROM version_release_plan_version y
+                                   WHERE y.workspace_id = p.workspace_id AND y.plan_id = p.id)))
+       ORDER BY (p.planned_at IS NULL), p.planned_at, p.id LIMIT 1) AS nextPlanAt,
+      (SELECT p.environment FROM version_release_plan p
+       WHERE p.workspace_id = v.workspace_id AND p.status NOT IN ('canceled', 'completed')
+         AND (EXISTS (SELECT 1 FROM version_release_plan_version x
+                       WHERE x.workspace_id = p.workspace_id AND x.plan_id = p.id AND x.version_id = v.id)
+              OR (p.version_id = v.id
+                  AND NOT EXISTS (SELECT 1 FROM version_release_plan_version y
+                                   WHERE y.workspace_id = p.workspace_id AND y.plan_id = p.id)))
+       ORDER BY (p.planned_at IS NULL), p.planned_at, p.id LIMIT 1) AS nextPlanEnvironment,
+      (SELECT p.status FROM version_release_plan p
+       WHERE p.workspace_id = v.workspace_id AND p.status NOT IN ('canceled', 'completed')
+         AND (EXISTS (SELECT 1 FROM version_release_plan_version x
+                       WHERE x.workspace_id = p.workspace_id AND x.plan_id = p.id AND x.version_id = v.id)
+              OR (p.version_id = v.id
+                  AND NOT EXISTS (SELECT 1 FROM version_release_plan_version y
+                                   WHERE y.workspace_id = p.workspace_id AND y.plan_id = p.id)))
+       ORDER BY (p.planned_at IS NULL), p.planned_at, p.id LIMIT 1) AS nextPlanStatus,
+      (SELECT COUNT(*) FROM version_release vr
+       WHERE vr.workspace_id = v.workspace_id AND vr.version_id = v.id
+         AND vr.result = 'success' AND vr.environment = 'production'
+         AND vr.operation IN ('deploy', 'redeploy')) AS productionSuccessCount,
+      (SELECT COUNT(*) FROM version_release vr
+       WHERE vr.workspace_id = v.workspace_id AND vr.version_id = v.id
+         AND vr.result = 'success' AND vr.environment = 'staging') AS stagingSuccessCount,
       (SELECT MAX(COALESCE(vr.published_on, DATE(vr.occurred_at))) FROM version_release vr
        WHERE vr.workspace_id = v.workspace_id AND vr.version_id = v.id
          AND vr.result = 'success' AND vr.environment = 'production'
-         AND vr.operation IN ('deploy', 'redeploy')) AS latestReleaseDate
+         AND vr.operation IN ('deploy', 'redeploy')) AS latestReleaseDate,
+      /* 交付说明确认是四个键的全部具备（摘要/变更/缺陷/验收），与交付页「待确认」同一口径 */
+      (SELECT CASE WHEN JSON_CONTAINS(dn.confirmed, '"summary"')
+                     AND JSON_CONTAINS(dn.confirmed, '"change"')
+                     AND JSON_CONTAINS(dn.confirmed, '"issue"')
+                     AND JSON_CONTAINS(dn.confirmed, '"acceptance"')
+                   THEN 1 ELSE 0 END
+       FROM delivery_note dn
+       WHERE dn.workspace_id = v.workspace_id AND dn.version_id = v.id LIMIT 1) AS deliveryConfirmed
     FROM project_version v
     INNER JOIN requirement r ON r.workspace_id = v.workspace_id AND r.id = v.req_id
     WHERE v.workspace_id = #{workspaceId} AND r.archived_at IS NULL
-    ORDER BY r.name, COALESCE(v.target_date, DATE(v.released_at), DATE(v.created_at)) DESC, v.created_at DESC, v.id DESC
+    ORDER BY v.updated_at DESC, v.created_at DESC, v.id DESC
   </select>
 
   <select id="countGroupByReq" resultType="java.util.HashMap">

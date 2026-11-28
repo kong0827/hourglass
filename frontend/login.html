@@ -59,12 +59,19 @@
 
   <section class="login-panel" aria-label="账号登录">
     <div class="auth-card">
-      <form id="loginForm" method="post" action="api/auth/login" autocomplete="on" novalidate>
-        <div class="auth-brand">
-          <h1>欢迎登录</h1>
-          <p class="sub">登录沙漏，继续推进团队计划</p>
-        </div>
+      <div class="auth-brand">
+        <h1>欢迎登录</h1>
+        <p class="sub">登录沙漏，继续推进团队计划</p>
+      </div>
 
+      <p class="auth-tip" id="wecomMsg" hidden></p>
+
+      <div id="wecomLogin" hidden>
+        <div class="wecom-login-list" id="wecomLoginList"></div>
+        <div class="auth-or"><span>或使用账号密码</span></div>
+      </div>
+
+      <form id="loginForm" method="post" action="api/auth/login" autocomplete="on" novalidate>
         <div class="stack" style="gap:16px">
           <div class="field" id="fUser">
             <label for="uName">账号</label>
@@ -120,6 +127,51 @@ import { API } from "./js/core/api.js";
     if (/(?:^|;\s*)XSRF-TOKEN=/.test(document.cookie)) return Promise.resolve();
     return API.get("/api/health").catch(function () { /* 网络异常由登录请求统一提示 */ });
   }
+
+  /* ---- 企业微信免登：一个部署可能对接多家企业（甲方与各供应商） ---- */
+  var params = new URLSearchParams(window.location.search);
+  var wecomMsg = document.getElementById("wecomMsg");
+  var wecomBox = document.getElementById("wecomLogin");
+  var wecomList = document.getElementById("wecomLoginList");
+  var wecomReasons = {
+    wecom_disabled: "该企业的企业微信接入已停用，请联系空间管理员。",
+    wecom_need_corp: "请选择要登录的企业微信企业。",
+    wecom_state: "登录请求已过期或已使用，请重新发起。",
+    wecom_denied: "你取消了企业微信授权。",
+    wecom_api: "企业微信接口暂时不可用，请稍后重试或使用账号密码登录。",
+    wecom_not_member: "你的企业微信账号不在该企业通讯录里，不能免登。",
+    wecom_bind_session: "绑定需要与发起时同一个登录状态，请重新登录后再试。",
+    wecom_bind_conflict: "该企业微信账号已绑定其他成员，或你已绑定另一个企微账号，请联系管理员。",
+    wecom_scope: "你不在启用该企业的空间里，不能绑定。",
+    account_disabled: "你的沙漏账号已停用，请联系管理员。"
+  };
+  function showWeComNote(text, warn) {
+    if (!wecomMsg) return;
+    wecomMsg.textContent = text;
+    wecomMsg.hidden = false;
+    if (warn) wecomMsg.setAttribute("data-tone", "warn");
+  }
+  if (params.get("wecomUnbound") === "1") {
+    showWeComNote("你的企业微信身份还没有绑定沙漏账号：请先用账号密码登录，再到「个人设置 → 企业微信」完成绑定。", true);
+  } else if (params.get("reason") && wecomReasons[params.get("reason")]) {
+    showWeComNote(wecomReasons[params.get("reason")], true);
+  }
+  function wecomIcon() {
+    return '<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h9A2.5 2.5 0 0 1 17 6.5v5a2.5 2.5 0 0 1-2.5 2.5H8l-3.6 2.4a.6.6 0 0 1-.9-.5V14"/><path d="M7 8.6h6M7 11.2h4"/></svg>';
+  }
+  API.get("/wecom/corps").then(function (data) {
+    var corps = (data && data.corps) || [];
+    if (!data || data.enabled === false || !corps.length || !wecomBox) return;
+    var next = params.get("next") || "";
+    var html = corps.map(function (corp) {
+      var href = API.appBase + "/wecom/entry?c=" + encodeURIComponent(corp.corpKey)
+        + (next ? "&target=" + encodeURIComponent(next) : "");
+      return '<a class="btn lg" href="' + href.replace(/"/g, "&quot;") + '">'
+        + wecomIcon() + "企业微信登录 · " + corp.corpName.replace(/[<>&"]/g, "") + "</a>";
+    }).join("");
+    wecomList.innerHTML = html;
+    wecomBox.hidden = false;
+  }).catch(function () { /* 未配置企微时静默回退到账号密码 */ });
 
   form.addEventListener("submit", function (e) {
     e.preventDefault();

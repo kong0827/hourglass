@@ -512,7 +512,7 @@ html[data-theme="dark"] .project-table-row > .project-row-acts{box-shadow:-8px 0
 .set-grid.three{grid-template-columns:repeat(3,minmax(0,1fr));}
 @media (max-width:1279px){.set-grid.three{grid-template-columns:1fr;}}
 .notification-prefs{border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;}
-.notification-pref-head,.notification-pref-row{display:grid;grid-template-columns:minmax(0,1fr) 110px 110px;align-items:center;gap:var(--space-3);padding:9px 14px;}
+.notification-pref-head,.notification-pref-row{display:grid;grid-template-columns:minmax(0,1fr) 104px 104px 104px;align-items:center;gap:var(--space-3);padding:9px 14px;}
 .notification-pref-head{background:var(--surface-sunken);font-size:12px;font-weight:600;color:var(--text-2);}
 .notification-pref-row{border-top:1px solid var(--border);font-size:13px;}
 /* 事件名与开关列一同垂直居中：说明挂在名称下方，整块在行内居中 */

@@ -49,6 +49,9 @@ public class UserNotificationPreferenceService {
     /** 邮件默认开启的事件（其余事件缺省只开站内）；用户显式保存过偏好后以其选择为准 */
     private static final Set<String> EMAIL_DEFAULT_ON =
             Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(DOC_MENTION)));
+    /** 企微应用消息只覆盖这三类事件，与 WeComNotifyService 的推送范围一致 */
+    private static final Set<String> WECOM_EVENTS = Collections.unmodifiableSet(new HashSet<String>(
+            Arrays.asList(TASK_ASSIGNED, TEST_PLAN_ASSIGNED, RELEASE_PREP)));
 
     private final UserNotificationPreferenceMapper mapper;
 
@@ -66,7 +69,7 @@ public class UserNotificationPreferenceService {
             UserNotificationPreference p = saved.get(eventType);
             result.add(new NotificationPreferenceItem(eventType,
                     p == null || p.getInAppEnabled() == null || Boolean.TRUE.equals(p.getInAppEnabled()),
-                    emailEnabled(p, eventType)));
+                    emailEnabled(p, eventType), wecomEnabled(p, eventType)));
         }
         return result;
     }
@@ -84,6 +87,9 @@ public class UserNotificationPreferenceService {
             p.setEventType(item.getEventType());
             p.setInAppEnabled(item.getInApp());
             p.setEmailEnabled(item.getEmail());
+            p.setWecomEnabled(WECOM_EVENTS.contains(item.getEventType())
+                    ? (item.getWecom() == null ? Boolean.TRUE : item.getWecom())
+                    : null);
             mapper.upsert(p);
         }
         return list(userId);
@@ -94,7 +100,7 @@ public class UserNotificationPreferenceService {
         UserNotificationPreference p = mapper.selectOne(userId, eventType);
         return new NotificationPreferenceItem(eventType,
                 p == null || p.getInAppEnabled() == null || Boolean.TRUE.equals(p.getInAppEnabled()),
-                emailEnabled(p, eventType));
+                emailEnabled(p, eventType), wecomEnabled(p, eventType));
     }
 
     private static boolean emailEnabled(UserNotificationPreference p, String eventType) {
@@ -102,6 +108,17 @@ public class UserNotificationPreferenceService {
             return EMAIL_DEFAULT_ON.contains(eventType);
         }
         return Boolean.TRUE.equals(p.getEmailEnabled());
+    }
+
+    /** 不支持企微的事件返回 null；支持的事件缺省开启（与升级前「送达后自动推企微」一致） */
+    private static Boolean wecomEnabled(UserNotificationPreference p, String eventType) {
+        if (!WECOM_EVENTS.contains(eventType)) {
+            return null;
+        }
+        if (p == null || p.getWecomEnabled() == null) {
+            return Boolean.TRUE;
+        }
+        return p.getWecomEnabled();
     }
 
     /** 读不到偏好时按开启处理：汇总属于低频增强，不应因一次读失败静默丢失 */

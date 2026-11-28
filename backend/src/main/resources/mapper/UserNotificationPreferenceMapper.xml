@@ -3,22 +3,23 @@
 <mapper namespace="com.hourglass.mapper.UserNotificationPreferenceMapper">
 
   <select id="selectByUser" resultType="UserNotificationPreference">
-    SELECT user_id, event_type, in_app_enabled, email_enabled
+    SELECT user_id, event_type, in_app_enabled, email_enabled, wecom_enabled
     FROM user_notification_preference
     WHERE user_id = #{userId}
   </select>
 
   <select id="selectOne" resultType="UserNotificationPreference">
-    SELECT user_id, event_type, in_app_enabled, email_enabled
+    SELECT user_id, event_type, in_app_enabled, email_enabled, wecom_enabled
     FROM user_notification_preference
     WHERE user_id = #{userId} AND event_type = #{eventType}
   </select>
 
   <insert id="upsert">
-    INSERT INTO user_notification_preference (user_id, event_type, in_app_enabled, email_enabled)
-    VALUES (#{userId}, #{eventType}, #{inAppEnabled}, #{emailEnabled})
+    INSERT INTO user_notification_preference (user_id, event_type, in_app_enabled, email_enabled, wecom_enabled)
+    VALUES (#{userId}, #{eventType}, #{inAppEnabled}, #{emailEnabled}, #{wecomEnabled})
     ON DUPLICATE KEY UPDATE
       in_app_enabled = VALUES(in_app_enabled),
-      email_enabled = VALUES(email_enabled)
+      email_enabled = VALUES(email_enabled),
+      wecom_enabled = VALUES(wecom_enabled)
   </insert>
 </mapper>
