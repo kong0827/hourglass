@@ -703,6 +703,8 @@ body.side-rail .rail-btn{transform:rotate(180deg);}
   color:var(--text-3);font-size:12px;cursor:pointer;
 }
 .palette-clear:hover{background:var(--primary-soft);color:var(--primary-fg);}
+.palette-visit{margin:1px 0;}
+.palette-visit .palette-title{font-weight:600;}
 .palette-recent{
   display:flex;align-items:center;gap:10px;width:100%;padding:var(--space-2) 10px;border:0;border-radius:var(--r-sm);
   background:transparent;color:var(--text);text-align:left;cursor:pointer;

@@ -5,7 +5,8 @@ import { $ } from "./dom.js";
 import { icon } from "./icons.js";
 import { activeView, showView } from "./router.js";
 import { taskPayloadWith } from "./shortcuts.js";
-import { state, canCreateNow, canEditTask, rt, taskById, taskCacheExtra } from "./state.js";
+import { state, canCreateNow, canEditTask, reqNameById, rt, taskById, taskCacheExtra } from "./state.js";
+import { recordRecentVisit } from "./recent-visits.js";
 import { deleteTask, openTaskDrawer, ownerOptions } from "./task-drawer.js";
 import { openDateAt } from "./date-picker.js";
 import { guard, loadRules, ruleFor, serverDecision } from "./transitions.js";
@@ -21,16 +22,27 @@ function taskLink(id){
   return window.location.origin + window.location.pathname + "#/board?task=" + encodeURIComponent(id);
 }
 var openTaskSeq = 0;
+/* 打开工作项即记一次最近访问（本机），全局搜索空态用它回答「刚才看到哪」 */
+function rememberTaskVisit(t){
+  if(!t || !t.id) return;
+  recordRecentVisit({
+    type: "task", id: t.id,
+    title: t.title || "未命名工作项",
+    meta: reqNameById(t.reqId) || "工作项",
+    reqId: t.reqId || ""
+  });
+}
 function openTaskById(id, opts){
   var seq = ++openTaskSeq;
   var local = taskById(id);
-  if(local && !local.deletedAt){ openTaskDrawer(null, local, opts); return Promise.resolve(true); }
+  if(local && !local.deletedAt){ rememberTaskVisit(local); openTaskDrawer(null, local, opts); return Promise.resolve(true); }
   /* 路径用单数 /api/task/{id}：与 /api/tasks/list、/api/tasks/done 零歧义 */
   return API.get("/api/task/" + encodeURIComponent(id)).then(function(t){
     if(seq !== openTaskSeq) return false;
     if(!t){ toast("工作项不存在或你没有访问权限", "warn"); return false; }
     if(t.deletedAt){ toast("该工作项已被删除，可在回收站查看", "warn"); return false; }
     taskCacheExtra[t.id] = t;
+    rememberTaskVisit(t);
     openTaskDrawer(null, t, opts);
     return true;
   }).catch(function(){
