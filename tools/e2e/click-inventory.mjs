@@ -135,6 +135,8 @@ async function main(){
     };
     await call("Page.navigate", { url: BASE + "/login.html" });
     await waitFor("!!document.getElementById('loginForm')", "登录表单");
+    /* 慢链路下页面解析完、登录脚本还没绑定 submit，直接点会退化成原生表单提交 */
+    await waitFor("document.readyState === 'complete'", "登录页加载", 20000);
     await ev(`(() => {
       const set = (id, v) => { const el = document.getElementById(id); const proto = Object.getPrototypeOf(el);
         Object.getOwnPropertyDescriptor(proto, "value").set.call(el, v); el.dispatchEvent(new Event("input", { bubbles:true })); };
