@@ -1467,7 +1467,8 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 .stack{display:flex;flex-direction:column;gap:var(--space-4);}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);}
 .form-grid.three{grid-template-columns:repeat(3,minmax(0,1fr));}
-@media (max-width:900px){.form-grid,.form-grid.three{grid-template-columns:1fr;}}
+.form-grid.four{grid-template-columns:repeat(4,minmax(0,1fr));}
+@media (max-width:900px){.form-grid,.form-grid.three,.form-grid.four{grid-template-columns:1fr;}}
 .row-inline{display:flex;gap:var(--space-2);align-items:center;}
 .row-inline .input{flex:1 1 auto;min-width:0;}
 /* 「9:00 至 18:00」中间的连接词 */

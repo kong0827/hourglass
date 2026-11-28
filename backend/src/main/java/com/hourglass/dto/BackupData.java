@@ -228,6 +228,8 @@ public class BackupData {
         private String title;
         private String desc;
         private String source;
+        /** 业务提出日期（只到日）；旧备份没有该字段时保持为空，不回填 */
+        private String proposedDate;
         private String itemKind;
         /** 模块ID（category.id；空=未指定） */
         private String categoryId;

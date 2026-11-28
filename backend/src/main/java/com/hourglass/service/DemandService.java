@@ -2083,6 +2083,14 @@ public class DemandService {
         }
     }
 
+    /** 业务提出日期是过去发生的事实，不能晚于今天（与人工交付判定生效日期同口径） */
+    private LocalDate validProposedDate(LocalDate date) {
+        if (date != null && date.isAfter(LocalDate.now())) {
+            throw AppException.badRequest("业务提出时间不能晚于今天");
+        }
+        return date;
+    }
+
     private Map<String, Object> snapshot(Demand d) {
         Map<String, Object> data = new LinkedHashMap<String, Object>();
         String name = d.getVersionName();
@@ -2097,6 +2105,7 @@ public class DemandService {
         data.put("plannedStart", d.getPlannedStart() == null ? null : d.getPlannedStart().toString());
         data.put("plannedEnd", d.getPlannedEnd() == null ? null : d.getPlannedEnd().toString());
         data.put("expectDate", d.getExpectDate() == null ? null : d.getExpectDate().toString());
+        data.put("proposedDate", d.getProposedDate() == null ? null : d.getProposedDate().toString());
         data.put("priority", d.getPriority());
         data.put("status", d.getStatus());
         data.put("closeReason", d.getCloseReason());
@@ -2133,6 +2142,7 @@ public class DemandService {
         d.setTitle(req.getTitle().trim());
         d.setDescription(Texts.trimToNull(req.getDescription()));
         d.setSource(Texts.trimToNull(req.getSource()));
+        d.setProposedDate(validProposedDate(req.getProposedDate()));
         d.setItemKind(req.getItemKind() == null ? "新功能" : req.getItemKind());
         d.setCategoryId(validCategoryId(d.getWorkspaceId(), d.getReqId(), req.getCategoryId()));
         d.setPriority(req.getPriority() == null ? "P2" : req.getPriority());
@@ -2169,10 +2179,11 @@ public class DemandService {
         return reviewerId;
     }
 
-    /** 已进入流转时的内容补录：只动说明与分类字段，标题、项目、类型、优先级和日期保持原值 */
+    /** 已进入流转时的内容补录：只动说明、留痕与分类字段，标题、项目、类型、优先级和日期保持原值 */
     private void applyContentFields(Demand d, DemandSaveRequest req) {
         d.setDescription(Texts.trimToNull(req.getDescription()));
         d.setSource(Texts.trimToNull(req.getSource()));
+        d.setProposedDate(validProposedDate(req.getProposedDate()));
         d.setCategoryId(validCategoryId(d.getWorkspaceId(), d.getReqId(), req.getCategoryId()));
         d.setAcceptText(Texts.trimToNull(req.getAcceptText()));
         d.setWsjfBusiness(req.getWsjfBusiness());

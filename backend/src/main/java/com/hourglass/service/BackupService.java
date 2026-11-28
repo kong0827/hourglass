@@ -448,6 +448,7 @@ public class BackupService {
                 demand.setTitle(Texts.cut(demandTitle, 80));
                 demand.setDescription(Texts.cut(Texts.trimToNull(bd.getDesc()), 2000));
                 demand.setSource(Texts.cut(Texts.trimToNull(bd.getSource()), 40));
+                demand.setProposedDate(parseDate(bd.getProposedDate()));
                 demand.setItemKind(oneOf(bd.getItemKind(),
                         new String[]{"新功能", "体验优化", "缺陷", "其他"}, "新功能"));
                 /* v12 存模块ID；映射不到或不属于需求项目（旧备份名称文本 / 已删模块）回落「未指定」 */
@@ -2008,6 +2009,10 @@ public class BackupService {
             if (start != null && end != null && start.isAfter(end)) {
                 throw AppException.badRequest("计划开始日期不能晚于计划结束日期");
             }
+            LocalDate proposed = parseDemandDate(demand.getProposedDate(), "proposedDate");
+            if (proposed != null && proposed.isAfter(LocalDate.now())) {
+                throw AppException.badRequest("业务提出时间不能晚于今天：" + demand.getId());
+            }
         }
     }
 
@@ -2019,7 +2024,7 @@ public class BackupService {
         try {
             return LocalDate.parse(text);
         } catch (java.time.format.DateTimeParseException e) {
-            throw AppException.badRequest("需求计划日期格式不合法：" + field);
+            throw AppException.badRequest("需求日期格式不合法：" + field);
         }
     }
 

@@ -30,6 +30,9 @@ public class DemandSaveRequest {
     @Size(max = 40, message = "来源不能超过 40 字")
     private String source;
 
+    /** 业务提出日期：只到日，可空；服务端校验不晚于今天 */
+    private LocalDate proposedDate;
+
     @Pattern(regexp = "新功能|体验优化|缺陷|其他", message = "需求类型不合法")
     private String itemKind;
 

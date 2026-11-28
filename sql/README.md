@@ -110,6 +110,8 @@ mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sq
 
 `131_doc_favorite.sql` 新增 `doc_favorite`（`workspace_id` + `user_id` + `doc_id` 唯一，按人记录文档收藏时间）：阅读页头星标收藏 / 取消收藏幂等写入，「我的」视图的收藏段与收藏可见口径跟文档列表一致（收回或收窄后立即消失）；文档彻底删除（回收站 purge）时级联清收藏，单删入回收站不影响。只建表、不回填，执行后 95 张表。
 
+`140_demand_proposed_date.sql` 给 `demand` 增加可空列 `proposed_date`（业务提出日期）：业务侧没有账号、需求由产品/项目成员代录，`created_at` 只说明录入时刻，这一列回答业务何时第一次提出。只到日、可空、不回填存量（没有可靠记录时保持空），不参与甘特阶段、WSJF 与排序；服务端校验不能晚于今天。只增可空列，执行后表数量不变。
+
 `110_task_comment_content_length.sql` 只把 `task_comment.content` 从 `VARCHAR(500)` 放宽到 `VARCHAR(2000)`，让工作项评论能贴下错误日志与会议结论；不新增字段、不回填、不改权限与通知口径。后端截断上限与抽屉输入框 `maxlength` 同步为 2000。脚本按 `information_schema` 判断当前长度，已达标即跳过，可重复执行；执行后表数量不变。
 
 不要执行 `sql/legacy/` 与 `sql/seeds/` 下的文件；前者只保留旧版本结构用于追溯，后者是旧结构的演示种子。

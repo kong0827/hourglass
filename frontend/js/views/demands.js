@@ -32,6 +32,7 @@ var demandReq = $("demandReq"), demandsMeta = $("demandsMeta"), demandBody = $("
     demandGanttBar = $("demandGanttBar"), demandGanttHelp = $("demandGanttHelp"), demandsPage = $("demandsPage"),
     dReq = $("dReq"), dTitle = $("dTitle"), dDesc = $("dDesc"), dAccept = $("dAccept"),
     dSource = $("dSource"), dKind = $("dKind"), dCategory = $("dCategory"), dExpect = $("dExpect"), dReviewer = $("dReviewer"),
+    dProposed = $("dProposed"),
     dWsjfB = $("dWsjfB"), dWsjfU = $("dWsjfU"), dWsjfR = $("dWsjfR"), dWsjfE = $("dWsjfE"),
     fDemandTitle = $("fDemandTitle"), btnSaveDemand = $("btnSaveDemand"), demandFormTitle = $("demandFormTitle"),
     dpVersion = $("dpVersion"), dpNote = $("dpNote"), fDemandPlanVer = $("fDemandPlanVer"), btnDoPlan = $("btnDoPlan"),
@@ -1021,6 +1022,7 @@ function cardHTML(d, opts){
     + (wsjfText(d) ? '<span class="tag tag-plum">' + esc(wsjfText(d)) + '</span>' : '')
     + '</div>'
     + (d.source ? '<div class="bkl-src">来源：' + esc(d.source) + '</div>' : '')
+    + (d.proposedDate ? '<div class="bkl-src">业务提出：' + esc(String(d.proposedDate).substring(0, 10)) + '</div>' : '')
     + (demCreatorName(d) ? '<div class="bkl-src dem-creator">提交人：' + esc(demCreatorName(d)) + '</div>' : '')
     + demandEvidenceHTML(d)
     + (demandStateNote(d) ? '<div class="bkl-state">' + esc(demandStateNote(d)) + '</div>' : '')
@@ -1265,17 +1267,18 @@ var DEM_WORK_COL_DEFS = {
   planned:{ label:"计划区间", w:"140px", min:140 },
   expect:{ label:"期望交付", w:"76px", min:76, sort:"expect", align:"right" },
   source:{ label:"来源", w:"80px", min:80 },
+  proposed:{ label:"业务提出", w:"84px", min:84 },
   created:{ label:"提交时间", w:"104px", min:104, align:"right" }
 };
 /* 排序方向由服务端 SQL 固定（WSJF 倒序，优先级/期望交付正序），表头只切列、不翻转方向；
    可排序列与筛选行的排序下拉同一套词表，两处始终保持一致 */
 var DEM_WORK_SORT_DIR = { priority:"asc", expect:"asc", wsjf:"desc" };
 var DEM_WORK_STATUS_COLS = {
-  plan:["title","kind","category","priority","stage","evidence","version","planned","expect","source"],
-  done:["title","kind","category","priority","stage","evidence","version","planned","expect","source"],
-  review:["title","kind","category","priority","wsjf","expect","source","created"],
-  pass:["title","kind","category","priority","wsjf","expect","source","created"],
-  closed:["title","kind","category","priority","close","version","expect","source","created"]
+  plan:["title","kind","category","priority","stage","evidence","version","planned","expect","source","proposed"],
+  done:["title","kind","category","priority","stage","evidence","version","planned","expect","source","proposed"],
+  review:["title","kind","category","priority","wsjf","expect","source","proposed","created"],
+  pass:["title","kind","category","priority","wsjf","expect","source","proposed","created"],
+  closed:["title","kind","category","priority","close","version","expect","source","proposed","created"]
 };
 function demWorkCols(){
   var keys = (DEM_WORK_STATUS_COLS[demWork.status] || DEM_WORK_STATUS_COLS.plan).slice();
@@ -1337,6 +1340,7 @@ function demWorkCell(d, key){
   if(key === "planned") return plannedText(d) ? esc(plannedText(d)) : none;
   if(key === "expect") return d.expectDate ? esc(String(d.expectDate).substring(5, 10)) : none;
   if(key === "source") return d.source ? esc(d.source) : none;
+  if(key === "proposed") return d.proposedDate ? esc(String(d.proposedDate).substring(0, 10)) : none;
   if(key === "created") return fmtTs(d.createdAt) ? esc(fmtTs(d.createdAt)) : none;
   return none;
 }
@@ -1421,6 +1425,7 @@ function demandCell(d, key){
   if(key === "project") return demProjectCell(d);
   if(key === "version") return demVersionCell(d);
   if(key === "expectDate") return demExpectCell(d);
+  if(key === "proposedDate") return demProposedCell(d);
   if(key === "wsjf") return d.wsjfScore === null || d.wsjfScore === undefined ? demEmptyCell() : (Math.round(d.wsjfScore * 10) / 10);
   if(key === "source") return demSourceCell(d);
   if(key === "reviewer") return demReviewerName(d) ? esc(demReviewerName(d)) : '<span class="dim">未指派</span>';
@@ -1428,10 +1433,10 @@ function demandCell(d, key){
   return demEmptyCell();
 }
 
-/* ---------- 列表行内编辑：优先级 / 状态 / 所属项目 / 期望交付 / 目标版本 / 分类 / 来源 ----------
+/* ---------- 列表行内编辑：优先级 / 状态 / 所属项目 / 期望交付 / 业务提出日期 / 目标版本 / 分类 / 来源 ----------
    只改列表表格；看板卡片继续用拖拽与行内主按钮。状态沿用原状态机动作，
    需要原因或版本的仍打开原弹窗，避免绕过流转规则。
-   分类与来源没有专用端点，走整单 PUT：列表行已含 description/acceptText/wsjf 等全部字段，
+   分类、来源与业务提出日期没有专用端点，走整单 PUT：列表行已含 description/acceptText/wsjf 等全部字段，
    按 demandSaveBody 回填后只覆盖目标字段，不会把说明类内容清空。 */
 function demInlineWritable(d){
   return !!d && !isClosedDemand(d) && canWriteDemand(d);
@@ -1488,6 +1493,14 @@ function demExpectCell(d){
     '<span class="dem-inline-date-t' + (text ? "" : " is-empty") + '">' + esc(text || "待评估") + '</span>',
     "修改期望交付");
 }
+/* 业务提出日期属于留痕字段：进入流转、完成后仍可补录（与来源同口径），已关闭需先恢复 */
+function demProposedCell(d){
+  var text = d.proposedDate ? String(d.proposedDate).substring(0, 10) : "";
+  if(!demInlineWritable(d)) return text ? esc(text) : demEmptyCell();
+  return demInlineTrigger("proposedDate", d,
+    '<span class="dem-inline-date-t' + (text ? "" : " is-empty") + '">' + esc(text || "未记录") + '</span>',
+    "修改业务提出日期");
+}
 /* 分类候选按需求所属项目过滤；缓存未加载时保留原值，避免一次保存把分类悄悄改掉 */
 function demCategoryCell(d){
   if(!demInlineWritable(d)) return catTag(d.categoryId) || demEmptyCell();
@@ -1500,7 +1513,7 @@ function demCategoryCell(d){
 function demInlineTrigger(kind, d, inner, title, extraCls){
   return '<button class="dem-inline-menu' + (extraCls ? " " + extraCls : "") + '" type="button"'
     + ' data-dem-inline-menu="' + kind + '" data-dem-id="' + esc(d.id) + '"'
-    + ' aria-haspopup="' + (kind === "expectDate" ? "dialog" : "menu") + '" aria-expanded="false" title="' + esc(title) + '">'
+    + ' aria-haspopup="' + (kind === "expectDate" || kind === "proposedDate" ? "dialog" : "menu") + '" aria-expanded="false" title="' + esc(title) + '">'
     + inner + icon("caretDown", 11) + '</button>';
 }
 /* 来源是纯文本，点单元格就地编辑：回车或失焦保存，Esc 取消，不做弹层 */
@@ -1596,6 +1609,18 @@ function openDemInlineMenu(btn){
         if((v || "") === cur) return;
         demQuickUpdate(btn, d, "expect-date", { expectDate:v || null },
           v ? ("期望交付已设为 " + v) : "已清空期望交付");
+      }
+    });
+    return;
+  }
+  if(kind === "proposedDate"){
+    var pcur = d.proposedDate ? String(d.proposedDate).substring(0, 10) : "";
+    var pr = btn.getBoundingClientRect();
+    openDateAt({ left:pr.left, top:pr.bottom, bottom:pr.bottom }, {
+      value:pcur, max:iso(new Date()),
+      onPick:function(v){
+        if((v || "") === pcur) return;
+        demPutRow(d, { proposedDate:v || null }, v ? ("业务提出日期已设为 " + v) : "已清空业务提出日期", btn);
       }
     });
     return;
@@ -1716,7 +1741,7 @@ function demQuickUpdate(el, d, action, payload, okMsg, revert){
     if(ex.code === 409) refreshDemandsInline();
   });
 }
-/* 分类 / 来源走整单 PUT：列表行字段齐全，回填后只覆盖目标字段 */
+/* 分类 / 来源 / 业务提出日期走整单 PUT：列表行字段齐全，回填后只覆盖目标字段 */
 function demPutRow(d, patch, okMsg, el, revert){
   if(el) el.disabled = true;
   var body = demandSaveBody(d);
@@ -2294,6 +2319,7 @@ function demCsvValue(d, key){
   if(key === "project") return reqNameById(d.reqId) || "";
   if(key === "version") return demandVersionName(d);
   if(key === "expectDate") return d.expectDate ? String(d.expectDate).substring(0, 10) : "";
+  if(key === "proposedDate") return d.proposedDate ? String(d.proposedDate).substring(0, 10) : "";
   if(key === "wsjf") return (d.wsjfScore === null || d.wsjfScore === undefined) ? "" : (Math.round(d.wsjfScore * 10) / 10);
   if(key === "source") return d.source || "";
   if(key === "createdAt") return d.createdAt ? fmtTs(d.createdAt) : "";
@@ -2546,7 +2572,7 @@ function renderDemandTable(){
     return;
   }
   var cols = listPrefs.columns("demand-pool"), labels = listPrefs.labels("demand-pool");
-  var numCols = { expectDate:1, wsjf:1, createdAt:1 };
+  var numCols = { expectDate:1, proposedDate:1, wsjf:1, createdAt:1 };
   function rowHTML(d, grouped){
     return '<tr' + (grouped ? ' class="dem-group-item-row"' : '') + '>' + cols.map(function(k){
       return '<td' + (numCols[k] ? ' class="num"' : '') + '>' + demandCell(d, k) + '</td>';
@@ -3014,7 +3040,7 @@ function demandFormAttFiles(){
   return demandAttKit ? demandAttKit.files() : [];
 }
 function demandFormSnapshot(){
-  return JSON.stringify([dReq.value, dTitle.value, demandSerializeRichText(dDesc), dAccept.value, dSource.value, dKind.value,
+  return JSON.stringify([dReq.value, dTitle.value, demandSerializeRichText(dDesc), dAccept.value, dSource.value, dProposed.value, dKind.value,
     dCategory.value, dExpect.value, formPri, dWsjfB.value, dWsjfU.value, dWsjfR.value, dWsjfE.value,
     dReviewer ? dReviewer.value : "", demandWatchPick.map(function(w){ return w.userId; }),
     demandFormAttFiles().map(function(f){ return f.name + ":" + f.size; })]);
@@ -3165,6 +3191,9 @@ function openDemandDialog(d){
     }, "");
   }
   dSource.value = d ? (d.source || "") : "";
+  /* 业务提出是过去发生的事实：前端挡掉未来日期，服务端仍会再校验一遍 */
+  dProposed.value = d ? (d.proposedDate || "") : "";
+  dProposed.max = iso(new Date());
   dKind.value = d ? (d.itemKind || "其他") : "新功能";
   /* 分类按所选项目过滤：候选只列该项目下的分类 */
   syncDemandCatOptions(dReq.value, d ? (d.categoryId || "") : "", !d);
@@ -3196,7 +3225,7 @@ function openDemandDialog(d){
   var lockNote = $("demandLockNote");
   if(lockNote) lockNote.textContent = d && d.status === "done"
     ? "已完成：标题与优先级在详情里改；所属项目、版本与计划日期不再调整。"
-    : "已进入流转：标题与类型锁定；优先级在列表改，日期用「调整排期」。";
+    : "已进入流转：标题与类型锁定；来源与业务提出日期可补录，优先级在列表改，交付日期用「调整排期」。";
   demandFormBaseline = demandFormSnapshot();
   updateDemandCheckResume();
   UI.openModal($("dlgDemand"), "input");
@@ -3241,6 +3270,7 @@ function saveDemand(){
     description: descText || null,
     acceptText: dAccept.value.trim() || null,
     source: dSource.value.trim() || null,
+    proposedDate: dProposed.value || null,
     itemKind: dKind.value,
     categoryId: dCategory.value || null,
     priority: formPri,
@@ -5301,7 +5331,7 @@ function demandReportImageUpload(okCount, failed){
 }
 /* ---------- 需求详情就地编辑 ----------
    文案（标题/描述/验收）点开即改，失焦或 ⌘/Ctrl+Enter 保存、Esc 还原；
-   属性（优先级/期望交付/目标版本/分类/来源）点开弹层选择后直接保存；
+   属性（优先级/期望交付/业务提出日期/目标版本/分类/来源）点开弹层选择后直接保存；
    类型与评审人只在待评审点开弹层，进入流转后由状态动作决定。
    保存后只刷新当前详情，不再关闭重开；同一详情内的写操作串行，避免 revision 互相覆盖。 */
 function demandSaveQueued(layer, work){
@@ -5323,6 +5353,7 @@ function demandSaveBody(d){
     description: d.description || null,
     acceptText: d.acceptText || null,
     source: d.source || null,
+    proposedDate: d.proposedDate || null,
     itemKind: d.itemKind || "其他",
     categoryId: d.categoryId || null,
     priority: d.priority || "P2",
@@ -5533,6 +5564,38 @@ function openDemandExpectFact(anchor, ctx){
     setTimeout(function(){ try{ input.focus(); }catch(e){ /* noop */ } }, 30);
   }
 }
+function openDemandProposedFact(anchor, ctx){
+  var cur = ctx.d.proposedDate ? String(ctx.d.proposedDate).substring(0, 10) : "";
+  var menu = document.createElement("div");
+  menu.className = "menu";
+  menu.innerHTML = '<div class="menu-title">业务提出日期</div>'
+    + '<div class="menu-field"><input class="input" type="date" id="demFactProposed" value="' + esc(cur) + '" max="' + esc(iso(new Date())) + '" aria-label="业务提出日期"></div>'
+    + '<div class="menu-foot"><button class="btn sm" type="button" data-dem-prop-clear>清除</button>'
+    + '<button class="btn sm primary" type="button" data-dem-prop-save>保存</button></div>';
+  UI.openPop(menu, anchor, { align:"left", width:250, onClose:function(){ menu.remove(); } });
+  var input = menu.querySelector("#demFactProposed");
+  function commit(clear){
+    var next = clear ? "" : (input ? input.value : "");
+    if(next && next > iso(new Date())){
+      toast("业务提出时间不能晚于今天", "warn");
+      return;
+    }
+    UI.closeAllPops();
+    if((next || "") === cur) return;
+    demandPutField(ctx, { proposedDate:next || null },
+      next ? ("业务提出日期已设为 " + next) : "已清空业务提出日期");
+  }
+  menu.addEventListener("click", function(e){
+    if(e.target.closest("[data-dem-prop-clear]")) commit(true);
+    else if(e.target.closest("[data-dem-prop-save]")) commit(false);
+  });
+  if(input){
+    input.addEventListener("keydown", function(e){
+      if(e.key === "Enter"){ e.preventDefault(); commit(false); }
+    });
+    setTimeout(function(){ try{ input.focus(); }catch(e){ /* noop */ } }, 30);
+  }
+}
 function openDemandModuleFact(anchor, ctx){
   var cur = ctx.d.categoryId || "";
   var cats = (rt.categoriesCache || []).filter(function(c){ return c.projectId === ctx.d.reqId; });
@@ -5633,6 +5696,7 @@ function openDemandFactEditor(kind, anchor, ctx){
   if(isClosedDemand(ctx.d)){ toast("已关闭的需求不能直接编辑", "warn"); return; }
   if(kind === "priority") return openDemandPriorityFact(anchor, ctx);
   if(kind === "expect") return openDemandExpectFact(anchor, ctx);
+  if(kind === "proposed") return openDemandProposedFact(anchor, ctx);
   if(kind === "version"){
     return openDemandVersionMenu(anchor, ctx.d, function(res){
       demandApplyServer(ctx.d, res);
@@ -5930,7 +5994,8 @@ function renderDemandDetail(d, opts){
     ["目标版本", demandVersionName(d) || "待规划"],
     ["所属项目", reqNameById(d.reqId) || "未归属项目"],
     ["分类", catNameById(d.categoryId) || "未分类"],
-    ["来源", d.source || "—"]
+    ["来源", d.source || "—"],
+    ["业务提出", d.proposedDate || "—"]
   ];
   var wsjf = (d.wsjfBusiness != null)
     ? '<div class="wsjf-break"><span>WSJF</span><span>业务 ' + d.wsjfBusiness + '</span><span>紧迫 ' + d.wsjfUrgency
@@ -5964,6 +6029,8 @@ function renderDemandDetail(d, opts){
         "分类", catNameById(d.categoryId) || "未分类", true],
       ["source", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 11.2 5 4.6h10l1.6 6.6v4.2a1.6 1.6 0 0 1-1.6 1.6H5a1.6 1.6 0 0 1-1.6-1.6Z"/><path d="M3.6 11.4h3.6l.9 1.7h3.8l.9-1.7h3.6"/></svg>',
         "来源", d.source || "未填写", true],
+      ["proposed", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.2" y="4.6" width="13.6" height="12.2" rx="1.6"/><path d="M3.2 8.4h13.6M6.8 3v3M13.2 3v3"/></svg>',
+        "业务提出", d.proposedDate || "未记录", true],
       ["creator", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="6.6" r="2.8"/><path d="M4.4 16.2a5.6 5.6 0 0 1 11.2 0"/></svg>',
         "提交人", demCreatorName(d) || "—", false],
       ["reviewer", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="6.6" r="2.8"/><path d="M4.4 16.2a5.6 5.6 0 0 1 11.2 0"/><path d="m12.4 15.2 1.3 1.3 2.4-2.5"/></svg>',
@@ -6695,7 +6762,7 @@ function demandLogChange(log){
     /* 快照里同一空值可能是 null / undefined / 空串，直接比较会渲染出「未设置 → 未设置」这种假变更 */
     var norm = function(v){ return (v === null || v === undefined || v === "") ? "" : String(v); };
     [["reqId", "所属项目"], ["categoryId", "分类"], ["versionName", "目标版本"], ["plannedStart", "计划开始"],
-      ["plannedEnd", "计划结束"], ["expectDate", "期望交付"], ["priority", "优先级"], ["status", "状态"]].forEach(function(field){
+      ["plannedEnd", "计划结束"], ["expectDate", "期望交付"], ["proposedDate", "业务提出"], ["priority", "优先级"], ["status", "状态"]].forEach(function(field){
       var key = field[0], a = norm(before[key]), b = norm(after[key]);
       if(a === b) return;
       if(key === "status"){ a = a ? statusName(a) : "未设置"; b = b ? statusName(b) : "未设置"; }

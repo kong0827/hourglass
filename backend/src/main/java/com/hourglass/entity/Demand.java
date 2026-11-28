@@ -20,6 +20,8 @@ public class Demand {
     private String description;
     /** 来源（谁提的，如「财务 · 刘」） */
     private String source;
+    /** 业务提出日期（业务第一次提出这件事的日期；与提交时间 created_at 分开记录） */
+    private LocalDate proposedDate;
     /** 新功能/体验优化/缺陷/其他 */
     private String itemKind;
     /** 模块ID（category.id；null 表示未指定） */

@@ -408,6 +408,7 @@ public class BackupExportService {
             bd.setTitle(d.getTitle());
             bd.setDesc(d.getDescription());
             bd.setSource(d.getSource());
+            bd.setProposedDate(d.getProposedDate() == null ? null : d.getProposedDate().toString());
             bd.setItemKind(d.getItemKind());
             bd.setCategoryId(d.getCategoryId());
             bd.setPriority(d.getPriority());

@@ -114,7 +114,7 @@ try{
     const body = {
       reqId: d.reqId, title: d.title, description: d.description, acceptText: d.acceptText,
       source: d.source, itemKind: d.itemKind, categoryId: d.categoryId, priority: d.priority,
-      expectDate: d.expectDate, plannedStart: d.plannedStart, plannedEnd: d.plannedEnd,
+      expectDate: d.expectDate, proposedDate: d.proposedDate, plannedStart: d.plannedStart, plannedEnd: d.plannedEnd,
       reviewerUserId: d.reviewerUserId || null,
       revision: d.revision, wsjfBusiness: d.wsjfBusiness, wsjfUrgency: d.wsjfUrgency,
       wsjfRisk: d.wsjfRisk, wsjfEffort: d.wsjfEffort
@@ -162,7 +162,7 @@ try{
   await evaluate(`(() => { const b = document.getElementById("btnDemandColumns"); if(b) b.click(); return !!b; })()`);
   await waitFor(`!!document.querySelector(".column-pref-modal")`, "显示字段弹层");
   await evaluate(`(() => {
-    ["category", "source"].forEach(k => {
+    ["category", "source", "proposedDate"].forEach(k => {
       const cb = document.querySelector('.column-pref-modal [data-pref-key="' + k + '"] [data-pref-toggle]');
       if(cb && !cb.checked) cb.click();
     });
@@ -172,7 +172,7 @@ try{
   await waitFor(`!document.querySelector(".column-pref-modal")`, "显示字段保存");
   await waitFor(`[...document.querySelectorAll("#demandBody thead th")].some(t => t.textContent.trim() === "分类")`, "分类列出现", 20000);
   const heads = await evaluate(`[...document.querySelectorAll("#demandBody thead th")].map(t => t.textContent.trim())`);
-  assert(heads.includes("分类") && heads.includes("来源"), "表头含分类与来源（" + heads.join("/") + "）");
+  assert(heads.includes("分类") && heads.includes("来源") && heads.includes("业务提出"), "表头含分类、来源与业务提出（" + heads.join("/") + "）");
 
   /* 记录写请求与骨架插入，用于验证「同值不保存」「不闪骨架」 */
   await evaluate(`(() => {
@@ -224,6 +224,7 @@ try{
       source: count("[data-dem-source-btn]"),
       priority: count('[data-dem-inline-menu="priority"]'),
       expect: count('[data-dem-inline-menu="expectDate"]'),
+      proposed: count('[data-dem-inline-menu="proposedDate"]'),
       nativeSelects: count("tbody select"),
       nativeDates: count("tbody input[type=date]"),
       priBorder: pri ? getComputedStyle(pri).borderTopColor : null,
@@ -237,6 +238,7 @@ try{
   assert(ctl.cats > 0, `分类字典已加载（${ctl.cats} 个分类，直接进需求池也要有候选）`);
   assert(ctl.category > 0, `分类触发器 ${ctl.category} 个`);
   assert(ctl.source > 0, `来源行内按钮 ${ctl.source} 个`);
+  assert(ctl.proposed > 0, `业务提出日期触发器 ${ctl.proposed} 个`);
   assert(ctl.nativeSelects === 0 && ctl.nativeDates === 0,
     `列表里不再有常显的原生下拉/日期框（select ${ctl.nativeSelects}，date ${ctl.nativeDates}）`);
   assert(ctl.priBorder === "rgba(0, 0, 0, 0)" && ctl.priArrow === "0",
@@ -387,9 +389,11 @@ try{
       const d = j.data || j;
       const cell = document.querySelector('#demandBody [data-dem-inline-menu="category"][data-dem-id="${catPick.id}"]');
       return { server: d.categoryId, cell: cell ? cell.textContent.trim() : null, skel: window.__skel,
+               putBody: (window.__writes.find(w => w.method === "PUT") || {}).body || null,
                body: window.__writes.map(w => w.method + " " + w.url) };
     })()`);
-    assert(catAfter.server === catPick.to, `分类已落库（${catPick.from || "未分类"} → ${catAfter.server}）`);
+    assert(catAfter.server === catPick.to,
+      `分类已落库（${catPick.from || "未分类"} → ${catAfter.server}${catAfter.server === catPick.to ? "" : "；PUT " + catAfter.putBody}）`);
     assert(catAfter.cell === catPick.toName, "刷新后单元格停在新分类");
     assert(catAfter.skel === 0, "分类保存后没有插入骨架");
     const putBody = await evaluate(`(window.__writes.find(w => w.method === "PUT") || {}).body || ""`);
@@ -546,6 +550,117 @@ try{
     assert(capped.length === 40 && capped === "长".repeat(40), "来源超 40 字按 40 字截断保存（实际 " + capped.length + " 字）");
     await shot("dem-inline-03-source-saved.png");
     pendingRestores.push({ id: srcPick.id, patch: { source: srcPick.text === "未填写" ? null : srcPick.text } });
+  }
+
+  /* 4b. 业务提出日期：行内日期面板选过去日期落库；未来日期面板禁用、服务端也拒绝；详情概览可回看 */
+  const propPick = await evaluate(`(() => {
+    const b = document.querySelector('#demandBody [data-dem-inline-menu="proposedDate"]');
+    return b ? { id: b.dataset.demId,
+                 text: (b.querySelector(".dem-inline-date-t") || {}).textContent || "" } : null;
+  })()`);
+  if(!propPick){
+    skip("当前筛选下没有可写业务提出日期的行");
+  }else{
+    const propCur = await evaluate(`(async () => {
+      const r = await fetch("api/demands/${propPick.id}"); const j = await r.json(); const d = j.data || j;
+      return String(d.proposedDate || "").slice(0, 10);
+    })()`);
+    assert(propPick.text === (propCur || "未记录"), "业务提出读态显示日期或「未记录」（" + propPick.text + "）");
+    /* 预期内的 400 会以 Log 域 "Failed to load resource" 落一条 error，事后按窗口剔除，别污染控制台断言 */
+    const errMark = cdp.errors.length;
+    const futureReject = await evaluate(`(async () => {
+      const { API } = await import("./js/core/api.js");
+      const d = await API.get("/api/demands/${propPick.id}");
+      const t = new Date(); t.setDate(t.getDate() + 1);
+      const p = n => (n < 10 ? "0" : "") + n;
+      const iso = t.getFullYear() + "-" + p(t.getMonth() + 1) + "-" + p(t.getDate());
+      const body = {
+        reqId: d.reqId, title: d.title, description: d.description, acceptText: d.acceptText,
+        source: d.source, proposedDate: iso, itemKind: d.itemKind, categoryId: d.categoryId,
+        priority: d.priority, expectDate: d.expectDate, plannedStart: d.plannedStart, plannedEnd: d.plannedEnd,
+        reviewerUserId: d.reviewerUserId || null, revision: d.revision,
+        wsjfBusiness: d.wsjfBusiness, wsjfUrgency: d.wsjfUrgency, wsjfRisk: d.wsjfRisk, wsjfEffort: d.wsjfEffort
+      };
+      try{ await API.put("/api/demands/${propPick.id}", body); return { ok: true }; }
+      catch(e){ return { ok: false, code: e.code, message: e.message || "" }; }
+    })()`);
+    await sleep(400);
+    for(let i = cdp.errors.length - 1; i >= errMark; i--){
+      if(/status of 400/.test(cdp.errors[i])) cdp.errors.splice(i, 1);
+    }
+    assert(!futureReject.ok && /晚于今天/.test(futureReject.message),
+      "服务端拒绝未来业务提出日期（" + futureReject.message + "）");
+    await evaluate(`(() => { window.__writes = [];
+      document.querySelector('#demandBody [data-dem-inline-menu="proposedDate"][data-dem-id="${propPick.id}"]').click();
+      return true; })()`);
+    await waitFor(`!!document.querySelector(".date-pop [data-dp-day]")`, "业务提出日期面板打开");
+    const maxGuard = await evaluate(`(() => {
+      const p = n => (n < 10 ? "0" : "") + n;
+      const t = new Date();
+      const today = t.getFullYear() + "-" + p(t.getMonth() + 1) + "-" + p(t.getDate());
+      const cells = [...document.querySelectorAll(".date-pop [data-dp-day]")];
+      return { today,
+               futureExposed: cells.filter(c => c.dataset.dpDay > today).length,
+               futureEnabled: cells.filter(c => c.dataset.dpDay > today && !c.disabled).length };
+    })()`);
+    assert(maxGuard.futureEnabled === 0,
+      `日期面板不放出可点的未来日期（未来格 ${maxGuard.futureExposed} 个全部禁用）`);
+    const propDate = await evaluate(`(() => {
+      const cur = ${JSON.stringify(propCur)};
+      const p = n => (n < 10 ? "0" : "") + n;
+      const t = new Date();
+      const today = t.getFullYear() + "-" + p(t.getMonth() + 1) + "-" + p(t.getDate());
+      const cells = [...document.querySelectorAll(".date-pop [data-dp-day]")].filter(c => !c.disabled);
+      const hit = cells.find(c => c.dataset.dpDay === today && c.dataset.dpDay !== cur)
+        || cells.find(c => c.dataset.dpDay !== cur && !c.classList.contains("is-out"))
+        || cells.find(c => c.dataset.dpDay !== cur);
+      if(!hit) return null;
+      hit.click();
+      return hit.dataset.dpDay;
+    })()`);
+    if(!propDate){
+      skip("日期面板里没有可选的其他日期（当前值已占满可点范围）");
+      await evaluate(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); true`);
+    }else{
+      await waitFor(`window.__writes.some(w => w.method === "PUT" && /\\/api\\/demands\\//.test(w.url))`, "业务提出日期 PUT 发出");
+      await sleep(1200);
+      const propAfter = await evaluate(`(async () => {
+        const r = await fetch("api/demands/${propPick.id}"); const j = await r.json(); const d = j.data || j;
+        const b = document.querySelector('#demandBody [data-dem-inline-menu="proposedDate"][data-dem-id="${propPick.id}"]');
+        return { server: String(d.proposedDate || "").slice(0, 10),
+                 cell: b ? (b.querySelector(".dem-inline-date-t") || {}).textContent.trim() : null,
+                 source: d.source };
+      })()`);
+      assert(propAfter.server === propDate, `业务提出日期已落库（${propCur || "未记录"} → ${propAfter.server}）`);
+      assert(propAfter.cell === propDate, "刷新后单元格停在新日期");
+      await shot("dem-inline-04b-proposed-saved.png");
+      /* 详情概览回看同一日期，点开是日期输入弹层（不是菜单） */
+      await evaluate(`(() => { document.querySelector('#demandBody [data-dem-detail="${propPick.id}"]').click(); return true; })()`);
+      await waitFor(`!!document.querySelector(".modal-layer.open.demand-detail #demandFacts [data-dem-fact='proposed']")`, "详情业务提出可编辑");
+      const propMeta = await evaluate(`(() => {
+        const el = document.querySelector(".modal-layer.open.demand-detail #demandFacts [data-dem-fact='proposed'] .rf-v");
+        return el ? el.textContent.trim() : null;
+      })()`);
+      assert(propMeta === propDate, "详情概览显示同一业务提出日期");
+      await evaluate(`(() => {
+        const row = document.querySelector(".modal-layer.open.demand-detail [data-dem-fact='proposed']");
+        row.focus();
+        row.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        return true;
+      })()`);
+      const propEditor = await waitFor(`(() => {
+        const inp = document.querySelector(".menu #demFactProposed");
+        return inp ? { value: inp.value, max: inp.getAttribute("max") } : null;
+      })()`, "业务提出日期弹层");
+      assert(propEditor.value === propDate && propEditor.max === maxGuard.today,
+        `详情日期弹层带上当前值与今天上限（${propEditor.value} / ${propEditor.max}）`);
+      await shot("dem-inline-04c-detail-proposed.png");
+      await evaluate(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); true`);
+      await sleep(300);
+      await evaluate(`(() => { const x = document.querySelector(".modal-layer.open.demand-detail [data-dem-x]"); if(x) x.click(); return true; })()`);
+      await waitFor(`!document.querySelector(".modal-layer.open.demand-detail")`, "详情抽屉关闭");
+      pendingRestores.push({ id: propPick.id, patch: { proposedDate: propCur || null } });
+    }
   }
 
   /* 5. 期望交付：点文本才弹日期面板；点同一天不重复保存，换一天正常落库 */

@@ -272,6 +272,7 @@ CREATE TABLE `demand` (
   `title` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '需求标题',
   `description` varchar(2000) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '为什么做（背景与价值）',
   `source` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '来源（谁提的，如「财务 · 刘」）',
+  `proposed_date` date DEFAULT NULL COMMENT '业务提出日期（业务第一次提出这件事的日期；空=未记录）',
   `item_kind` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '新功能' COMMENT '类型：新功能/体验优化/缺陷/其他',
   `category_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '模块ID（category.id，空=未指定）',
   `priority` varchar(4) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'P2' COMMENT '优先级 P0/P1/P2/P3',

@@ -478,16 +478,35 @@ class DemandServiceScheduleTest {
         body.setPlannedStart(LocalDate.of(2027, 2, 1));
         body.setPlannedEnd(LocalDate.of(2027, 2, 2));
         body.setDescription("补充的描述");
+        body.setProposedDate(LocalDate.of(2026, 11, 15));
         body.setRevision(4L);
 
         Demand out = service.update("U1", "W1", "D1", body);
 
         assertEquals("补充的描述", out.getDescription());
+        assertEquals(LocalDate.of(2026, 11, 15), out.getProposedDate());
         assertEquals("原标题", out.getTitle());
         assertEquals("P1", out.getPriority());
         assertEquals(LocalDate.of(2026, 11, 20), out.getExpectDate());
         assertEquals(LocalDate.of(2026, 10, 11), out.getPlannedStart());
         assertEquals(LocalDate.of(2026, 11, 10), out.getPlannedEnd());
+    }
+
+    @Test
+    void proposedDateCannotBeLaterThanToday() {
+        demand.setStatus("review");
+        DemandSaveRequest body = new DemandSaveRequest();
+        body.setReqId("R1");
+        body.setTitle("需求");
+        body.setRevision(4L);
+        body.setProposedDate(LocalDate.now().plusDays(1));
+        AppException ex = assertThrows(AppException.class, () -> service.update("U1", "W1", "D1", body));
+        assertEquals(400, ex.getCode());
+        assertTrue(ex.getMessage().contains("晚于今天"));
+        verify(demands, never()).update(any());
+
+        body.setProposedDate(LocalDate.now());
+        assertEquals(LocalDate.now(), service.update("U1", "W1", "D1", body).getProposedDate());
     }
 
     @Test
