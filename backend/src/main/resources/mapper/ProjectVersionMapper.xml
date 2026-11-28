@@ -116,7 +116,9 @@
                      AND JSON_CONTAINS(dn.confirmed, '"acceptance"')
                    THEN 1 ELSE 0 END
        FROM delivery_note dn
-       WHERE dn.workspace_id = v.workspace_id AND dn.version_id = v.id LIMIT 1) AS deliveryConfirmed
+       /* delivery_note 在早期库上可能建库默认排序规则，与 core 表 unicode_ci 不同，显式归一再比较 */
+       WHERE dn.workspace_id COLLATE utf8mb4_unicode_ci = v.workspace_id
+         AND dn.version_id COLLATE utf8mb4_unicode_ci = v.id LIMIT 1) AS deliveryConfirmed
     FROM project_version v
     INNER JOIN requirement r ON r.workspace_id = v.workspace_id AND r.id = v.req_id
     WHERE v.workspace_id = #{workspaceId} AND r.archived_at IS NULL
