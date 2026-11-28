@@ -391,6 +391,11 @@ function showDocHtml(html){
 
 function showDocPreview(att){
   API.get(previewUrl(att.id)).then(function(res){
+    if(res && res.warnings && headMeta){
+      /* 转换时被省略的矢量图等告警：头部只显短句，完整原因放 title */
+      headMeta.textContent = "Word 文档 · 部分图形未显示";
+      headMeta.title = res.warnings;
+    }
     if(res && res.type === "html"){
       frameEl.hidden = false;
       showDocHtml(res.content || "");
@@ -415,6 +420,7 @@ function openAttPreview(opts){
   current = { attachment: att, kind: kind };
   headName.textContent = att.filename || "附件预览";
   headMeta.textContent = "加载中…";
+  headMeta.removeAttribute("title");
   hideBody();
   setStatus("正在加载预览…");
   resetSilently();

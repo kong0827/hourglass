@@ -1,8 +1,10 @@
-/* core/sheet-viewer · 任务附件 xlsx 在线预览/编辑（Univer 渲染 + SheetJS 互转，vendor 懒加载） */
+/* core/sheet-viewer · 任务附件 xlsx 在线预览/编辑（Univer 渲染，xlsx 走 ExcelJS 保样式，
+   .xls 与 ExcelJS 失败时退回 SheetJS，vendor 懒加载） */
 
 import { icon } from "./icons.js";
-import { esc, toast } from "./ui.js";
+import { toast } from "./ui.js";
 import { API, csrfCookie } from "./api.js";
+import { ensureExcelJs, excelToSnapshot, snapshotToExcel } from "./xlsx-fidelity.js";
 
 var VENDOR_BASE = API.url("/vendor/univer/");
 var SHEETJS_URL = API.url("/vendor/sheetjs/xlsx.full.min.js");
@@ -27,6 +29,7 @@ var SCRIPT_FILES = [
 var MAX_ROWS = 20000, MAX_COLS = 200;
 
 var vendorPromise = null;
+var sheetJsPromise = null;
 var rootEl = null, hostEl = null, headName = null, headMeta = null, headActs = null, bodyEl = null;
 var univerInst = null, univerAPI = null;
 var current = null; /* { attachment, canEdit, onSaved } */
@@ -56,11 +59,21 @@ function ensureVendor(){
         return React.createElement(type, key === undefined ? props : Object.assign({}, props, { key: key }));
       };
       window.React.jsxs = window.React.jsx;
-    })
-    .then(function(){ return loadTag("script", SHEETJS_URL); });
+    });
   SCRIPT_FILES.forEach(function(f){ chain = chain.then(function(){ return loadTag("script", VENDOR_BASE + f); }); });
   vendorPromise = chain;
   return vendorPromise;
+}
+
+/* SheetJS 只在 .xls 或 ExcelJS 解析失败时用，单独懒加载，xlsx 常规路径不必付它的体积 */
+function ensureSheetJs(){
+  if(window.XLSX) return Promise.resolve(window.XLSX);
+  if(sheetJsPromise) return sheetJsPromise;
+  sheetJsPromise = loadTag("script", SHEETJS_URL).then(function(){
+    if(!window.XLSX) throw new Error("表格回退组件未就绪");
+    return window.XLSX;
+  }).catch(function(ex){ sheetJsPromise = null; throw ex; });
+  return sheetJsPromise;
 }
 
 /* ---------- xlsx ⇄ Univer 快照互转 ---------- */
@@ -209,53 +222,17 @@ function xlsxToSnapshot(wb, filename, locale, formulaMap){
   };
 }
 
-function richTextPlain(p){
-  try{
-    var ds = p && p.body && p.body.dataStream;
-    if(typeof ds !== "string") return null;
-    ds = ds.replace(/[\r\n]+$/, "");
-    return ds || null;
-  }catch(e){ return null; }
-}
-
-function snapshotToXlsx(snapshot){
-  var XLSX = window.XLSX;
-  var wb = XLSX.utils.book_new();
-  snapshot.sheetOrder.forEach(function(sheetId){
-    var ss = snapshot.sheets[sheetId] || {};
-    var ws = {}, maxR = 0, maxC = 0;
-    var cellData = ss.cellData || {};
-    Object.keys(cellData).forEach(function(r){
-      var row = cellData[r] || {};
-      Object.keys(row).forEach(function(c){
-        var cell = row[c];
-        if(!cell) return;
-        var addr = XLSX.utils.encode_cell({ r: +r, c: +c });
-        var out;
-        if(cell.f){
-          out = { f: String(cell.f).replace(/^=/, ""), t: "n" };
-          if(cell.v !== undefined && cell.v !== null){
-            out.v = cell.v;
-            if(typeof cell.v === "string") out.t = "str";
-            else if(typeof cell.v === "boolean") out.t = "b";
-          }
-        }else{
-          var v = cell.v;
-          if(v === undefined || v === null) v = richTextPlain(cell.p);
-          if(v === undefined || v === null) return;
-          if(typeof v === "number") out = { v: v, t: "n" };
-          else if(typeof v === "boolean") out = { v: v, t: "b" };
-          else out = { v: String(v), t: "s" };
-        }
-        ws[addr] = out;
-        if(+r + 1 > maxR) maxR = +r + 1;
-        if(+c + 1 > maxC) maxC = +c + 1;
-      });
+/* 回退路径：.xls 只能走 SheetJS；xlsx 在 ExcelJS 解析失败时也用它保证至少能打开 */
+function sheetJsSnapshot(bytes, filename){
+  return ensureSheetJs().then(function(){
+    var parsed = window.XLSX.read(bytes, { type: "array" });
+    return extractFormulas(bytes).then(function(formulaMap){
+      var converted = xlsxToSnapshot(parsed, filename,
+        window.UniverCore.LocaleType.ZH_CN, formulaMap);
+      converted.sheetCount = parsed.SheetNames.length;
+      return converted;
     });
-    ws["!ref"] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(maxR - 1, 0), c: Math.max(maxC - 1, 0) } });
-    XLSX.utils.book_append_sheet(wb, ws, String(ss.name || "Sheet").slice(0, 31) || "Sheet");
   });
-  return XLSX.write(wb, { bookType: "xlsx", type: "array" });
 }
 
 /* ---------- Univer 实例 ---------- */
@@ -393,25 +370,31 @@ function openSheet(opts){
     .then(function(){
       if(vendorError) throw vendorError;
       setStatus("正在解析表格…");
-      return Promise.resolve().then(function(){
-        var parsed = window.XLSX.read(bytes, { type: "array" });
-        return extractFormulas(bytes).then(function(formulaMap){
-          var converted = xlsxToSnapshot(parsed, opts.attachment.filename,
-            window.UniverCore.LocaleType.ZH_CN, formulaMap);
-          if(univerInst){
-            try{ univerInst.dispose(); }catch(e){ /* 忽略销毁异常 */ }
-            univerInst = null; univerAPI = null;
-          }
-          setStatus(null);
-          univerInst = createUniver();
-          univerAPI = window.UniverCoreFacade.FUniver.newAPI(univerInst);
-          univerAPI.createWorkbook(converted.snapshot);
-          var sheets = parsed.SheetNames.length;
-          headMeta.textContent = sheets + " 个工作表" +
-            (converted.truncated ? "（已按 " + MAX_ROWS + " 行 × " + MAX_COLS + " 列截断）" : "") +
-            (current.canEdit ? " · 直接编辑后点保存" : " · 只读模式");
-          if(converted.truncated) toast(current.canEdit ? "表格过大，已截断预览，保存前请注意" : "表格过大，已截断预览", "warn");
-        });
+      var filename = opts.attachment.filename;
+      /* xlsx 与文档内 Excel 导入共用 ExcelJS，样式/合并/列宽/冻结一致；.xls 仍只用 SheetJS */
+      var parse = /\.xlsx$/i.test(filename || "")
+        ? ensureExcelJs().then(function(){
+            return excelToSnapshot(bytes, {
+              filename: String(filename).replace(/\.[^.]+$/, ""),
+              locale: window.UniverCore.LocaleType.ZH_CN,
+              truncate: true, maxRows: MAX_ROWS, maxCols: MAX_COLS
+            });
+          }).catch(function(){ return sheetJsSnapshot(bytes, filename); })
+        : sheetJsSnapshot(bytes, filename);
+      return parse.then(function(converted){
+        if(univerInst){
+          try{ univerInst.dispose(); }catch(e){ /* 忽略销毁异常 */ }
+          univerInst = null; univerAPI = null;
+        }
+        setStatus(null);
+        univerInst = createUniver();
+        univerAPI = window.UniverCoreFacade.FUniver.newAPI(univerInst);
+        univerAPI.createWorkbook(converted.snapshot);
+        var sheets = converted.sheetCount || converted.snapshot.sheetOrder.length;
+        headMeta.textContent = sheets + " 个工作表" +
+          (converted.truncated ? "（已按 " + MAX_ROWS + " 行 × " + MAX_COLS + " 列截断）" : "") +
+          (current.canEdit ? " · 直接编辑后点保存" : " · 只读模式");
+        if(converted.truncated) toast(current.canEdit ? "表格过大，已截断预览，保存前请注意" : "表格过大，已截断预览", "warn");
       });
     })
     .catch(function(e){
@@ -442,30 +425,31 @@ function saveCurrent(){
   headMeta.textContent = "保存中…";
   Promise.resolve().then(function(){
     var snapshot = univerAPI.getActiveWorkbook().save();
-    var bytes = snapshotToXlsx(snapshot);
-    var fd = new FormData();
-    fd.append("file", new Blob([bytes],
-      { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
-      current.attachment.filename);
     var url = API.url("/api/attachments/" + encodeURIComponent(current.attachment.id) + "/content" +
       (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
-    return fetch(url, {
-      method: "POST", credentials: "same-origin",
-      headers: { "X-XSRF-TOKEN": csrfCookie() },
-      body: fd
-    }).then(function(res){
-      if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }
-      return res.json().catch(function(){ return null; }).then(function(json){
-        if(!json || json.code !== 0) throw new Error((json && json.message) || "保存失败");
-        return json.data || {};
+    return snapshotToExcel(snapshot).then(function(bytes){
+      var fd = new FormData();
+      fd.append("file", new Blob([bytes],
+        { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+        current.attachment.filename);
+      return fetch(url, {
+        method: "POST", credentials: "same-origin",
+        headers: { "X-XSRF-TOKEN": csrfCookie() },
+        body: fd
+      }).then(function(res){
+        if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }
+        return res.json().catch(function(){ return null; }).then(function(json){
+          if(!json || json.code !== 0) throw new Error((json && json.message) || "保存失败");
+          return json.data || {};
+        });
+      }).then(function(saved){
+        toast("表格已保存", "fs");
+        headMeta.textContent = "已保存";
+        if(current){
+          current.attachment.size = saved.size;
+          if(current.onSaved) current.onSaved();
+        }
       });
-    }).then(function(saved){
-      toast("表格已保存", "fs");
-      headMeta.textContent = "已保存";
-      if(current){
-        current.attachment.size = saved.size;
-        if(current.onSaved) current.onSaved();
-      }
     });
   }).catch(function(e){
     toast(e && e.message ? e.message : "保存失败", "bad");

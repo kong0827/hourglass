@@ -5242,6 +5242,9 @@ function reqDocFileKind(name){
 }
 var REQ_DOC_FILE_MAX = 10 * 1024 * 1024;
 var REQ_SHEET_FILE_MAX = 20 * 1024 * 1024;
+/* 与服务端 CONTENT_MAX 对齐：Markdown / 富文本 / HTML 正文按字符数计，超限直接拒绝 */
+var REQ_DOC_CONTENT_MAX = 12000000;
+var REQ_DOC_CONTENT_HINT = "文档内容超过 12MB 上限，请压缩图片或拆分成多篇后再保存";
 var REQ_DOC_FILE_HINT = "暂不支持该文件格式，请上传 Word、Markdown、TXT、HTML 或 Excel(.xlsx) 文件";
 function readArrayBuffer(file){
   return new Promise(function(resolve, reject){
@@ -5253,7 +5256,8 @@ function readArrayBuffer(file){
 }
 function excelFileToSnapshot(file){
   return ensureExcelJs().then(function(){ return readArrayBuffer(file); })
-    .then(function(buf){ return excelToSnapshot(buf, { filename: file.name.replace(/\.[^.]+$/, "") }); });
+    .then(function(buf){ return excelToSnapshot(buf, { filename: file.name.replace(/\.[^.]+$/, "") }); })
+    .then(function(res){ return res.snapshot; });
 }
 function reqDocFileExt(name){
   var m = /\.([^.]+)$/.exec(String(name || ""));
@@ -5284,6 +5288,8 @@ function docImportMetaText(file, label, html){
   var parts = [file.name, label, imgs ? ("含 " + imgs + " 张图片") : "无内嵌图片"];
   if(reqDocFileExt(file.name) === "doc"){
     parts.push("旧版 .doc 只能保留文字，建议另存为 .docx 再导入");
+  }else if(reqDocFileExt(file.name) === "html" || reqDocFileExt(file.name) === "htm"){
+    parts.push("脚本、外链样式与相对路径资源不会导入，交互需作为 HTML 附件预览");
   }
   return parts.join(" · ");
 }
@@ -5343,7 +5349,8 @@ function parseNewReqDocFile(file){
       var html = data.content || "";
       if(!html) throw new Error("文档内容为空或无法识别");
       newReqDocParsed = { file: file, kind: kind, content: html, format: "html" };
-      showNewReqDocPreview(docImportMetaText(file, "Word → 富文本", html), html);
+      showNewReqDocPreview(docImportMetaText(file, "Word → 富文本"
+        + (data.warnings ? " · " + data.warnings : ""), html), html);
     });
   }
   var read = kind === "html" ? readHtmlFile(file) : readTextFile(file);
@@ -5540,14 +5547,19 @@ function submitNewReqDoc(keepList){
     return;
   }
   setNewReqDocBusy(isFile ? "导入文档…" : "新建文档…");
-  /* 富文本模板正文是 HTML：建文档前先转成 Univer 快照，后端 univer 只收快照 JSON */
-  var prepare = content && format === "html" && isTemplate
+  /* 富文本正文一律以 Univer 快照落库：模板与「导入 HTML / Word 新建」走同一条路，
+     不再产生只能由旧编辑器打开的 html 文档 */
+  var prepare = content && format === "html"
     ? ensureVendor().then(function(){
-        content = JSON.stringify(htmlToSnapshot(content, "hg-tpl-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)));
+        content = JSON.stringify(htmlToSnapshot(content, "hg-doc-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)));
         format = "univer";
       })
     : Promise.resolve();
   prepare.then(function(){
+    /* Univer 快照通常比 HTML 更大：转换后再检查，避免白等一次失败请求 */
+    if(format !== "sheet" && content && content.length > REQ_DOC_CONTENT_MAX){
+      throw new Error(REQ_DOC_CONTENT_HINT);
+    }
     return API.post("/api/req-docs", {
       reqId: reqId || null, title: title, content: content, status: "draft",
       format: format, docType: ($("newReqDocType") && $("newReqDocType").value) || "requirement", parentId: parentId || null,
@@ -8169,12 +8181,18 @@ function saveReqDoc(opts){
   var categoryId = catSelForSave && !catSelForSave.disabled
     ? catSelForSave.value : (editingMeta.categoryId || "");
   var content = currentReqDocContent();
+  var format = md ? "markdown" : (isUniverDoc() ? "univer" : (isSheetDoc() ? "sheet" : "html"));
+  /* 表格有独立的 20MB / 单元格上限，其余正文与后端保持一致：超限先提示，不发请求 */
+  if(format !== "sheet" && content && content.length > REQ_DOC_CONTENT_MAX){
+    toast(REQ_DOC_CONTENT_HINT, "warn");
+    return Promise.resolve(null);
+  }
   var body = {
     reqId: reqId || null,
     title: title,
     content: content,
     status: editingMeta.status || "draft",
-    format: md ? "markdown" : (isUniverDoc() ? "univer" : (isSheetDoc() ? "sheet" : "html")),
+    format: format,
     docType: $("reqDocType").value,
     parentId: parentId || null,
     categoryId: categoryId || "",
@@ -8316,7 +8334,7 @@ function onReqDocImportFile(e){
     toast("正在解析 Word 文档…", "info");
     fetchWordImport(f).then(function(data){
       var html = data.content || "";
-      openDocImportPreview(f, html, "Word → 富文本", function(){
+      openDocImportPreview(f, html, "Word → 富文本" + (data.warnings ? " · " + data.warnings : ""), function(){
         applyImportedHtml(f.name, html);
       });
     }).catch(function(ex){ toast(ex.message || "导入失败", "bad"); });
@@ -8357,7 +8375,7 @@ function importUniverFile(f, kind){
   if(kind === "word"){
     toast("正在解析 Word 文档…", "info");
     fetchWordImport(f).then(function(data){
-      preview(data.content || "", "Word → 富文本");
+      preview(data.content || "", "Word → 富文本" + (data.warnings ? " · " + data.warnings : ""));
     }).catch(function(ex){ toast(ex.message || "导入失败", "bad"); });
     return;
   }
@@ -8525,7 +8543,15 @@ function exportReqDoc(){
   document.body.appendChild(a);
   a.click();
   setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 0);
-  toast("已导出 " + name, "fs");
+  toast("已导出 " + name + exportAttachHint(), "fs");
+}
+/* 附件是独立文件，不随 Markdown / HTML / Word 导出；导出成功时顺带说清 */
+function exportAttachHint(){
+  var page = $("reqDocEditPage");
+  if(!page || page.hidden) return "";
+  var list = $("reqDocAttachList");
+  var n = list && list.__attList ? list.__attList.length : 0;
+  return n ? "（附件 " + n + " 个需单独下载）" : "";
 }
 function exportReqDocFromReader(docId){
   var doc = reqDocById(docId);
@@ -8610,7 +8636,7 @@ function exportReqDocWordFrom(title, html){
   }).then(function(blob){
     var name = (title || "文档").replace(/[\\/:*?"<>|]/g, "_") + ".docx";
     downloadBlob(name, blob);
-    toast("已导出 " + name, "fs");
+    toast("已导出 " + name + exportAttachHint(), "fs");
   });
 }
 function exportReqDocWord(){
@@ -9080,7 +9106,7 @@ function populateReqDocSelect(keep){
     hint.textContent = rt.drawerReadOnly ? "只读项目不可修改关联文档"
       : (!reqDocsLoaded && cur ? "文档列表加载失败；现在保存会保留原关联"
         : (selected ? reqDocProjectName(selected.reqId) + " · " + docTypeName(selected.docType)
-          : "无需先选项目，可搜索全部可见文档"));
+          : "无需先选项目；选其他项目的文档会先确认切换"));
   }
   syncAssocViewBtns();
   syncAssocRead();

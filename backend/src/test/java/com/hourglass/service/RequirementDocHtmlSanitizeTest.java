@@ -1,9 +1,11 @@
 package com.hourglass.service;
 
+import com.hourglass.common.AppException;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** HTML 导入/保存的样式白名单：常用排版保留，可隐藏/遮挡/外链的样式丢弃。 */
@@ -73,5 +75,30 @@ class RequirementDocHtmlSanitizeTest {
         assertTrue(clean.contains("href=\"hgdoc://K100\""), clean);
         assertTrue(clean.contains("data-hg-ref=\"doc:K100\""), clean);
         assertFalse(clean.contains("javascript:"), clean);
+    }
+
+    @Test
+    void rejectsOversizedHtmlInsteadOfTruncating() {
+        String html = "<p>" + repeat('x', 12_000_001) + "</p>";
+
+        AppException ex = assertThrows(AppException.class, () -> RequirementDocService.sanitize(html));
+
+        assertTrue(ex.getMessage().contains("12MB"), ex.getMessage());
+    }
+
+    @Test
+    void rejectsOversizedMarkdownInsteadOfTruncating() {
+        String md = repeat('x', 12_000_001);
+
+        AppException ex = assertThrows(AppException.class,
+                () -> RequirementDocService.contentOf("markdown", md));
+
+        assertTrue(ex.getMessage().contains("12MB"), ex.getMessage());
+    }
+
+    private static String repeat(char c, int n) {
+        char[] arr = new char[n];
+        java.util.Arrays.fill(arr, c);
+        return new String(arr);
     }
 }

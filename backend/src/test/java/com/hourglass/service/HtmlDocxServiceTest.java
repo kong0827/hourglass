@@ -2,6 +2,7 @@ package com.hourglass.service;
 
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFRun;
+import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -75,6 +76,50 @@ public class HtmlDocxServiceTest {
             assertEquals(0, doc.getAllPictures().size());
             assertTrue(doc.getDocument().getBody().xmlText().contains("[remote]"));
         }
+    }
+
+    /** 合并单元格要写成 Word 的 gridSpan / vMerge，不能只把 colspan 当列数占位。 */
+    @Test
+    public void exportKeepsMergedCellsAsGridSpanAndVMerge() throws Exception {
+        String html = "<table>"
+                + "<tr><td colspan=\"2\">横向合并</td><td rowspan=\"2\">纵向合并</td></tr>"
+                + "<tr><td>a</td><td>b</td></tr></table>";
+
+        byte[] docx = new HtmlDocxService().toDocx(html);
+        try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(docx))) {
+            XWPFTable table = doc.getTables().get(0);
+            assertEquals(2, table.getRows().size());
+            assertEquals(2, table.getRow(0).getTableCells().size(), "首行横合并后应只有两个单元格");
+            assertEquals(3, table.getRow(1).getTableCells().size(), "次行应补出纵向合并的续格");
+            String xml = doc.getDocument().getBody().xmlText();
+            assertTrue(xml.contains("gridSpan"), "应写入 w:gridSpan");
+            assertTrue(xml.contains("vMerge"), "应写入 w:vMerge");
+            assertEquals(1, count(xml, "纵向合并"), "合并文字只写一次，续格不重复");
+        }
+    }
+
+    /** 不规则表格：colspan 整段要避开上方纵向合并区，不能压在合并格上。 */
+    @Test
+    public void exportShiftsSpanningCellPastVerticalMerge() throws Exception {
+        String html = "<table><tr><td rowspan=\"2\">A</td><td>B</td><td rowspan=\"2\">C</td></tr>"
+                + "<tr><td colspan=\"2\">D</td></tr></table>";
+
+        byte[] docx = new HtmlDocxService().toDocx(html);
+        try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(docx))) {
+            XWPFTable table = doc.getTables().get(0);
+            assertEquals(4, table.getRow(1).getTableCells().size(), "A 续格 / 空格 / C 续格 / D");
+            assertEquals("D", table.getRow(1).getTableCells().get(3).getText());
+            assertEquals(1, count(doc.getDocument().getBody().xmlText(), "gridSpan"));
+        }
+    }
+
+    private static int count(String text, String needle) {
+        int n = 0, at = 0;
+        while ((at = text.indexOf(needle, at)) >= 0) {
+            n++;
+            at += needle.length();
+        }
+        return n;
     }
 
     /** Univer 导出的标题是 p.UniverHeading + aria-level，不能退化成正文。 */

@@ -74,6 +74,8 @@ public class RequirementDocService {
 
     /** 正文上限：粘贴截图会以 base64 内联，200KB 会把图片截断，放宽到 12MB（列是 MEDIUMTEXT，上限 16MB） */
     private static final int CONTENT_MAX = 12_000_000;
+    private static final String CONTENT_TOO_LARGE =
+            "文档内容超过 12MB 上限，请压缩图片或拆分成多篇后再保存";
 
     /** 表格正文（Univer 工作簿快照）上限：按 UTF-8 字节计，与前端约定的 20MB 一致（列为 LONGTEXT） */
     private static final int SHEET_MAX_BYTES = 20 * 1024 * 1024;
@@ -1309,7 +1311,11 @@ public class RequirementDocService {
         if (html == null || html.trim().isEmpty()) {
             return null;
         }
-        String src = html.length() > CONTENT_MAX ? html.substring(0, CONTENT_MAX) : html;
+        /* 截断会毁掉标签和图片数据，超限统一拒绝，提示用户压缩或拆分 */
+        if (html.length() > CONTENT_MAX) {
+            throw AppException.badRequest(CONTENT_TOO_LARGE);
+        }
+        String src = html;
         /* 站内附件图先摘出来换成可通过白名单的占位 data URI，清洗完再还原成原相对路径 */
         List<String> attSrcs = new ArrayList<String>();
         Matcher am = ATT_IMG_SRC.matcher(src);
@@ -1530,6 +1536,11 @@ public class RequirementDocService {
 
     /** 导入 Word：docx 走 XHTML 转换，doc 走 POI 文本提取，最后统一白名单清洗 */
     public String importWord(java.io.File file, String ext) {
+        return importWordResult(file, ext).get("content");
+    }
+
+    /** 导入结果除正文外还带回转换告警（如 emf/wmf 矢量图无法内联） */
+    public Map<String, String> importWordResult(java.io.File file, String ext) {
         Map<String, String> preview = docPreviewService.preview(file, ext);
         String html = preview == null ? null : preview.get("content");
         if (html == null || html.trim().isEmpty()) {
@@ -1539,7 +1550,13 @@ public class RequirementDocService {
         if (clean == null) {
             throw AppException.badRequest("文档内容为空或无法识别");
         }
-        return clean;
+        Map<String, String> result = new LinkedHashMap<String, String>();
+        String warnings = preview.get("warnings");
+        if (warnings != null && !warnings.trim().isEmpty()) {
+            result.put("warnings", warnings);
+        }
+        result.put("content", clean);
+        return result;
     }
 
     /**
@@ -2022,7 +2039,10 @@ public class RequirementDocService {
             if (content == null || content.trim().isEmpty()) {
                 return null;
             }
-            return content.length() > CONTENT_MAX ? content.substring(0, CONTENT_MAX) : content;
+            if (content.length() > CONTENT_MAX) {
+                throw AppException.badRequest(CONTENT_TOO_LARGE);
+            }
+            return content;
         }
         if ("univer".equals(format)) {
             /* 快照是 JSON，不能按 HTML 清洗（会把结构打散）；截断同样会毁掉 JSON，超限直接拒绝 */
@@ -2043,7 +2063,7 @@ public class RequirementDocService {
             return null;
         }
         if (content.length() > CONTENT_MAX) {
-            throw AppException.badRequest("文档内容超过大小上限，请压缩或拆分图片后再保存");
+            throw AppException.badRequest(CONTENT_TOO_LARGE);
         }
         try {
             JsonNode root = JSON.readTree(content);

@@ -134,6 +134,28 @@ class CheckLinksTest(unittest.TestCase):
                     self.assertEqual(self.check(target), [])
                     exists.assert_not_called()
 
+    def test_hgdoc_links_are_ignored(self):
+        for target in ("hgdoc://K100", "hgdoc://K100?anchor=1#L2"):
+            with self.subTest(target=target):
+                with patch.object(check_docs.os.path, "exists") as exists:
+                    self.assertEqual(self.check(target), [])
+                    exists.assert_not_called()
+
+    def test_links_inside_code_are_ignored(self):
+        bodies = (
+            "`[目标](missing-inline.md)`",
+            "```\n[目标](missing-fenced.md)\n```",
+            "~~~\n[目标](missing-tilde.md)\n~~~",
+        )
+        for body in bodies:
+            with self.subTest(body=body):
+                (self.docs / "check.md").write_text(body + "\n", encoding="utf-8")
+                issues = []
+                with patch.object(check_docs.os.path, "exists") as exists:
+                    check_docs.check_links(issues)
+                    self.assertEqual(issues, [])
+                    exists.assert_not_called()
+
     def test_bare_absolute_links_remain_rejected(self):
         target = self.root / "source.py"
         target.touch()

@@ -22,8 +22,11 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPrGeneral;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTShd;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTStyle;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblBorders;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblGrid;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STBorder;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STMerge;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STShd;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STStyleType;
 import org.springframework.stereotype.Service;
@@ -35,8 +38,10 @@ import java.io.ByteArrayOutputStream;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * 把文档正文 HTML 导出为真实 .docx（不是改扩展名的 HTML）。
@@ -65,6 +70,10 @@ public class HtmlDocxService {
             }
             if (out.getBodyElements().isEmpty()) {
                 out.createParagraph().createRun().setText("");
+            }
+            /* 缺 sectPr 时 xdocreport 反向转 HTML 会在页眉页脚处理处 NPE，整篇退化成纯文本 */
+            if (!out.getDocument().getBody().isSetSectPr()) {
+                out.getDocument().getBody().addNewSectPr();
             }
             out.write(bytes);
             return bytes.toByteArray();
@@ -386,40 +395,124 @@ public class HtmlDocxService {
         if (rows.isEmpty()) {
             return;
         }
-        int cols = 1;
-        for (Element tr : rows) {
-            int n = 0;
-            for (Element cell : tr.children()) {
-                String t = cell.tagName().toLowerCase(Locale.ROOT);
-                if ("td".equals(t) || "th".equals(t)) {
-                    n += Math.max(1, intAttr(cell, "colspan"));
-                }
-            }
-            cols = Math.max(cols, n);
-        }
         int rowCount = rows.size();
-        XWPFTable table = body.table(rowCount, cols);
-        table.setWidth(9000);
-        borders(table);
+        /* 先按 colspan/rowspan 铺一张逻辑网格：被合并覆盖的位置也登记锚点，
+           之后逐格还原成 Word 的 gridSpan / vMerge，而不是只把 colspan 当列数占位 */
+        Map<Long, GridCell> grid = new HashMap<Long, GridCell>();
+        int cols = 0;
         for (int r = 0; r < rowCount; r++) {
-            Element tr = rows.get(r);
-            XWPFTableRow row = table.getRow(r);
             int c = 0;
-            for (Element cellEl : tr.children()) {
+            for (Element cellEl : rows.get(r).children()) {
                 String t = cellEl.tagName().toLowerCase(Locale.ROOT);
                 if (!"td".equals(t) && !"th".equals(t)) {
                     continue;
                 }
-                if (c >= cols) {
-                    break;
+                int colspan = Math.min(64, intAttr(cellEl, "colspan"));
+                int rowspan = Math.min(rowCount - r, Math.min(64, intAttr(cellEl, "rowspan")));
+                /* 与浏览器一致：整段 colspan 都空闲才落位，否则右移，避免跨到上方合并区 */
+                while (!spanFree(grid, r, c, colspan)) {
+                    c++;
                 }
-                XWPFTableCell cell = row.getCell(c);
-                fillCell(cell, cellEl, depth, ctx, "th".equals(t));
-                c += Math.max(1, intAttr(cellEl, "colspan"));
+                GridCell gc = new GridCell(cellEl, r, c, colspan, rowspan, "th".equals(t));
+                for (int dr = 0; dr < rowspan; dr++) {
+                    for (int dc = 0; dc < colspan; dc++) {
+                        long key = gridKey(r + dr, c + dc);
+                        if (!grid.containsKey(key)) {
+                            grid.put(key, gc);
+                        }
+                    }
+                }
+                cols = Math.max(cols, c + colspan);
+                c += colspan;
+            }
+        }
+        if (cols <= 0) {
+            return;
+        }
+        XWPFTable table = body.table(rowCount, cols);
+        table.setWidth(9000);
+        borders(table);
+        /* POI 建表不写 tblGrid；xdocreport 反向转 HTML 缺它会 NPE，退化成纯文本 */
+        CTTblGrid tblGrid = table.getCTTbl().getTblGrid();
+        if (tblGrid == null) {
+            tblGrid = table.getCTTbl().addNewTblGrid();
+            for (int i = 0; i < cols; i++) {
+                tblGrid.addNewGridCol().setW(BigInteger.valueOf(9000 / cols));
+            }
+        }
+        for (int r = 0; r < rowCount; r++) {
+            XWPFTableRow row = table.getRow(r);
+            /* POI 建表时每行会带默认单元格；合并网格要按需重建，先清空 */
+            while (!row.getTableCells().isEmpty()) {
+                row.removeCell(0);
+            }
+            for (int c = 0; c < cols; c++) {
+                GridCell gc = grid.get(gridKey(r, c));
+                if (gc == null) {
+                    /* 行尾缺格：补空格，保证 Word 表格列对齐 */
+                    row.createCell();
+                    continue;
+                }
+                if (gc.row < r) {
+                    /* 纵向合并：只在锚点列写一个 vMerge continue，横向被 colspan 覆盖的列跳过 */
+                    if (gc.col == c) {
+                        cellPr(row.createCell(), gc.colspan, true, false);
+                    }
+                    continue;
+                }
+                if (gc.col < c) {
+                    /* 同行内已被锚点单元格的 gridSpan 覆盖 */
+                    continue;
+                }
+                XWPFTableCell cell = row.createCell();
+                cellPr(cell, gc.colspan, gc.rowspan > 1, true);
+                fillCell(cell, gc.el, depth, ctx, gc.header);
             }
         }
         /* 表格后留一个空段，避免与后续正文粘连 */
         paragraph(body);
+    }
+
+    private static final class GridCell {
+        final Element el;
+        final int row;
+        final int col;
+        final int colspan;
+        final int rowspan;
+        final boolean header;
+
+        GridCell(Element el, int row, int col, int colspan, int rowspan, boolean header) {
+            this.el = el;
+            this.row = row;
+            this.col = col;
+            this.colspan = colspan;
+            this.rowspan = rowspan;
+            this.header = header;
+        }
+    }
+
+    private long gridKey(int row, int col) {
+        return ((long) row << 20) | col;
+    }
+
+    private boolean spanFree(Map<Long, GridCell> grid, int row, int col, int colspan) {
+        for (int dc = 0; dc < colspan; dc++) {
+            if (grid.containsKey(gridKey(row, col + dc))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** colspan 写 gridSpan；纵向合并起点写 vMerge restart，续格写 continue */
+    private void cellPr(XWPFTableCell cell, int colspan, boolean vMerge, boolean restart) {
+        CTTcPr pr = cell.getCTTc().isSetTcPr() ? cell.getCTTc().getTcPr() : cell.getCTTc().addNewTcPr();
+        if (colspan > 1) {
+            pr.addNewGridSpan().setVal(BigInteger.valueOf(colspan));
+        }
+        if (vMerge) {
+            pr.addNewVMerge().setVal(restart ? STMerge.RESTART : STMerge.CONTINUE);
+        }
     }
 
     private void fillCell(XWPFTableCell cell, Element cellEl, int depth, Ctx ctx, boolean header) {

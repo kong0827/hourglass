@@ -8,6 +8,10 @@ import org.apache.poi.hwpf.HWPFDocument;
 import org.apache.poi.hwpf.extractor.WordExtractor;
 import org.apache.poi.xwpf.extractor.XWPFWordExtractor;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.apache.poi.xwpf.usermodel.XWPFTable;
+import org.apache.poi.xwpf.usermodel.XWPFTableCell;
+import org.apache.poi.xwpf.usermodel.XWPFTableRow;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblGrid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -16,9 +20,12 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 附件 doc / docx 在线预览：docx 用 xdocreport 转 XHTML（保留标题/表格/列表样式），
@@ -32,7 +39,12 @@ public class DocPreviewService {
 
     public Map<String, String> preview(File file, String ext) {
         if ("docx".equals(ext)) {
-            return result("html", docxToHtml(file));
+            Conversion c = docxToHtml(file);
+            Map<String, String> m = result("html", c.html);
+            if (c.skipped > 0) {
+                m.put("warnings", c.skipped + " 张矢量图（emf/wmf/svg 等）无法在浏览器与文档中显示，已省略");
+            }
+            return m;
         }
         if ("doc".equals(ext)) {
             return result("html", docToHtml(file));
@@ -47,17 +59,64 @@ public class DocPreviewService {
         return m;
     }
 
-    private String docxToHtml(File file) {
+    private static final class Conversion {
+        final String html;
+        final int skipped;
+
+        Conversion(String html, int skipped) {
+            this.html = html;
+            this.skipped = skipped;
+        }
+    }
+
+    private Conversion docxToHtml(File file) {
         try (InputStream in = new FileInputStream(file);
              XWPFDocument doc = new XWPFDocument(in)) {
+            repairMinimalParts(doc);
             ByteArrayOutputStream out = new ByteArrayOutputStream();
-            XHTMLOptions options = XHTMLOptions.create().setImageManager(new EmbedImgManager());
+            EmbedImgManager images = new EmbedImgManager();
+            XHTMLOptions options = XHTMLOptions.create().setImageManager(images);
             XHTMLConverter.getInstance().convert(doc, out, options);
-            return new String(out.toByteArray(), StandardCharsets.UTF_8);
+            return new Conversion(new String(out.toByteArray(), StandardCharsets.UTF_8), images.skipped());
         } catch (Exception e) {
             /* 部分工具导出的精简 docx 缺 styles 等部件，XHTML 转换会失败；降级为纯文本提取 */
             log.warn("docx XHTML 转换失败，降级文本预览：{}", file.getName(), e);
-            return docxTextToHtml(file);
+            return new Conversion(docxTextToHtml(file), 0);
+        }
+    }
+
+    /**
+     * 精简 docx 常缺 sectPr / tblGrid：xdocreport 分别在页眉页脚和列宽计算处 NPE，
+     * 整篇降级成纯文本。补最小结构后再转，旧版导出的表格也能保住。
+     */
+    private static void repairMinimalParts(XWPFDocument doc) {
+        if (!doc.getDocument().getBody().isSetSectPr()) {
+            doc.getDocument().getBody().addNewSectPr();
+        }
+        for (XWPFTable table : doc.getTables()) {
+            repairTable(table);
+        }
+    }
+
+    private static void repairTable(XWPFTable table) {
+        if (table.getCTTbl().getTblGrid() == null) {
+            int cols = 0;
+            for (XWPFTableRow row : table.getRows()) {
+                cols = Math.max(cols, row.getTableCells().size());
+            }
+            if (cols > 0) {
+                CTTblGrid grid = table.getCTTbl().addNewTblGrid();
+                for (int i = 0; i < cols; i++) {
+                    grid.addNewGridCol().setW(BigInteger.valueOf(9000 / cols));
+                }
+            }
+        }
+        for (XWPFTableRow row : table.getRows()) {
+            for (XWPFTableCell cell : row.getTableCells()) {
+                for (XWPFTable nested : cell.getTables()) {
+                    repairTable(nested);
+                }
+            }
         }
     }
 
@@ -71,6 +130,7 @@ public class DocPreviewService {
 
         private byte[] picture;
         private String mime;
+        private final Set<String> skipped = new HashSet<String>();
 
         EmbedImgManager() {
             super(new File(""), "");
@@ -84,10 +144,21 @@ public class DocPreviewService {
 
         @Override
         public String resolve(String uri) {
-            if (picture == null || mime == null) {
+            if (picture == null) {
+                return uri;
+            }
+            if (mime == null) {
+                /* emf/wmf 等矢量图浏览器不认，正文白名单也会丢；记下来给导入结果提示 */
+                if (uri != null) {
+                    skipped.add(uri);
+                }
                 return uri;
             }
             return "data:" + mime + ";base64," + java.util.Base64.getEncoder().encodeToString(picture);
+        }
+
+        int skipped() {
+            return skipped.size();
         }
 
         /** 只映射浏览器与正文白名单都认的位图格式；emf/wmf 等矢量图保持原样，由清洗阶段丢弃 */

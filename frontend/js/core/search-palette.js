@@ -288,6 +288,8 @@ function metaText(h){
     return [setNameById(reqSetId(h.id)), PROJECT_STATUS[h.status] || "项目"].filter(Boolean).join(" · ");
   }
   var parts = [];
+  /* 章节命中：正文标题做主标题，文档名并入 meta，一眼看出命中在哪一篇的哪一节 */
+  if(h.type === "doc" && h.section) parts.push(h.title);
   if(h.reqName) parts.push(h.reqName);
   if(h.type === "doc" && h.extra) parts.push(DOC_TYPE[h.extra] || h.extra);
   if(h.type === "case" && h.extra) parts.push(h.extra);
@@ -391,10 +393,11 @@ function render(){
       html += '<div class="palette-group">' + gm.label + '</div>';
     }
     var m = TYPE_META[h.type] || { label: "结果", icon: "•" };
+    var hitTitle = (h.type === "doc" && h.section) ? h.section : (h.title || "未命名");
     html += '<button class="palette-item' + (i === active ? " on" : "") + '" type="button" role="option"'
       + ' aria-selected="' + (i === active ? "true" : "false") + '" data-hit="' + i + '">'
       + '<span class="palette-ic">' + m.icon + '</span>'
-      + '<span class="palette-body"><span class="palette-title">' + esc(h.title || "未命名") + '</span>'
+      + '<span class="palette-body"><span class="palette-title">' + esc(hitTitle) + '</span>'
       + '<span class="palette-meta">' + esc(metaText(h)) + '</span>'
       + (h.type === "doc" && h.snippet ? '<span class="palette-snippet">' + snippetHTML(h.snippet, inputEl ? inputEl.value : "") + '</span>' : '')
       + '</span>'
@@ -523,7 +526,10 @@ function openHit(h){
     return;
   }
   if(h.type === "doc"){
-    import("../views/requirements.js").then(function(mod){ mod.openReqDocAndJump(h.id); });
+    import("../views/requirements.js").then(function(mod){
+      if(h.head != null && mod.openReqDocSection) mod.openReqDocSection(h.id, h.head);
+      else mod.openReqDocAndJump(h.id);
+    });
     return;
   }
   if(h.type === "demand"){

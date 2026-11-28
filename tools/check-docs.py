@@ -29,6 +29,9 @@ COPY_PAIRS = [
 ]
 
 LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+# 代码块 / 行内代码里的链接是语法示例，不指向本地文件
+FENCED_RE = re.compile(r"^[ \t]*(`{3,}|~{3,})[^\n]*\n[\s\S]*?^[ \t]*\1[^\n]*$", re.M)
+INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
 
 
 def read(path):
@@ -60,9 +63,11 @@ def check_links(issues):
                 path = os.path.join(root, name)
                 rel_path = os.path.relpath(path, ROOT)
                 text = read(path)
+                # 代码块 / 行内代码中是语法示例，不当作真实链接
+                text = INLINE_CODE_RE.sub("", FENCED_RE.sub("", text))
                 for raw in LINK_RE.findall(text):
                     target = raw.strip()
-                    if target.startswith(("http://", "https://", "mailto:", "#", "tel:")):
+                    if target.startswith(("http://", "https://", "mailto:", "#", "tel:", "hgdoc:")):
                         continue
                     if target.startswith("/"):
                         issues.append("%s 使用绝对路径链接：%s" % (rel_path, target))
@@ -94,7 +99,8 @@ def check_links(issues):
 def check_table_count(issues):
     schema = read(BASELINE)
     actual = len(re.findall(r"^CREATE TABLE", schema, re.M))
-    header = re.search(r"\((\d+) tables?\)", schema[:1200])
+    # 头注释写作 "(96 tables；…)"，分隔符可能是全角括号
+    header = re.search(r"[(（](\d+) tables?\b", schema[:1200])
     if header and int(header.group(1)) != actual:
         issues.append("基线表数量口径不一致：头部写 %s，实际 CREATE TABLE %d" % (header.group(1), actual))
 

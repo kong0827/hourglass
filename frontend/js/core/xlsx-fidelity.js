@@ -213,16 +213,26 @@ function valueOf(cell){
 
 /**
  * ExcelJS Buffer → Univer 工作簿快照。
- * opts: { filename, locale }；超出单元格/行列上限直接抛错，避免静默截断丢数据。
+ * opts: { filename, locale, truncate, maxRows, maxCols, maxCells }。
+ * 默认超限抛错避免静默丢数据；预览场景传 truncate:true，按上限截断并返回 truncated。
  */
 export async function excelToSnapshot(buffer, opts){
   var E = await ensureExcelJs();
   opts = opts || {};
+  var truncate = !!opts.truncate;
+  var maxRows = opts.maxRows || MAX_ROWS;
+  var maxCols = opts.maxCols || MAX_COLS;
+  var maxCells = truncate ? Infinity : (opts.maxCells || MAX_CELLS);
+  var truncated = false;
   var wb = new E.Workbook();
   await wb.xlsx.load(buffer);
   var sheets = wb.worksheets || [];
   if(!sheets.length) throw new Error("Excel 里没有工作表");
-  if(sheets.length > MAX_SHEETS) throw new Error("工作表超过 " + MAX_SHEETS + " 个，请拆分后再导入");
+  if(sheets.length > MAX_SHEETS){
+    if(!truncate) throw new Error("工作表超过 " + MAX_SHEETS + " 个，请拆分后再导入");
+    sheets = sheets.slice(0, MAX_SHEETS);
+    truncated = true;
+  }
 
   var book = new StyleBook();
   var snapshot = {
@@ -245,15 +255,29 @@ export async function excelToSnapshot(buffer, opts){
     var maxRow = 0, maxCol = 0;
 
     ws.eachRow({ includeEmpty: true }, function(row, rowNumber){
-      if(rowNumber > MAX_ROWS) throw new Error("「" + ws.name + "」超过 " + MAX_ROWS + " 行上限");
+      if(rowNumber > maxRows){
+        if(!truncate) throw new Error("「" + ws.name + "」超过 " + maxRows + " 行上限");
+        truncated = true;
+        return;
+      }
       row.eachCell({ includeEmpty: true }, function(cell, colNumber){
-        if(colNumber > MAX_COLS) throw new Error("「" + ws.name + "」超过 " + MAX_COLS + " 列上限");
+        if(colNumber > maxCols){
+          if(!truncate) throw new Error("「" + ws.name + "」超过 " + maxCols + " 列上限");
+          truncated = true;
+          return;
+        }
         var isDate = cell.type === E.ValueType.Date || cell.value instanceof Date;
         var style = styleOf(cell);
         var value = valueOf(cell);
         if(!style && !value) return;
         totalCells++;
-        if(totalCells > MAX_CELLS) throw new Error("单元格超过 " + MAX_CELLS + " 个上限，请拆分后再导入");
+        if(totalCells > maxCells){
+          if(truncate){
+            truncated = true;
+            return;
+          }
+          throw new Error("单元格超过 " + maxCells + " 个上限，请拆分后再导入");
+        }
         if(isDate && (!style || !style.n)){
           style = style || {};
           style.n = { pattern: "yyyy-mm-dd" }; /* 有值无格式的日期默认按日显示，避免显示成 45xxx */
@@ -275,8 +299,12 @@ export async function excelToSnapshot(buffer, opts){
     (ws.model.merges || []).forEach(function(text){
       var range = parseMergeRange(text);
       if(!range) return;
-      if(range.endRow >= MAX_ROWS || range.endColumn >= MAX_COLS){
-        throw new Error("「" + ws.name + "」合并区域超出 " + MAX_ROWS + " 行 / " + MAX_COLS + " 列上限");
+      if(range.endRow >= maxRows || range.endColumn >= maxCols){
+        if(!truncate){
+          throw new Error("「" + ws.name + "」合并区域超出 " + maxRows + " 行 / " + maxCols + " 列上限");
+        }
+        truncated = true;
+        return;
       }
       mergeData.push(range);
       if(range.endRow + 1 > maxRow) maxRow = range.endRow + 1;
@@ -330,7 +358,7 @@ export async function excelToSnapshot(buffer, opts){
   });
 
   snapshot.styles = book.byId;
-  return snapshot;
+  return { snapshot: snapshot, truncated: truncated };
 }
 
 /** 空工作簿快照（新建表格文档用） */

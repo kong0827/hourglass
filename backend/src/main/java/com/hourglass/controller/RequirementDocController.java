@@ -247,10 +247,10 @@ public class RequirementDocController {
         try {
             temp = File.createTempFile("hourglass-word-import-", "." + ext);
             file.transferTo(temp);
-            String html = docService.importWord(temp, ext);
+            Map<String, String> imported = docService.importWordResult(temp, ext);
             Map<String, String> data = new LinkedHashMap<String, String>();
             data.put("format", "html");
-            data.put("content", html);
+            data.putAll(imported);
             return ApiResult.ok(data);
         } catch (IOException e) {
             throw new AppException(500, "文件处理失败");
