@@ -59,7 +59,7 @@
 .pw-vrow:hover { background:var(--surface-sunken); }
 .pw-vrow.is-on { background:var(--primary-soft); }
 .pw-vrow.is-dis { cursor:default; opacity:.72; }
-.pw-vrow input { width:15px; height:15px; accent-color:var(--primary); flex:none; }
+.pw-vrow input { width:16px; height:16px; flex:none; }
 .pw-vtx { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
 .pw-vtx b { font-size:12.5px; font-weight:600; color:var(--text); display:flex; align-items:center; gap:6px; }
 .pw-vtx i { font-style:normal; font-size:11.5px; color:var(--text-3); }
@@ -77,11 +77,18 @@
 .pw-table td { padding:9px 12px; border-bottom:1px solid var(--border); vertical-align:middle; }
 .pw-table tr:last-child td { border-bottom:0; }
 .pw-table tr.is-on td { background:var(--primary-soft); }
-.pw-col-ck { width:38px; }
-.pw-col-ck input { width:15px; height:15px; accent-color:var(--primary); }
+.pw-table tbody tr[data-pw-demand-open] { cursor:pointer; }
+.pw-table tbody tr[data-pw-demand-open]:hover td { background:var(--surface-hover); }
+.pw-table tbody tr[data-pw-demand-open].is-on:hover td { background:var(--primary-soft); }
+.pw-table tbody tr[data-pw-demand-open]:focus-visible { outline:none; }
+.pw-table tbody tr[data-pw-demand-open]:focus-visible td { background:var(--surface-hover); box-shadow:inset 0 1px 0 var(--primary), inset 0 -1px 0 var(--primary); }
+.pw-col-ck { width:38px; cursor:default; }
+.pw-col-ck input { width:16px; height:16px; }
+.pw-table th.pw-col-ck { vertical-align:middle; }
 .pw-table .progress .bar { background:var(--border); }
 .pw-table .progress .pv { font-size:11.5px; }
-.pw-dt { display:block; font-size:12.5px; font-weight:600; color:var(--text); }
+.pw-dt { display:block; font-size:12.5px; font-weight:600; color:var(--text); transition:color var(--dur-fast) var(--ease-out); }
+.pw-table tbody tr[data-pw-demand-open]:hover .pw-dt { color:var(--primary-fg); }
 .pw-dsub { display:flex; align-items:center; gap:5px; font-style:normal; font-size:11.5px; color:var(--text-3); margin-top:3px; }
 .pw-empty { padding:26px 18px; text-align:center; }
 .pw-empty b { display:block; font-size:13px; color:var(--text); margin-bottom:4px; }

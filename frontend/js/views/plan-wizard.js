@@ -7,6 +7,7 @@ import { API } from "../core/api.js";
 import { showView } from "../core/router.js";
 import { rt } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
+import { loadView } from "../core/view-loader.js";
 import { versionStatusTagHTML, priTagHTML } from "../lib/format.js";
 
 var host = null;
@@ -299,10 +300,14 @@ function railHTML(){
     + '</aside>';
 }
 
-function field(label, control, req, opt){
-  return '<label class="pw-field"><span class="pw-label">' + esc(label)
+/* 只有单个文本控件才用 label 关联；分段按钮、版本清单这类复合控件用 div + span，
+   否则点标题或清单空白会被 label 激活行为转发到第一个按钮 / 复选框。 */
+function field(label, control, req, opt, ctlId){
+  var tag = ctlId ? "label" : "span";
+  return '<div class="pw-field"><' + tag + ' class="pw-label"' + (ctlId ? ' for="' + ctlId + '"' : "") + '>'
+    + esc(label)
     + (req ? ' <em class="pw-req">*</em>' : "")
-    + (opt ? ' <em class="pw-opt">' + esc(opt) + '</em>' : "") + '</span>' + control + '</label>';
+    + (opt ? ' <em class="pw-opt">' + esc(opt) + '</em>' : "") + '</' + tag + '>' + control + '</div>';
 }
 
 function step1HTML(){
@@ -321,10 +326,10 @@ function step1HTML(){
     + '<p>一个计划可以覆盖<b>多个版本、多个项目</b>——同一次生产窗口要发多个项目时，在下面一起勾选即可。'
     + '列表默认只显示计划中/进行中的版本；已发布、已关闭的版本不可选，需要时可展开查看。</p></div>'
     + '<div class="pw-form">'
-    + field("计划名称", '<input class="inp" type="text" maxlength="120" data-pw-field="name" value="' + esc(W.name) + '" placeholder="例：12-08 多项目生产发布">', true)
+    + field("计划名称", '<input class="input" type="text" id="pwfName" maxlength="120" data-pw-field="name" value="' + esc(W.name) + '" placeholder="例：12-08 多项目生产发布">', true, "", "pwfName")
     + '<div class="pw-grid2">'
     + field("目标环境", envHTML(), true)
-    + field("计划窗口", '<input class="inp" type="datetime-local" data-pw-field="plannedAt" value="' + esc(W.plannedAt) + '">', true, "预计执行时间")
+    + field("计划窗口", '<input class="input" type="datetime-local" id="pwfPlannedAt" data-pw-field="plannedAt" value="' + esc(W.plannedAt) + '">', true, "预计执行时间", "pwfPlannedAt")
     + '</div>'
     + field("覆盖版本", '<div class="pw-vbox">' + summary + list + '</div>', true, "可勾多个 · 可按项目跨选")
     + '<p class="pw-help">跨项目勾选后，发布内容与就绪检查会按项目、按版本分别核对；记录发布时环境或覆盖范围与计划不一致，会要求填写偏差理由。</p>'
@@ -405,7 +410,9 @@ function step2HTML(){
     body = '<div class="pw-empty"><b>覆盖的版本里还没有需求</b><p>先去版本里添加需求，再回来勾选发布内容。</p></div>';
   }else{
     body = '<div class="pw-table-wrap"><table class="pw-table"><thead><tr>'
-      + '<th class="pw-col-ck"></th><th>需求</th><th>优先级</th><th>携带工作项</th><th>完成度</th><th>用例覆盖</th>'
+      + '<th class="pw-col-ck"><input type="checkbox" data-pw-selectall aria-label="全选需求" title="全选 / 取消全选"'
+      + (rows.length && selN === rows.length ? " checked" : "") + '></th>'
+      + '<th>需求</th><th>优先级</th><th>携带工作项</th><th>完成度</th><th>用例覆盖</th>'
       + '</tr></thead><tbody>' + rows.map(demandRowHTML).join("") + '</tbody></table></div>';
   }
   return '<div class="pw-pane"><div class="pw-hd"><h2>这个计划交付什么？</h2>'
@@ -423,8 +430,8 @@ function demandRowHTML(d){
   var done = tasks.length - open;
   var on = !!W.demandSel[d.id];
   var cases = Number(d.caseCount) || 0;
-  return '<tr class="' + (on ? "is-on" : "") + '">'
-    + '<td class="pw-col-ck"><input type="checkbox" data-pw-demand="' + esc(d.id) + '"' + (on ? " checked" : "") + '></td>'
+  return '<tr class="' + (on ? "is-on" : "") + '" data-pw-demand-open="' + esc(d.id) + '" tabindex="0" title="打开需求详情">'
+    + '<td class="pw-col-ck"><input type="checkbox" data-pw-demand="' + esc(d.id) + '" aria-label="纳入「' + esc(d.title) + '」"' + (on ? " checked" : "") + '></td>'
     + '<td><b class="pw-dt">' + esc(d.title) + '</b><i class="pw-dsub"><span class="tag">' + esc(d._project) + '</span> ' + esc(d._version) + '</i></td>'
     + '<td>' + (d.priority ? priTagHTML(d.priority) : "—") + '</td>'
     + '<td>' + (tasks.length
@@ -446,7 +453,7 @@ function step3HTML(){
   }else if(W.membersError){
     ownerControl = '<span class="pw-error-s">' + esc(W.membersError) + '</span>';
   }else{
-    ownerControl = '<select class="inp" data-pw-field="owner"><option value="">请选择执行人</option>'
+    ownerControl = '<select class="select" id="pwfOwner" data-pw-field="owner"><option value="">请选择执行人</option>'
       + members.map(function(m){
         var id = m.userId || m.id || "";
         var name = m.displayName || m.username || id;
@@ -456,11 +463,11 @@ function step3HTML(){
   return '<div class="pw-pane"><div class="pw-hd"><h2>谁来执行、交付范围怎么算？</h2>'
     + '<p>执行人负责到窗口执行并回来记录发布；覆盖范围与目标键会与发布记录逐项比对。</p></div>'
     + '<div class="pw-form pw-narrow">'
-    + field("执行人", ownerControl, true)
+    + field("执行人", ownerControl, true, "", "pwfOwner")
     + field("覆盖范围", coverageHTML(), true, "全量 / 部分需填写目标键")
-    + field("目标键", '<textarea class="inp" rows="3" data-pw-field="targets" placeholder="一行一个，例：api-gateway / web-app">' + esc(W.targets) + '</textarea>', false, "覆盖为全量/部分时必填")
-    + field("备注", '<textarea class="inp" rows="3" data-pw-field="notes" placeholder="例：窗口内避开对账任务；回滚走预案 A">' + esc(W.notes) + '</textarea>')
-    + field("风险提示", '<textarea class="inp" rows="2" data-pw-field="risks" placeholder="例：结算中心依赖第三方对账接口，失败时先降级">' + esc(W.risks) + '</textarea>')
+    + field("目标键", '<textarea class="textarea" rows="3" id="pwfTargets" data-pw-field="targets" placeholder="一行一个，例：api-gateway / web-app">' + esc(W.targets) + '</textarea>', false, "覆盖为全量/部分时必填", "pwfTargets")
+    + field("备注", '<textarea class="textarea" rows="3" id="pwfNotes" data-pw-field="notes" placeholder="例：窗口内避开对账任务；回滚走预案 A">' + esc(W.notes) + '</textarea>', false, "", "pwfNotes")
+    + field("风险提示", '<textarea class="textarea" rows="2" id="pwfRisks" data-pw-field="risks" placeholder="例：结算中心依赖第三方对账接口，失败时先降级">' + esc(W.risks) + '</textarea>', false, "", "pwfRisks")
     + '</div></div>';
 }
 
@@ -514,7 +521,7 @@ function step4HTML(){
   return '<div class="pw-pane"><div class="pw-hd"><h2>计划可以执行了吗？</h2>'
     + '<p>「未通过」需要处理或写明理由才能标为就绪；「警告」不阻塞，执行时会再次提示。</p></div>'
     + '<div class="pw-form">' + banner + rows
-    + field("例外说明", '<textarea class="inp" rows="2" data-pw-field="exception" placeholder="例：运营配置随下个计划发布，本次仅验证开关读取……">' + esc(W.exception) + '</textarea>', false, "有未通过项但仍要标就绪时必填，会写入计划备注")
+    + field("例外说明", '<textarea class="textarea" rows="2" id="pwfException" data-pw-field="exception" placeholder="例：运营配置随下个计划发布，本次仅验证开关读取……">' + esc(W.exception) + '</textarea>', false, "有未通过项但仍要标就绪时必填，会写入计划备注", "pwfException")
     + '</div></div>';
 }
 
@@ -588,6 +595,23 @@ function render(){
   syncHead();
   host.innerHTML = '<div class="pw">' + railHTML() + '<div class="pw-main">'
     + '<div class="pw-body">' + paneHTML() + '</div>' + footHTML() + '</div></div>';
+  syncSelectAll();
+}
+
+function refocus(sel){
+  var el = host && host.querySelector(sel);
+  if(!el) return;
+  try{ el.focus({ preventScroll:true }); }catch(e){ try{ el.focus(); }catch(e2){ /* noop */ } }
+}
+
+function syncSelectAll(){
+  var box = host && host.querySelector("[data-pw-selectall]");
+  if(!box) return;
+  var rows = W.demands || [], selN = 0;
+  rows.forEach(function(d){ if(W.demandSel[d.id]) selN++; });
+  box.checked = rows.length > 0 && selN === rows.length;
+  box.indeterminate = selN > 0 && selN < rows.length;
+  box.disabled = !rows.length;
 }
 
 function syncHead(){
@@ -754,11 +778,22 @@ function toggleId(id, on){
   else W.demands = W.tasks = null;
 }
 
+function openDemand(id){
+  loadView("demands").then(function(m){ m.openDemandDetailById(id); })
+    .catch(function(ex){ toast(ex.message || "打开需求详情失败", "bad"); });
+}
+
 function bind(){
   if(!host || host.__pwWired) return;
   host.__pwWired = true;
   host.addEventListener("click", function(e){
     if(!W || !e.target.closest) return;
+    var row = e.target.closest("[data-pw-demand-open]");
+    if(row){
+      if(e.target.closest("input,button,a,td.pw-col-ck")) return;
+      openDemand(row.getAttribute("data-pw-demand-open"));
+      return;
+    }
     var t = e.target.closest("button,[data-pw-goto]");
     if(!t) return;
     if(t.hasAttribute("data-pw-step")){ gotoStep(Number(t.getAttribute("data-pw-step"))); return; }
@@ -784,10 +819,22 @@ function bind(){
   });
   host.addEventListener("change", function(e){
     if(!W || !e.target) return;
+    if(e.target.hasAttribute && e.target.hasAttribute("data-pw-selectall")){
+      var on = e.target.checked;
+      (W.demands || []).forEach(function(d){ W.demandSel[d.id] = on; });
+      render();
+      refocus("[data-pw-selectall]");
+      return;
+    }
     var v = e.target.getAttribute && e.target.getAttribute("data-pw-version");
     if(v){ toggleId(v, e.target.checked); return; }
     var d = e.target.getAttribute && e.target.getAttribute("data-pw-demand");
-    if(d){ W.demandSel[d] = e.target.checked; render(); return; }
+    if(d){
+      W.demandSel[d] = e.target.checked;
+      render();
+      refocus('[data-pw-demand="' + d + '"]');
+      return;
+    }
     var owner = e.target.getAttribute && e.target.getAttribute("data-pw-field");
     if(owner === "owner"){ W.owner = e.target.value || ""; render(); return; }
   });
@@ -796,6 +843,14 @@ function bind(){
     var f = e.target.getAttribute && e.target.getAttribute("data-pw-field");
     if(!f || f === "owner") return;
     W[f] = e.target.value;
+  });
+  host.addEventListener("keydown", function(e){
+    if(!W || (e.key !== "Enter" && e.key !== " ")) return;
+    var row = e.target.closest && e.target.closest("[data-pw-demand-open]");
+    if(row && row === e.target){
+      e.preventDefault();
+      openDemand(row.getAttribute("data-pw-demand-open"));
+    }
   });
 }
 
